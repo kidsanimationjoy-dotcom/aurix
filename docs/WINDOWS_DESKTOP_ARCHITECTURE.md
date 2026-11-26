@@ -66,6 +66,7 @@ Implemented capabilities:
 - Block button names that look destructive (delete, remove, erase, format, wipe, uninstall or reset).
 - Refuse password and common secret-field names (PIN, payment code, token, secret and recovery code).
 - Cancel remaining steps with the emergency-stop control.
+- Append a bounded local task-audit event for each attempted task step, with UTC time, action kind, supported application and outcome. Dictated instructions, entered field contents, window titles and exception messages are excluded.
 
 The current slice does **not** read document contents, capture screenshots, click arbitrary screen coordinates, simulate keyboard input, handle password fields or execute arbitrary shell commands. UI Automation is provider-dependent: an application that does not expose a named button or editable field cannot be operated through this slice.
 
@@ -119,7 +120,7 @@ High-impact operations (deleting files, installing software, changing security s
 2. **Bounded local task console:** implemented — allowlisted multi-app launch and read-only visible-window inspection.
 3. **Scoped UI Automation slice:** implemented — inspect supported-app controls, approve exact named button clicks and field-value entry, refuse ambiguous/destructive/password targets.
 4. **Hands-free wake-word loop:** implemented in this branch — opt-in local wake grammar, one-command dictation, tray pause/resume, hidden-at-startup support. Real-device microphone and wake-word testing remains required.
-5. **Interactive computer use:** next — expand supported-app coverage, reliable foreground targeting, verify expected state changes and add persistent local audit history.
+5. **Interactive computer use:** next — expand supported-app coverage, reliable foreground targeting and verification of expected state changes. A bounded local task-audit history is implemented for the current task runner; it records action kind, application, UTC timestamp and outcome without recording speech or entered text.
 6. **Hybrid reasoning:** future — local policy router plus connected provider adapters.
 7. **Security event dashboard:** future — Defender history, scheduled scans and safe notifications.
 8. **Installer and release:** future — signed installer, startup controls, update/rollback and Windows 11 test matrix.
