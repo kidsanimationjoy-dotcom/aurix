@@ -244,7 +244,7 @@ function Workspace({ projectId, name, localPath }: { projectId: string; name: st
                         <pre className="code-block">{String((change as Record<string, unknown>).diff ?? '')}</pre>
                       </div>
                     ))}
-                    {event.requestedPermissions && <><small>Requested filesystem permission (review carefully)</small><pre className="code-block">{JSON.stringify(event.requestedPermissions, null, 2)}</pre></>}
+                    {event.requestedPermissions !== undefined && event.requestedPermissions !== null && <><small>Requested filesystem permission (review carefully)</small><pre className="code-block">{JSON.stringify(event.requestedPermissions, null, 2)}</pre></>}
                     {isNetwork && <Notice tone="warn">Network access is never granted by this AURIX coding workflow.</Notice>}
                     <div className="row">
                       <button className="btn primary" disabled={isNetwork || approvalBusyId !== null} onClick={() => void resolveApproval(id, 'accept')}>
