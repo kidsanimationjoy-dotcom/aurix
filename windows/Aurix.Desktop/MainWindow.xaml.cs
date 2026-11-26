@@ -127,7 +127,7 @@ public partial class MainWindow : Window
     private async void RunTaskButton_Click(object sender, RoutedEventArgs e)
         => await RunCommandAsync(CommandInput.Text);
 
-    private async void CommandInput_KeyDown(object sender, KeyEventArgs e)
+    private async void CommandInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
         e.Handled = true;
