@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, chmod, rm, readdir, lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -482,6 +482,27 @@ process.exit(2);
       assert.equal(log.args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
       assert.equal(log.args.includes('--add-dir'), false);
       assert.equal(log.args.includes(request.prompt), false);
+      const cdIndex = log.args.indexOf('--cd');
+      assert.ok(cdIndex >= 0);
+      const taskWorkspace = log.args[cdIndex + 1]!;
+      const relativeWorkspace = path.relative(profile.paths.workspaceRoot, taskWorkspace);
+      assert.ok(relativeWorkspace.length > 0 && !relativeWorkspace.startsWith('..') && !path.isAbsolute(relativeWorkspace));
+      await assert.rejects(lstat(taskWorkspace), { code: 'ENOENT' });
+      assert.deepEqual(await readdir(profile.paths.workspaceRoot), []);
+
+      // The next request must be denied if the supposedly empty chat root has unexpected data.
+      await rm(executionLog, { force: true });
+      await writeFile(path.join(profile.paths.workspaceRoot, 'unexpected-note.txt'), 'private local note');
+      const denied = await fetch(url + '/v1/codex/exec', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: 'task_unexpected_data', prompt: 'Summarize the note.' }),
+      });
+      assert.equal(denied.status, 409);
+      const deniedBody = await denied.json() as { error: string; message: string };
+      assert.equal(deniedBody.error, 'CODEX_CHAT_WORKSPACE_NOT_EMPTY');
+      assert.match(deniedBody.message, /No prompt was sent to Codex/);
+      await assert.rejects(readFile(executionLog, 'utf8'), { code: 'ENOENT' });
     }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
