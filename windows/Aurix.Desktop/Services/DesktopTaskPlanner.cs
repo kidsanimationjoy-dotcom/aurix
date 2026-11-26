@@ -79,7 +79,7 @@ public static class DesktopTaskPlanner
 
         var clickMatch = Regex.Match(
             normalized,
-            "^click button \"" + "(?<button>[^\\\"]+)" + "\" in (?<app>.+)$",
+            @"^click button ""(?<button>[^""]+)"" in (?<app>.+)$",
             RegexOptions.IgnoreCase);
         if (clickMatch.Success)
         {
@@ -101,7 +101,7 @@ public static class DesktopTaskPlanner
 
         var typeMatch = Regex.Match(
             normalized,
-            "^type \"" + "(?<text>[^\\\"]*)" + "\" into \"" + "(?<control>[^\\\"]+)" + "\" in (?<app>.+)$",
+            @"^type ""(?<text>[^""]*)"" into ""(?<control>[^""]+)"" in (?<app>.+)$",
             RegexOptions.IgnoreCase);
         if (typeMatch.Success)
         {
