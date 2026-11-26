@@ -178,7 +178,7 @@ export async function getReaStatus(config: LocalCompanionConfig, fetchImpl: type
   return body as ReaStatus;
 }
 
-export async function analyzeReaTarget(config: LocalCompanionConfig, target: string, kind: 'javascript' | 'desktop' = 'javascript', fetchImpl: typeof fetch = fetch): Promise<unknown> {
+export async function analyzeReaTarget(config: LocalCompanionConfig, target: string, kind: 'javascript' | 'desktop' | 'android' = 'javascript', fetchImpl: typeof fetch = fetch): Promise<unknown> {
   const base = companionBaseUrl(config.url);
   if (!config.token.trim()) throw new Error('Pair the local companion before running REA.');
   const response = await fetchImpl(base + '/v1/rea/analyze', {
