@@ -235,7 +235,18 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
 
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/prepare') {
-      await readJson(req);
+      try {
+        await readJson(req);
+      } catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error
+          ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, {
+          error: 'INVALID_REQUEST',
+          message: status === 413
+            ? 'The profile preparation request is too large.'
+            : 'The profile preparation request must contain valid JSON.',
+        });
+      }
       return send(200, await prepareAndVerifyCodex({ command: codexCommand, paths }));
     }
 
