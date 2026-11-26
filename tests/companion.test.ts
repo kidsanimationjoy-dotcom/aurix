@@ -478,7 +478,7 @@ process.exit(2);
       assert.equal(log.apiKeyPresent, false);
       assert.ok(log.args.includes('--json'));
       assert.ok(log.args.includes('--ephemeral'));
-      assert.ok(log.args.includes('default_permissions=aurix-chat-readonly'));
+      assert.ok(log.args.includes('default_permissions="aurix-chat-readonly"'));
       assert.equal(log.args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
       assert.equal(log.args.includes('--add-dir'), false);
       assert.equal(log.args.includes(request.prompt), false);
