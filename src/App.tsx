@@ -16,11 +16,13 @@ import { Assets } from './pages/Assets';
 import { Usage } from './pages/Usage';
 import { Activity } from './pages/Activity';
 import { Settings } from './pages/Settings';
+import { Tasks } from './pages/Tasks';
 
 const PAGES: Record<string, () => ReactNode> = {
   '/': () => <Home />,
   '/projects': () => <Projects />,
   '/coding': () => <Coding />,
+  '/tasks': () => <Tasks />,
   '/research': () => <Research />,
   '/media': () => <Media />,
   '/3d': () => <Studio3D />,
