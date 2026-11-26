@@ -63,7 +63,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
         state: 'connected' as const,
         implementation: 'implemented_untested' as const,
         summary: 'Codex CLI signed in',
-        detail: 'Version ' + (status.version ?? 'unknown') + '; separate AURIX profile is signed in. ' + (status.sandboxVerified ? 'Read-only chat is available after Task Center approval.' : 'Run the local sandbox check in Settings to enable read-only chat; coding and project access remain disabled.');',
+        detail: 'Version ' + (status.version ?? 'unknown') + '; separate AURIX profile is signed in. ' + (status.sandboxVerified ? 'Read-only chat is available after Task Center approval.' : 'Run the local sandbox check in Settings to enable read-only chat; coding and project access remain disabled.'),
         checkedAt: Date.now(),
       };
     }
