@@ -56,7 +56,7 @@ export class Db {
 
   async update<K extends CollectionName>(name: K, id: string, patch: Partial<Omit<Schema[K], keyof Entity>>): Promise<Schema[K]> {
     this.assertLoaded();
-    if (name === 'audit') throw new Error('Audit log is append-only');
+    if (name === 'audit' || name === 'taskEvents') throw new Error(name === 'audit' ? 'Audit log is append-only' : 'Task event history is append-only');
     const cur = this.get(name, id);
     if (!cur) throw new Error(`${name}/${id} not found`);
     const next = { ...cur, ...patch, updatedAt: Date.now() } as Schema[K];
