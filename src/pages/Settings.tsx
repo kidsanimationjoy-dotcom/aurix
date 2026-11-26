@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { getCodexStatus, startCodexLogin } from '../companion/client';
+import type { CodexStatus } from '../companion/protocol';
 import { companionToken, useApp, useAudit, useSettings } from '../state/AppState';
 import { ConfirmButton, Field, ImplPill, Notice, PageHeader, Panel, StatusPill, download } from '../ui/kit';
 
@@ -24,7 +26,7 @@ function Providers() {
   const { adapters, statuses } = useApp();
   return (
     <>
-      <Notice>Every provider below has a typed interface but no working integration. There is no sign-in button because there is nothing to sign in to yet.</Notice>
+      <Notice>Codex now has local CLI installation and sign-in detection. Its AI task execution is still disabled pending a verified, narrowly scoped sandbox. The other provider adapters remain disconnected.</Notice>
       <div className="stack">
         {adapters.map((a) => {
           const s = statuses[a.meta.id];
@@ -47,15 +49,27 @@ function Providers() {
 }
 
 function Companion() {
-  const { db, companion, checkCompanion } = useApp();
+  const { db, companion, checkCompanion, refreshStatuses } = useApp();
   const audit = useAudit();
   const settings = useSettings();
   const [url, setUrl] = useState(settings.companionUrl);
   const [token, setToken] = useState(companionToken.get());
   const [busy, setBusy] = useState(false);
+  const [codexBusy, setCodexBusy] = useState(false);
+  const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [codexMessage, setCodexMessage] = useState('');
+  const localConfig = { url, token };
+  const checkCodex = async () => {
+    setCodexBusy(true);
+    setCodexMessage('');
+    const result = await getCodexStatus(localConfig);
+    setCodexStatus(result);
+    await refreshStatuses();
+    setCodexBusy(false);
+  };
   return (
     <>
-      <Notice>The companion is a small program you run on your own machine. This build ships only its health check (<code>npm run companion</code>); it has no file or terminal access. See <code>companion/README.md</code>.</Notice>
+      <Notice>The companion runs on your own computer. It provides health checks and official Codex CLI status/sign-in only. It has no filesystem access and cannot run AURIX tasks yet. See <code>companion/README.md</code>.</Notice>
       <Panel title="Connection" aside={<StatusPill state={companion.state === 'connected' ? 'connected' : companion.state === 'unauthorized' ? 'awaiting_authentication' : companion.state === 'unreachable' || companion.state === 'incompatible' ? 'error' : 'not_configured'} />}>
         <div className="grid g2">
           <Field label="Companion URL" hint="Loopback address printed by the companion, e.g. http://127.0.0.1:4317"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:4317" /></Field>
@@ -68,11 +82,44 @@ function Companion() {
             await db.update('settings', settings.id, { companionUrl: url.trim() });
             await checkCompanion();
             await audit({ action: 'companion.test', target: url.trim() || 'none' });
+            const status = await getCodexStatus(localConfig);
+            setCodexStatus(status);
             setBusy(false);
           }}>Save and test</button>
           <small>{companion.message}</small>
         </div>
         {companion.health && <small>Companion v{companion.health.version} · capabilities: {companion.health.capabilities.join(', ')} · granted folders: {companion.health.grantedRoots.length || 'none'}</small>}
+      </Panel>
+
+      <Panel title="OpenAI Codex CLI" aside={codexStatus && <span className="pill">{codexStatus.state.replace('_', ' ')}</span>}>
+        <p className="muted">AURIX checks the official CLI on this computer. Sign-in happens through Codex itself in the companion terminal; AURIX never reads the local credential store.</p>
+        {codexStatus && (
+          <Notice tone={codexStatus.state === 'ready' ? 'good' : codexStatus.state === 'error' ? 'bad' : 'info'}>
+            {codexStatus.message}
+            {codexStatus.version ? ' · Version ' + codexStatus.version : ''}
+            {codexStatus.signedIn ? ' · Sign-in: ' + codexStatus.authMode.replace('_', ' ') : ''}
+          </Notice>
+        )}
+        {codexMessage && <Notice tone="info">{codexMessage}</Notice>}
+        <div className="row">
+          <button className="btn" disabled={codexBusy} onClick={() => void checkCodex()}>
+            {codexBusy ? 'Checking…' : 'Check Codex status'}
+          </button>
+          <button className="btn primary" disabled={codexBusy || !companionToken.get() || codexStatus?.installed === false || codexStatus?.signedIn === true} onClick={async () => {
+            setCodexBusy(true);
+            setCodexMessage('');
+            try {
+              const message = await startCodexLogin(localConfig);
+              setCodexMessage(message);
+              await audit({ action: 'codex.login.start', target: 'local companion', outcome: 'info' });
+            } catch (error) {
+              setCodexMessage(error instanceof Error ? error.message : 'Could not start Codex sign-in.');
+            } finally {
+              setCodexBusy(false);
+            }
+          }}>Sign in with ChatGPT</button>
+        </div>
+        <small>Sign-in is only a connection check. AURIX task execution remains disabled until restricted filesystem access is verified.</small>
       </Panel>
     </>
   );
@@ -111,7 +158,7 @@ function Security() {
     ['Agent permissions', 'Ask or deny only', 'Implemented. No “allow always” option exists.'],
     ['Destructive actions', 'Two-step confirmation', 'Implemented for deletes in this browser.'],
     ['Audit log', 'Append-only, local', 'Implemented. Not tamper-proof against someone with access to this browser profile.'],
-    ['Secrets', 'Pairing token in session memory only', 'Implemented. No provider credentials exist yet.'],
+    ['Secrets', 'Pairing token in session memory only; Codex credentials stay with the official CLI', 'Implemented. AURIX never reads or exports Codex credentials.'],
     ['Command approval, sandboxing, network controls', 'Per-command approval via companion', 'Not built. Needs the companion.'],
     ['Emergency stop, rate limiting, authentication', 'Planned for the security phase', 'Not built.'],
   ];
