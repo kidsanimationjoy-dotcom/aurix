@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using Aurix.Desktop.Services;
 
 namespace Aurix.Desktop;
@@ -7,6 +8,9 @@ namespace Aurix.Desktop;
 public partial class MainWindow : Window
 {
     public bool AllowClose { get; set; }
+
+    private SpeechInputService? _speechInput;
+    private CancellationTokenSource? _taskCancellation;
 
     public MainWindow()
     {
@@ -19,6 +23,7 @@ public partial class MainWindow : Window
         RefreshButton.IsEnabled = false;
         ScanButton.IsEnabled = false;
         DefenderStatusText.Text = "Checking Microsoft Defender…";
+
         try
         {
             var result = await DefenderService.GetStatusAsync();
@@ -53,22 +58,138 @@ public partial class MainWindow : Window
         if (confirm != MessageBoxResult.Yes) return;
 
         ScanButton.IsEnabled = false;
-        ActivityText.Text = "Requesting a Microsoft Defender quick scan…";
+        DefenderDetailsText.Text = "Requesting a Microsoft Defender quick scan…";
+
         try
         {
             var result = await DefenderService.StartQuickScanAsync();
-            ActivityText.Text = result.Success
+            DefenderDetailsText.Text = result.Success
                 ? "Microsoft Defender accepted the quick-scan request. Check Windows Security for scan progress and detections."
                 : $"The scan request could not be started: {result.Error}";
         }
         catch (Exception ex)
         {
-            ActivityText.Text = $"The scan request failed: {ex.Message}";
+            DefenderDetailsText.Text = $"The scan request failed: {ex.Message}";
         }
         finally
         {
             ScanButton.IsEnabled = true;
         }
+    }
+
+    private void ListenButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_speechInput is not null)
+        {
+            StopVoiceListening();
+            return;
+        }
+
+        try
+        {
+            _speechInput = new SpeechInputService();
+            _speechInput.PhraseRecognized += SpeechInput_PhraseRecognized;
+            _speechInput.StartListening();
+
+            ListenButton.Content = "Stop voice listening";
+            ListeningStatusText.Text = "MICROPHONE ACTIVE — listening locally. Press Stop voice listening to turn it off.";
+            ListeningStatusText.Foreground = System.Windows.Media.Brushes.LightGreen;
+        }
+        catch (Exception ex)
+        {
+            _speechInput?.Dispose();
+            _speechInput = null;
+            ListenButton.Content = "Start voice listening";
+            ListeningStatusText.Text = $"Voice input unavailable: {ex.Message}";
+            ListeningStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+        }
+    }
+
+    private void SpeechInput_PhraseRecognized(object? sender, string phrase)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            CommandInput.Text = phrase;
+            CommandInput.CaretIndex = CommandInput.Text.Length;
+            ListeningStatusText.Text = $"Heard: “{phrase}” — review it, then press Run task.";
+        });
+    }
+
+    private void StopVoiceListening()
+    {
+        _speechInput?.Dispose();
+        _speechInput = null;
+        ListenButton.Content = "Start voice listening";
+        ListeningStatusText.Text = "Microphone off.";
+        ListeningStatusText.Foreground = System.Windows.Media.Brushes.LightGray;
+    }
+
+    private async void RunTaskButton_Click(object sender, RoutedEventArgs e)
+        => await RunCommandAsync(CommandInput.Text);
+
+    private async void CommandInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        await RunCommandAsync(CommandInput.Text);
+    }
+
+    private async void InspectWindowsButton_Click(object sender, RoutedEventArgs e)
+        => await RunCommandAsync("show open windows");
+
+    private async Task RunCommandAsync(string command)
+    {
+        var plan = DesktopTaskPlanner.CreatePlan(command);
+        PlanText.Text = plan.Summary;
+
+        if (!plan.IsValid)
+        {
+            TaskOutputText.Text = plan.Error ?? "AURIX could not create a safe local plan for that request.";
+            return;
+        }
+
+        _taskCancellation?.Cancel();
+        _taskCancellation?.Dispose();
+        _taskCancellation = new CancellationTokenSource();
+        var token = _taskCancellation.Token;
+
+        RunTaskButton.IsEnabled = false;
+        EmergencyStopButton.IsEnabled = true;
+        TaskOutputText.Text = "Working…";
+
+        try
+        {
+            var result = await Task.Run(() => DesktopTaskRunner.Execute(
+                plan,
+                token,
+                message => Dispatcher.Invoke(() => TaskOutputText.Text = message)), token);
+
+            TaskOutputText.Text = result.Output;
+            ListeningStatusText.Text = result.Cancelled
+                ? "Task stopped. Already completed actions are not undone."
+                : result.Success ? "Task completed." : "Task finished with an issue.";
+        }
+        catch (OperationCanceledException)
+        {
+            TaskOutputText.Text = "Task stopped. Already completed actions are not undone.";
+            ListeningStatusText.Text = "Emergency stop activated.";
+        }
+        catch (Exception ex)
+        {
+            TaskOutputText.Text = $"Task failed safely: {ex.Message}";
+        }
+        finally
+        {
+            RunTaskButton.IsEnabled = true;
+            EmergencyStopButton.IsEnabled = false;
+        }
+    }
+
+    private void EmergencyStopButton_Click(object sender, RoutedEventArgs e)
+    {
+        _taskCancellation?.Cancel();
+        TaskOutputText.Text = "Stopping remaining task steps…";
+        ListeningStatusText.Text = "Emergency stop requested.";
     }
 
     private void StartupButton_Click(object sender, RoutedEventArgs e)
@@ -83,8 +204,16 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (AllowClose) return;
-        e.Cancel = true;
-        Hide();
+        if (!AllowClose)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        StopVoiceListening();
+        _taskCancellation?.Cancel();
+        _taskCancellation?.Dispose();
+        _taskCancellation = null;
     }
 }
