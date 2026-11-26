@@ -22,10 +22,11 @@ export function Research() {
   const [form, setForm] = useState(EMPTY);
   const [filter, setFilter] = useState<ClaimStatus | 'all'>('all');
   const [reaTarget, setReaTarget] = useState('');
+  const [reaKind, setReaKind] = useState<'javascript' | 'desktop'>('javascript');
   const [reaAuthorized, setReaAuthorized] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaError, setReaError] = useState('');
-  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[]; graphSummary?: { nodes: number; edges: number; coverage: string }; graphNodes?: { id: string; kind: string; path?: string }[] } | null>(null);
+  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[]; graphSummary?: { nodes: number; edges: number; coverage: string }; graphNodes?: { id: string; kind: string; path?: string }[]; desktopSummary?: unknown } | null>(null);
 
   const needsSource = form.status === 'verified' && !validUrl(form.sourceUrl);
   const urlBad = form.sourceUrl !== '' && !validUrl(form.sourceUrl);
@@ -42,6 +43,12 @@ export function Research() {
       <Notice>Web search is not connected, so sources are added by hand. A claim can only be marked <b>verified</b> when it has a valid source link; everything else stays unverified or an assumption in exports.</Notice>
       <Panel title="Inspect an application with REA">
         <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
+        <Field label="Analysis workflow">
+          <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop')}>
+            <option value="javascript">JavaScript / Electron application graph</option>
+            <option value="desktop">Desktop installation discovery</option>
+          </select>
+        </Field>
         <Field label="Local application folder path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
           <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
         </Field>
@@ -54,7 +61,7 @@ export function Research() {
             const created = await rea.createInvestigation(reaTarget.trim(), {
               statement: 'I own this application or have permission to inspect it.',
               confirmedAt: Date.now(),
-            });
+            }, reaKind);
             if (!created.ok) throw new Error(created.error.message);
             const report = await rea.getReport(created.value.id);
             if (!report.ok) throw new Error(report.error.message);
@@ -65,12 +72,14 @@ export function Research() {
           } finally { setReaBusy(false); }
         }}>{reaBusy ? 'Inspecting application…' : 'Run REA investigation'}</button></div>
         {reaReport ? <div className="stack">
-          <h3>Recovered application graph</h3>
+          {reaReport.desktopSummary !== undefined ? <><h3>Desktop installation inspection</h3><pre className="code-block">{JSON.stringify(reaReport.desktopSummary, null, 2)}</pre></> : null}
+          {reaReport.desktopSummary === undefined ? <><h3>Recovered application graph</h3>
           {reaReport.graphSummary ? <p>{reaReport.graphSummary.nodes} nodes · {reaReport.graphSummary.edges} relationships · coverage: <b>{reaReport.graphSummary.coverage}</b></p> : null}
           {reaReport.graphNodes?.length ? <ul>{reaReport.graphNodes.map((node) => <li key={node.id}><b>{node.kind}</b>{node.path ? ' — ' + node.path : ''} <code>{node.id}</code></li>)}</ul> : <p>No graph nodes were returned.</p>}
           {reaReport.graphNodes && reaReport.graphNodes.length === 200 ? <p className="muted">Showing the first 200 nodes. The full graph remains in the REA result.</p> : null}
           <h3>Unknowns and limitations ({reaReport.unknowns.length})</h3>
           {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
+          {reaReport.desktopSummary === undefined ? </> : null}
         </div> : null}
       </Panel>
       <Panel title="Add a claim">
