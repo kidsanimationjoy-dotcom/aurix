@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using Aurix.Desktop.Services;
@@ -17,7 +19,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += async (_, _) => await RefreshDefenderStatusAsync();
+        Loaded += async (_, _) =>
+        {
+            UpdateStartupButton();
+            await RefreshDefenderStatusAsync();
+        };
     }
 
     public void InitializeVoiceFromSavedPreference()
@@ -270,14 +276,47 @@ public partial class MainWindow : Window
         ListeningStatusText.Text = "Emergency stop requested.";
     }
 
+    private void UpdateStartupButton()
+    {
+        StartupButton.Content = StartupRegistration.IsEnabled
+            ? "Disable start with Windows"
+            : "Enable start with Windows";
+    }
+
     private void StartupButton_Click(object sender, RoutedEventArgs e)
     {
-        var result = StartupRegistration.Enable();
+        var result = StartupRegistration.IsEnabled
+            ? StartupRegistration.Disable()
+            : StartupRegistration.Enable();
+
         System.Windows.MessageBox.Show(
             result.Message,
-            result.Success ? "AURIX startup" : "Startup not enabled",
+            result.Success ? "AURIX startup" : "Startup setting not changed",
             System.Windows.MessageBoxButton.OK,
             result.Success ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
+        UpdateStartupButton();
+    }
+
+    private void OpenAuditLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AuditLogService.LogDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{AuditLogService.LogDirectory}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"Could not open the local task log folder: {ex.Message}",
+                "AURIX task log",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
