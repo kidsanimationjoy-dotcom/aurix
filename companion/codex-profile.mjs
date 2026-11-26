@@ -78,7 +78,7 @@ function renderLegacyCodexProfileConfigV2(workspaceRoot) {
     '[permissions.' + profile + '.network]',
     'enabled = false',
     '',
-  ].join('\\n');
+  ].join('\n');
 }
 
 /** Strict read-only chat profile with one dedicated AURIX workspace and no command network. */
@@ -125,7 +125,7 @@ export function renderCodexProfileConfig(workspaceRoot, platform = process.platf
     'enabled = false',
     '',
   );
-  return lines.join('\\n');
+  return lines.join('\n');
 }
 
 async function replaceManagedProfileAtomically(target, content) {
