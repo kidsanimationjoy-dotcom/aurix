@@ -105,6 +105,7 @@ function Companion() {
 
       <Panel title="OpenAI Codex CLI" aside={codexStatus && <span className="pill">{codexStatus.state.replace('_', ' ')}</span>}>
         <p className="muted">AURIX creates its own CODEX_HOME, separate from your normal Codex installation settings and sign-in. You may need to sign in again using the AURIX profile. AURIX never reads the credential store.</p>
+        <small>On Windows, AURIX prefers the supported MXC sandbox and uses the elevated sandbox only as its legacy fallback. That fallback can require a one-time administrator-approved setup. AURIX will not use the weaker unelevated mode.</small>
         {profileResult && (
           <Notice tone={profileResult.sandboxVerified ? 'info' : 'warn'}>
             {profileResult.message}
