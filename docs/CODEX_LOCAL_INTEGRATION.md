@@ -24,6 +24,8 @@ Locations:
 
 AURIX writes a dedicated `config.toml` exclusively. Before status checks or sign-in, it validates the complete directory path and confirms the profile file still exactly matches the expected AURIX-managed content. Symlinks/junctions, changed profile content, or redirected directories cause a fail-closed result.
 
+Before sandbox launch, AURIX also checks the current local Codex policy paths: `/etc/codex/config.toml`, `/etc/codex/managed_config.toml`, and `/etc/codex/requirements.toml` on Unix; `%ProgramData%\\OpenAI\\Codex\\config.toml` and `%ProgramData%\\OpenAI\\Codex\\requirements.toml` on Windows; plus `managed_config.toml` inside AURIX's dedicated `CODEX_HOME`. If these files contain legacy `sandbox_mode` or `sandbox_workspace_write` entries, preparation fails closed. Modern managed requirements remain active: the sandbox invocation explicitly includes managed configuration, and the canary must prove the effective read/write boundaries rather than assuming that the local profile overrides administrator policy.
+
 After profile preparation, **Sign in to AURIX Codex with ChatGPT** runs the official `codex login` process with AURIX's separate `CODEX_HOME`. The user may need to sign in again. AURIX never reads the resulting credential store.
 
 ## 3. Permission profile and OS canary
