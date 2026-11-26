@@ -106,7 +106,7 @@ test('Codex exec args are fixed, read-only-profile scoped and non-interactive', 
     '--skip-git-repo-check',
     '--cd', path.resolve(workspaceRoot),
     '--ask-for-approval', 'never',
-    '--config', 'default_permissions=aurix-chat-readonly',
+    '--config', 'default_permissions="aurix-chat-readonly"',
     '-',
   ]);
   assert.equal(args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
