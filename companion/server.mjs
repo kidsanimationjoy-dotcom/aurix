@@ -38,13 +38,27 @@ function safeEnvironment() {
   return env;
 }
 
+function spawnCodex(command, args, options = {}) {
+  const fixedArgs = args.every((arg) => ['--version', 'login', 'status'].includes(arg));
+  if (!fixedArgs) throw new Error('Only fixed Codex status and login arguments are allowed by this companion stage.');
+
+  if (process.platform === 'win32') {
+    // Windows npm installations expose .cmd shims. Node documents that these
+    // require cmd.exe; only the fixed arguments above can reach this path.
+    const commandLine = [command, ...args].map((part) => '"' + String(part).replace(/"/g, '""') + '"').join(' ');
+    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', commandLine], options);
+  }
+
+  return spawn(command, args, options);
+}
+
 function runCaptured(command, args, { timeoutMs = 4000, prefixArgs = [] } = {}) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let settled = false;
     let timedOut = false;
-    const child = spawn(command, [...prefixArgs, ...args], {
+    const child = spawnCodex(command, [...prefixArgs, ...args], {
       env: safeEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -176,7 +190,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       try {
         // Deliberately inherit the companion terminal: official Codex handles browser OAuth itself.
         // AURIX does not capture the login output or read the CLI credential store.
-        const child = spawn(codexCommand, [...codexPrefixArgs, 'login'], {
+        const child = spawnCodex(codexCommand, [...codexPrefixArgs, 'login'], {
           env: safeEnvironment(),
           stdio: 'inherit',
           windowsHide: false,
