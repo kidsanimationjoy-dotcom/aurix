@@ -79,7 +79,7 @@ export function Research() {
           {reaReport.graphNodes && reaReport.graphNodes.length === 200 ? <p className="muted">Showing the first 200 nodes. The full graph remains in the REA result.</p> : null}
           <h3>Unknowns and limitations ({reaReport.unknowns.length})</h3>
           {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
-          {reaReport.desktopSummary === undefined ? </> : null}
+          </>}
         </div> : null}
       </Panel>
       <Panel title="Add a claim">
