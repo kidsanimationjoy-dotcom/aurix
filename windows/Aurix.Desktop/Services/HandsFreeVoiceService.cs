@@ -152,8 +152,9 @@ public sealed class HandsFreeVoiceService : IDisposable
                 }
                 else if (_state == ListeningState.ListeningForCommand)
                 {
-                    if (e.Result is not null && e.Result.Confidence >= 0.42)
-                        command = e.Result.Text?.Trim();
+                    var recognitionResult = e.Result;
+                    if (recognitionResult is not null && recognitionResult.Confidence >= 0.42)
+                        command = recognitionResult.Text?.Trim();
 
                     // Return to the narrow wake grammar immediately after one command.
                     _engine.UnloadAllGrammars();
