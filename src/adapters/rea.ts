@@ -12,7 +12,7 @@ export const reaMeta: ProviderMeta = {
   references: [{ label: 'REA engine', url: 'https://github.com/morluto/rea' }],
   constraints: [
     'Only inspects directories explicitly allowlisted by the user on their own computer.',
-    'This first implementation supports REA JavaScript/Electron application analysis.',
+    'Supports REA JavaScript/Electron graph analysis and bounded desktop installation discovery.',
     'Every report is returned by the local REA engine; unknowns and missing evidence must remain visible.',
   ],
 };
