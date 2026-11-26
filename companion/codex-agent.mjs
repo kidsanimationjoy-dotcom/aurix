@@ -203,7 +203,6 @@ class CodexAppServerSession {
             request_permissions: true,
           },
         },
-        sandbox: 'read-only',
       });
       const threadId = started?.thread?.id;
       if (typeof threadId !== 'string' || !threadId) throw new Error('Codex App Server returned no thread ID.');
@@ -220,7 +219,6 @@ class CodexAppServerSession {
             request_permissions: true,
           },
         },
-        sandboxPolicy: { type: 'readOnly', networkAccess: false },
       });
       this.turnId = typeof turn?.turn?.id === 'string' ? turn.turn.id : null;
       if (this.status === 'starting') this.status = 'running';
