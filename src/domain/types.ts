@@ -1,4 +1,5 @@
 import type { ProviderId } from '../adapters/types';
+import type { TaskEvent, TaskRecord } from '../tasks/types';
 
 export type Id = string;
 export interface Entity {
@@ -135,9 +136,12 @@ export interface Schema {
   scenes: SceneSpec;
   mediaDrafts: MediaDraft;
   settings: SettingsRecord;
+  tasks: TaskRecord;
+  taskEvents: TaskEvent;
 }
 export type CollectionName = keyof Schema;
 export const COLLECTIONS: CollectionName[] = [
   'projects', 'conversations', 'messages', 'files', 'memory', 'research', 'skills',
   'mcpServers', 'agents', 'assets', 'audit', 'scenes', 'mediaDrafts', 'settings',
+  'tasks', 'taskEvents',
 ];
