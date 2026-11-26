@@ -400,8 +400,11 @@ class CodexAppServerSession {
       result = { decision };
     } else if (record.method === 'item/fileChange/requestApproval') {
       if (decision === 'accept') {
+        if (typeof record.params.grantRoot === 'string' && record.params.grantRoot.trim()) {
+          throw new Error('AURIX refuses session-scoped root grants. Wait for an explicit per-turn filesystem permission request instead.');
+        }
         const changes = Array.isArray(record.item.changes) ? record.item.changes : [];
-        if (!changes.length || changes.length > 30) throw new Error('The proposed file change list is empty or too large.');
+        if (!changes.length || changes.length > 30) throw new Error('AURIX cannot approve this file change without a bounded, visible list of exact file paths.');
         for (const change of changes) {
           if (!(await safeProjectPath(this.projectRoot, change.path))) {
             throw new Error('AURIX refused this file change because its path is outside the approved project or crosses a symbolic link.');
