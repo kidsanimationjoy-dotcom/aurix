@@ -1,6 +1,6 @@
 # OpenAI Codex local companion integration
 
-**Status:** separate AURIX Codex profile setup, official sign-in handoff, and local OS-sandbox canary are implemented in the companion. AURIX chat/task execution remains deliberately disabled.
+**Status:** separate AURIX Codex profile setup, official sign-in handoff, and local OS-sandbox canary are implemented. A bounded text-only read-only chat task endpoint is available only after ChatGPT sign-in and a fresh local sandbox verification. Coding and project access remain disabled.
 
 ## 1. Supported no-API-key path
 
@@ -60,7 +60,7 @@ The Codex CLI permission-profile feature is beta and may change between versions
 
 ## 4. What a successful result does—and does not—mean
 
-A successful canary is evidence that the tested Codex sandbox command allowed the dedicated workspace read and blocked the specific outside-read and write probes on that computer.
+A successful canary is evidence that the tested Codex sandbox command allowed the dedicated workspace read and blocked the specific outside-read and write probes on that computer. It is repeated immediately before each read-only chat dispatch; a changed CLI version or failed canary blocks the request.
 
 It does **not** mean:
 - AURIX can already send chat prompts to Codex;
@@ -85,7 +85,7 @@ Implemented authenticated routes:
 - `POST /v1/codex/prepare`
 - `POST /v1/codex/login`
 
-The legacy `GET /v1/codex/exec` remains method-not-allowed and no execution route is implemented. There is no general filesystem or terminal endpoint.
+`POST /v1/codex/exec` accepts only a bounded Task Center chat prompt and a task ID. It re-runs the sandbox canary and verifies ChatGPT sign-in and the exact CLI version before dispatch; it invokes a fixed `codex exec --json --ephemeral` argument list and returns only the final assistant text. `POST /v1/codex/cancel` stops the local process tree. There is no general filesystem, project-folder, coding-agent, browser, or terminal endpoint; `GET /v1/codex/exec` remains method-not-allowed.
 
 ## 6. Testing
 
