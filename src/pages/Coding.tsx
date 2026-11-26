@@ -232,6 +232,8 @@ function Workspace({ projectId, name, localPath }: { projectId: string; name: st
                 const id = String(event.id);
                 const kind = String(event.kind ?? 'approval');
                 const isNetwork = kind === 'network';
+                const isSessionGrant = typeof event.grantRoot === 'string' && event.grantRoot.length > 0;
+                const isUnreviewableFileChange = kind === 'file_change' && (!Array.isArray(event.changes) || event.changes.length === 0);
                 return (
                   <div className="panel" key={id}>
                     <h3>Approval needed: {kind.replace('_', ' ')}</h3>
@@ -248,8 +250,9 @@ function Workspace({ projectId, name, localPath }: { projectId: string; name: st
                     ))}
                     {event.requestedPermissions !== undefined && event.requestedPermissions !== null && <><small>Requested filesystem permission (review carefully)</small><pre className="code-block">{JSON.stringify(event.requestedPermissions, null, 2)}</pre></>}
                     {isNetwork && <Notice tone="warn">Network access is never granted by this AURIX coding workflow.</Notice>}
+                    {isUnreviewableFileChange && <Notice tone="warn">This file-change request has no exact file list to review, so AURIX will not approve it.</Notice>}
                     <div className="row">
-                      <button className="btn primary" disabled={isNetwork || approvalBusyId !== null} onClick={() => void resolveApproval(id, 'accept')}>
+                      <button className="btn primary" disabled={isNetwork || isSessionGrant || isUnreviewableFileChange || approvalBusyId !== null} onClick={() => void resolveApproval(id, 'accept')}>
                         {approvalBusyId === id ? 'Saving…' : 'Approve this request'}
                       </button>
                       <button className="btn" disabled={approvalBusyId !== null} onClick={() => void resolveApproval(id, 'decline')}>Decline</button>
