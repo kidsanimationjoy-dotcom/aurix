@@ -36,7 +36,7 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - No general terminal, browser, network or deployment endpoint.
 - No persistent Codex session/rollout history from AURIX chat.
 
-**The successful canary permits only this bounded read-only chat mode.** It does not authorize coding, project inspection, file changes, general command execution or deployment. A real sandbox canary must pass on the actual user's computer; fake-CLI tests in CI verify the API contract only and are not proof of OS isolation.
+**The successful canary permits only this bounded read-only chat mode.** It does not authorize coding-agent or project tasks, project inspection, file changes, general command execution or deployment, and it does not prove the isolation of future code paths. A real sandbox canary must pass on the actual user's computer; fake-CLI tests in CI verify the API contract only and are not proof of OS isolation.
 
 ## Set up the companion
 
