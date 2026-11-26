@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, u
 import { recordAudit, type AuditInput } from '../audit/audit';
 import type { ProviderAdapter, ProviderId, ProviderStatus } from '../adapters/types';
 import { OpenAiAdapter } from '../adapters/openai';
+import { ReaAdapter } from '../adapters/rea';
 import { probeCompanion } from '../companion/client';
 import type { CompanionStatus } from '../companion/protocol';
 import type { CollectionName, Project, Schema, SettingsRecord } from '../domain/types';
@@ -53,7 +54,7 @@ export function AppProvider(props: { db: Db; adapters: ProviderAdapter[]; persis
 
   useEffect(() => {
     for (const adapter of adapters) {
-      if (adapter instanceof OpenAiAdapter) {
+      if (adapter instanceof OpenAiAdapter || adapter instanceof ReaAdapter) {
         adapter.setCompanionConfigProvider(() => ({
           url: db.get('settings', SETTINGS_ID)?.companionUrl ?? '',
           token: companionToken.get(),

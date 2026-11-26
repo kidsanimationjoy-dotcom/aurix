@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ReaAdapter } from '../adapters/rea';
 import type { ClaimStatus } from '../domain/types';
 import { researchToMarkdown } from '../lib/researchExport';
 import { useActiveProject, useApp, useAudit, useCollection, useSettings } from '../state/AppState';
@@ -11,7 +12,8 @@ function validUrl(u: string): boolean {
 }
 
 export function Research() {
-  const { db } = useApp();
+  const { db, adapters } = useApp();
+  const rea = adapters.find((adapter) => adapter.meta.id === 'rea') as ReaAdapter | undefined;
   const audit = useAudit();
   const project = useActiveProject();
   const settings = useSettings();
@@ -19,6 +21,12 @@ export function Research() {
   const items = useCollection('research').filter((r) => r.projectId === scope);
   const [form, setForm] = useState(EMPTY);
   const [filter, setFilter] = useState<ClaimStatus | 'all'>('all');
+  const [reaTarget, setReaTarget] = useState('');
+  const [reaKind, setReaKind] = useState<'javascript' | 'desktop' | 'android'>('javascript');
+  const [reaAuthorized, setReaAuthorized] = useState(false);
+  const [reaBusy, setReaBusy] = useState(false);
+  const [reaError, setReaError] = useState('');
+  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[]; graphSummary?: { nodes: number; edges: number; coverage: string }; graphNodes?: { id: string; kind: string; path?: string }[]; desktopSummary?: unknown; artifactSummary?: unknown } | null>(null);
 
   const needsSource = form.status === 'verified' && !validUrl(form.sourceUrl);
   const urlBad = form.sourceUrl !== '' && !validUrl(form.sourceUrl);
@@ -33,6 +41,48 @@ export function Research() {
         actions={<button className="btn" disabled={!items.length} onClick={() => { download('research.md', 'text/markdown', researchToMarkdown(project ? `${project.name}: research` : 'Research', [...items])); void audit({ action: 'research.export', detail: `${items.length} items` }); }}>Export Markdown</button>}
       />
       <Notice>Web search is not connected, so sources are added by hand. A claim can only be marked <b>verified</b> when it has a valid source link; everything else stays unverified or an assumption in exports.</Notice>
+      <Panel title="Inspect an application with REA">
+        <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
+        <Field label="Analysis workflow">
+          <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop' | 'android')}>
+            <option value="javascript">JavaScript / Electron application graph</option>
+            <option value="desktop">Desktop installation discovery</option>
+            <option value="android">Android APK static inspection</option>
+          </select>
+        </Field>
+        <Field label="Local application folder or APK file path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
+          <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
+        </Field>
+        <label className="check"><input type="checkbox" checked={reaAuthorized} onChange={(e) => setReaAuthorized(e.target.checked)} /> I own this application or have permission to inspect it.</label>
+        {reaError ? <Notice>{reaError}</Notice> : null}
+        <div><button className="btn primary" disabled={!rea || !reaTarget.trim() || !reaAuthorized || reaBusy} onClick={async () => {
+          if (!rea) return;
+          setReaBusy(true); setReaError(''); setReaReport(null);
+          try {
+            const created = await rea.createInvestigation(reaTarget.trim(), {
+              statement: 'I own this application or have permission to inspect it.',
+              confirmedAt: Date.now(),
+            }, reaKind);
+            if (!created.ok) throw new Error(created.error.message);
+            const report = await rea.getReport(created.value.id);
+            if (!report.ok) throw new Error(report.error.message);
+            setReaReport(report.value);
+            await audit({ action: 'rea.investigation.completed', detail: reaTarget.trim() });
+          } catch (error) {
+            setReaError(error instanceof Error ? error.message : 'REA investigation failed.');
+          } finally { setReaBusy(false); }
+        }}>{reaBusy ? 'Inspecting application…' : 'Run REA investigation'}</button></div>
+        {reaReport ? <div className="stack">
+          {reaReport.desktopSummary !== undefined || reaReport.artifactSummary !== undefined ? <><h3>{reaReport.desktopSummary !== undefined ? 'Desktop installation inspection' : 'Android APK static inspection'}</h3><pre className="code-block">{JSON.stringify(reaReport.desktopSummary ?? reaReport.artifactSummary, null, 2)}</pre></> : null}
+          {reaReport.desktopSummary === undefined && reaReport.artifactSummary === undefined ? <><h3>Recovered application graph</h3>
+          {reaReport.graphSummary ? <p>{reaReport.graphSummary.nodes} nodes · {reaReport.graphSummary.edges} relationships · coverage: <b>{reaReport.graphSummary.coverage}</b></p> : null}
+          {reaReport.graphNodes?.length ? <ul>{reaReport.graphNodes.map((node) => <li key={node.id}><b>{node.kind}</b>{node.path ? ' — ' + node.path : ''} <code>{node.id}</code></li>)}</ul> : <p>No graph nodes were returned.</p>}
+          {reaReport.graphNodes && reaReport.graphNodes.length === 200 ? <p className="muted">Showing the first 200 nodes. The full graph remains in the REA result.</p> : null}
+          <h3>Unknowns and limitations ({reaReport.unknowns.length})</h3>
+          {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
+          </> : null}
+        </div> : null}
+      </Panel>
       <Panel title="Add a claim">
         <div className="grid g2">
           <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>

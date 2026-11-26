@@ -156,3 +156,40 @@ export async function startCodexLogin(config: LocalCompanionConfig, fetchImpl: t
   if (!response.ok) throw new Error(body.message ?? 'Could not start Codex sign-in (HTTP ' + response.status + ').');
   return body.message ?? 'The official Codex sign-in has started in the companion terminal.';
 }
+
+
+export interface ReaStatus {
+  available: boolean;
+  version: string | null;
+  approvedRootCount: number;
+  message?: string;
+}
+
+export async function getReaStatus(config: LocalCompanionConfig, fetchImpl: typeof fetch = fetch): Promise<ReaStatus> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before checking REA.');
+  const response = await fetchImpl(base + '/v1/rea/status', {
+    headers: { Authorization: 'Bearer ' + config.token.trim() },
+  });
+  const body = await response.json() as Partial<ReaStatus>;
+  if (!response.ok || typeof body.available !== 'boolean' || typeof body.approvedRootCount !== 'number') {
+    throw new Error(typeof body.message === 'string' ? body.message : 'Could not check the local REA engine.');
+  }
+  return body as ReaStatus;
+}
+
+export async function analyzeReaTarget(config: LocalCompanionConfig, target: string, kind: 'javascript' | 'desktop' | 'android' = 'javascript', fetchImpl: typeof fetch = fetch): Promise<unknown> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before running REA.');
+  const response = await fetchImpl(base + '/v1/rea/analyze', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + config.token.trim(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ target, kind }),
+  });
+  const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
+  if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'REA analysis failed.');
+  return body.result;
+}

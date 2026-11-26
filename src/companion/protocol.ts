@@ -19,7 +19,11 @@ export type CompanionCapability =
   | 'cli.codex.profile.prepare'
   | 'cli.codex.sandbox.verify'
   | 'cli.grok-build'
-  | 'cli.rea';
+  | 'cli.rea'
+  | 'rea.status'
+  | 'rea.javascript.analyze'
+  | 'rea.desktop.inspect'
+  | 'rea.android.inspect';
 
 export interface HealthResponse {
   service: 'aurix-companion';
