@@ -139,7 +139,7 @@ async function prepareAndVerifyCodex({ command, paths }) {
         profilePrepared: true, sandboxVerified: false, profileName: paths.profileName,
         platform: process.platform, cliInstalled: false, version: null,
         code: version.errorCode || (version.timedOut ? 'CODEX_VERSION_TIMEOUT' : 'CODEX_NOT_READY'),
-        message: 'The separate AURIX Codex profile was created, but Codex CLI could not be verified. Task execution remains disabled.',
+        message: 'The separate AURIX Codex profile was created, but Codex CLI could not be verified. Read-only chat remains disabled.',
       };
     }
     const versionText = `${version.stdout} ${version.stderr}`;
