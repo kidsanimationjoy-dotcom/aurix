@@ -105,8 +105,8 @@ process.stdin.on('end', () => {
       openAiKeyPresent: boolean;
     };
     assert.equal(result.output, 'Fake Codex reply');
-    assert.equal(log.prompt, 'Explain a simple gear train.\\n');
-    assert.equal(log.openAiKeyPresent, true, 'manager receives its allowlisted environment from the companion caller');
+    assert.equal(log.prompt, 'Explain a simple gear train.\n');
+    assert.equal(log.openAiKeyPresent, false, 'the exec manager strips any accidentally inherited API key');
     assert.ok(log.args.includes('--json'));
     assert.ok(log.args.includes('--ephemeral'));
     assert.ok(log.args.includes('--strict-config'));
