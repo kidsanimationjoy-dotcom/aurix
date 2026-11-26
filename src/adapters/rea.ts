@@ -11,8 +11,8 @@ export const reaMeta: ProviderMeta = {
   authentication: 'Runs the official REA CLI locally through the paired AURIX companion; no API key.',
   references: [{ label: 'REA engine', url: 'https://github.com/morluto/rea' }],
   constraints: [
-    'Only inspects directories explicitly allowlisted by the user on their own computer.',
-    'Supports REA JavaScript/Electron graph analysis and bounded desktop installation discovery.',
+    'Only inspects files or directories explicitly allowlisted by the user on their own computer.',
+    'Supports JavaScript/Electron graph analysis, desktop installation discovery, and static Android APK inspection.',
     'Every report is returned by the local REA engine; unknowns and missing evidence must remain visible.',
   ],
 };
@@ -71,7 +71,7 @@ export class ReaAdapter implements InvestigationAdapter {
         const normalized: InvestigationReport = {
           findings: [],
           unknowns: [kind === 'desktop' ? 'Desktop directory inspection reports runtime candidates and supporting file evidence. It does not run the application or prove runtime behavior. Review the raw REA result for full evidence and follow-up probes.' : 'Android APK inspection is static analysis. It does not install or execute the APK, prove server-side behavior, or establish runtime permissions. Review the raw REA result and its coverage limitations.'],
-          desktopSummary: envelope.report,
+          ...(kind === 'desktop' ? { desktopSummary: envelope.report } : { artifactSummary: envelope.report }),
         };
         const id = globalThis.crypto.randomUUID();
         this.reports.set(id, normalized);
