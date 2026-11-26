@@ -16,7 +16,7 @@ AURIX must not:
 ## 2. Local discovery and sign-in
 
 The companion now:
-1. Runs the official `codex` executable through Node's argument-array process API (no shell interpolation).
+1. Runs the official `codex` executable through Node's argument-array process API (no shell interpolation on macOS/Linux). On Windows, where CLI installers can expose `.cmd` shims, it invokes `cmd.exe` only with a fixed allowlist of status/login arguments; user prompts and arbitrary commands are not accepted by this path.
 2. Runs `codex --version` with a short timeout and returns only a parsed version number.
 3. Runs `codex login status` and returns only signed-in state and a sanitised authentication-mode label; it never returns raw CLI output.
 4. Lets the user explicitly select **Sign in with ChatGPT**, which starts `codex login` locally. Codex's own process inherits the companion terminal so the user completes the official browser sign-in there.
@@ -93,6 +93,7 @@ The exact JSON event schema must be verified against the installed CLI version w
 ## 6. Official references
 
 - Codex CLI install and source: https://github.com/openai/codex
+- Node.js Windows `.cmd` / `.bat` child-process behaviour: https://nodejs.org/api/child_process.html
 - ChatGPT plan availability: https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
 - Authentication and local credential storage: https://learn.chatgpt.com/docs/auth?surface=cli
 - CLI arguments, sandbox, and approval controls: https://learn.chatgpt.com/docs/cli/reference
