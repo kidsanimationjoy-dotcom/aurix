@@ -14,7 +14,8 @@ export type CompanionCapability =
   | 'filesystem.read'
   | 'filesystem.write'
   | 'terminal.exec'
-  | 'cli.codex'
+  | 'cli.codex.status'
+  | 'cli.codex.login'
   | 'cli.grok-build'
   | 'cli.rea';
 
@@ -43,4 +44,22 @@ export interface CompanionStatus {
   state: CompanionState;
   message: string;
   health?: HealthResponse;
+}
+
+
+export type CodexAuthMode = 'chatgpt' | 'api_key' | 'unknown';
+export type CodexInstallState = 'missing' | 'needs_login' | 'ready' | 'error';
+
+export interface CodexStatus {
+  state: CodexInstallState;
+  installed: boolean;
+  signedIn: boolean;
+  version: string | null;
+  authMode: CodexAuthMode;
+  message: string;
+}
+
+export interface LocalCompanionConfig {
+  url: string;
+  token: string;
 }
