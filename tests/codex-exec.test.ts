@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildCodexExecArgs,
+  createCodexChatWorkspace,
   createCodexExecManager,
+  removeCodexChatWorkspace,
 } from '../companion/codex-exec.mjs';
 
 async function makeTempRoot() {
@@ -36,6 +38,59 @@ function safeEnv(root: string): NodeJS.ProcessEnv {
     TMP: root,
   };
 }
+
+test('each Codex chat gets a new empty workspace that is removed after the run', async () => {
+  const root = await makeTempRoot();
+  const workspaceRoot = path.join(root, 'workspace');
+  await (await import('node:fs/promises')).mkdir(workspaceRoot);
+  try {
+    const taskRoot = await createCodexChatWorkspace(workspaceRoot);
+    assert.equal(path.dirname(taskRoot), workspaceRoot);
+    assert.match(path.basename(taskRoot), /^task-[a-f0-9]{32}$/);
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(taskRoot), []);
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(workspaceRoot), [path.basename(taskRoot)]);
+
+    await removeCodexChatWorkspace(workspaceRoot, taskRoot);
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(workspaceRoot), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Codex chat refuses a workspace root containing unexpected files', async () => {
+  const root = await makeTempRoot();
+  const workspaceRoot = path.join(root, 'workspace');
+  await (await import('node:fs/promises')).mkdir(workspaceRoot);
+  try {
+    const unexpected = path.join(workspaceRoot, 'user-notes.txt');
+    await writeFile(unexpected, 'must never be passed to Codex');
+    await assert.rejects(
+      createCodexChatWorkspace(workspaceRoot),
+      (error: NodeJS.ErrnoException) => error.code === 'CODEX_CHAT_WORKSPACE_NOT_EMPTY',
+    );
+    assert.equal(await readFile(unexpected, 'utf8'), 'must never be passed to Codex');
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(workspaceRoot), ['user-notes.txt']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Codex chat cleanup refuses paths outside the AURIX workspace root', async () => {
+  const root = await makeTempRoot();
+  const workspaceRoot = path.join(root, 'workspace');
+  await (await import('node:fs/promises')).mkdir(workspaceRoot);
+  const outside = path.join(root, 'outside');
+  await (await import('node:fs/promises')).mkdir(outside);
+  try {
+    await assert.rejects(
+      removeCodexChatWorkspace(workspaceRoot, outside),
+      (error: NodeJS.ErrnoException) => error.code === 'CODEX_CHAT_WORKSPACE_UNSAFE',
+    );
+    assert.equal((await (await import('node:fs/promises')).lstat(outside)).isDirectory(), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('Codex exec args are fixed, read-only-profile scoped and non-interactive', () => {
   const workspaceRoot = path.join(os.tmpdir(), 'aurix-chat-workspace');
