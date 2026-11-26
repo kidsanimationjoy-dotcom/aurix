@@ -6,10 +6,11 @@ A browser cannot directly run or safely inspect software on the user's computer.
 
 - Binds to `127.0.0.1` only.
 - Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
-- Implements authenticated health, Codex status, and official Codex sign-in handoff.
+- Implements authenticated health, Codex status, official Codex sign-in handoff, and read-only Codex chat.
 - Runs the official local REA CLI's documented JavaScript/Electron application analyzer through authenticated `/v1/rea/*` endpoints, without API keys.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
+- Runs `codex exec --sandbox read-only --ephemeral --json` for AURIX chat only after the local OS sandbox canary passes during the current companion session. It captures assistant-message events, bounds the request and output, and never grants project-folder access or command-write permission.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
 - The canary checks that the sandbox can read its own workspace file, cannot read an existing file outside that workspace, and cannot write either outside the workspace or into the read-only workspace.
 - It also attempts a connection to a temporary loopback-only listener on the companion host. Any accepted connection fails verification, so the canary checks that sandboxed commands cannot reach that local service without contacting an external host.
@@ -41,9 +42,15 @@ AURIX_REA_ROOTS="$HOME/apps-to-inspect" npm run companion
 
 Only add folders containing software you own or are authorised to inspect. The bridge does not bypass login, DRM, network controls, or provider protections and does not extract credentials or private model weights.
 
+## Read-only Codex chat
+
+After preparing the separate AURIX Codex profile, passing its OS sandbox canary, and completing the official ChatGPT sign-in, AURIX can call the authenticated `POST /v1/codex/chat` endpoint. The endpoint verifies that the sandbox was checked in the current companion process, verifies the profile and sign-in again, and launches only `codex exec --sandbox read-only --ephemeral --json` in AURIX's empty chat workspace. It accepts up to 12 bounded conversation messages and returns only the completed assistant message. The chat process inherits an allowlisted environment that omits `OPENAI_API_KEY`. Restarting the companion clears the in-memory sandbox verification; run the local preparation/check again before chatting.
+
+This provides a local Codex-backed chat capability, not access to the private runtime of this ChatGPT conversation and not an identical Astra model. It cannot access a user's project folder, edit files, or execute project tasks.
+
 ## Still disabled
 
-- No AURIX chat/task execution endpoint.
+- No project coding/task execution endpoint. The chat endpoint is read-only and cannot edit project files.
 - No terminal or general filesystem endpoint.
 - No user project folder grants.
 - No task approval UI or execution/cancellation bridge.
