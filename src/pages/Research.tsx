@@ -42,7 +42,7 @@ export function Research() {
       />
       <Notice>Web search is not connected, so sources are added by hand. A claim can only be marked <b>verified</b> when it has a valid source link; everything else stays unverified or an assumption in exports.</Notice>
       <Panel title="Inspect an application with REA">
-        <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
+        <p className="muted">Run the real REA engine on a JavaScript/Electron application folder or .asar archive inside an approved AURIX companion folder. Desktop installation discovery accepts folders only; Android inspection accepts APK files. No API key is used.</p>
         <Field label="Analysis workflow">
           <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop' | 'android')}>
             <option value="javascript">JavaScript / Electron application graph</option>
@@ -50,7 +50,7 @@ export function Research() {
             <option value="android">Android APK static inspection</option>
           </select>
         </Field>
-        <Field label="Local application folder or APK file path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
+        <Field label="Application folder, .asar archive or APK file path" hint="The target must be inside a folder configured in AURIX_REA_ROOTS on the computer running the companion. Desktop installation discovery requires a folder; JavaScript analysis also accepts .asar archives.">
           <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
         </Field>
         <label className="check"><input type="checkbox" checked={reaAuthorized} onChange={(e) => setReaAuthorized(e.target.checked)} /> I own this application or have permission to inspect it.</label>
