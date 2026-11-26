@@ -1,4 +1,4 @@
-import { getCodexStatus } from '../companion/client';
+import { getCodexStatus, sendCodexMessage } from '../companion/client';
 import type { LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, ChatAdapter, CodingAgentAdapter, ChatRequest, ProviderMeta } from './types';
 
@@ -12,8 +12,8 @@ export const openaiMeta: ProviderMeta = {
   references: [{ label: 'Codex CLI', url: 'https://github.com/openai/codex' }],
   constraints: [
     'The ChatGPT web conversation and its private runtime cannot be embedded in AURIX.',
-    'Only local CLI installation and sign-in status are integrated at this stage.',
-    'AURIX creates a separate Codex home and provides a local OS-sandbox canary; chat and coding task execution remain disabled until the execution and approval paths are implemented.',
+    'AURIX supports read-only chat through the locally signed-in Codex CLI after a fresh companion sandbox verification.',
+    'Chat runs with the explicit read-only sandbox, ephemeral session storage, bounded messages and output, and no project-folder access. Coding task execution remains disabled until its separate scoped-write approval path is implemented.',
     'AURIX never reads, copies, or exports Codex credentials.',
   ],
 };
@@ -61,7 +61,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
         state: 'connected' as const,
         implementation: 'implemented_untested' as const,
         summary: 'Codex CLI signed in',
-        detail: 'Version ' + (status.version ?? 'unknown') + '; AURIX has verified sign-in in its separate profile only. Run the local sandbox check in Settings; task execution remains disabled until the executor and approvals are implemented.',
+        detail: 'Version ' + (status.version ?? 'unknown') + '; signed in with the separate AURIX profile. ' + (status.sandboxVerified ? 'The local OS sandbox was verified in this companion session; read-only chat is available.' : 'Run Prepare AURIX profile & verify sandbox in Settings to enable read-only chat.') + ' Coding task execution remains disabled.',
         checkedAt: Date.now(),
       };
     }
@@ -74,19 +74,36 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
     };
   }
 
-  /** No task capability is advertised until a safe, tested execution profile is available. */
+  /** Chat is advertised only after local sign-in and sandbox verification. */
   async getCapabilities(): Promise<Capability[]> {
-    return [];
+    try {
+      const config = this.getConfig();
+      if (!config.url || !config.token) return [];
+      const status = await getCodexStatus(config);
+      return status.state === 'ready' && status.sandboxVerified === true ? ['chat'] : [];
+    } catch {
+      return [];
+    }
   }
 
-  sendMessage(_request: ChatRequest) {
-    return Promise.resolve({
-      ok: false as const,
-      error: {
-        code: 'NOT_IMPLEMENTED' as const,
-        message: 'The AURIX Codex profile is signed in, but chat execution is not implemented. The local sandbox check is a prerequisite, not an executor.',
-      },
-    });
+  async sendMessage(request: ChatRequest) {
+    try {
+      const config = this.getConfig();
+      if (!config.url || !config.token) {
+        return { ok: false as const, error: { code: 'NOT_CONNECTED' as const, message: 'Pair the AURIX local companion first.' } };
+      }
+      const status = await getCodexStatus(config);
+      if (status.state !== 'ready') {
+        return { ok: false as const, error: { code: 'NOT_CONNECTED' as const, message: status.message } };
+      }
+      if (status.sandboxVerified !== true) {
+        return { ok: false as const, error: { code: 'NOT_CONNECTED' as const, message: 'Run the local Codex sandbox verification in Settings before using chat.' } };
+      }
+      const reply = await sendCodexMessage(config, request.messages);
+      return { ok: true as const, value: reply };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'Codex chat failed.' } };
+    }
   }
 
   startSession() {
