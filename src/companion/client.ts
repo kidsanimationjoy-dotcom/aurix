@@ -3,6 +3,7 @@ import {
   type CompanionStatus,
   type CodexStatus,
   type CodexPrepareResult,
+  type CodexAgentSession,
   type HealthResponse,
   type LocalCompanionConfig,
 } from './protocol';
@@ -191,6 +192,121 @@ export async function sendCodexMessage(
   } finally {
     clearTimeout(timer);
   }
+}
+
+
+async function codexAgentRequest<T>(
+  config: LocalCompanionConfig,
+  endpoint: string,
+  init: RequestInit,
+  timeoutMs = 15_000,
+  fetchImpl: typeof fetch = fetch,
+): Promise<T> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Enter the local companion pairing token first.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(base + endpoint, {
+      ...init,
+      headers: {
+        Authorization: 'Bearer ' + config.token.trim(),
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
+      },
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({})) as T & { message?: string; error?: string };
+    if (!response.ok) throw new Error(body.message ?? body.error ?? 'Codex agent request failed (HTTP ' + response.status + ').');
+    return body;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('The local Codex agent request timed out.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function startCodexAgent(
+  config: LocalCompanionConfig,
+  target: string,
+  prompt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CodexAgentSession> {
+  const body = await codexAgentRequest<{ ok?: boolean; session?: CodexAgentSession }>(
+    config,
+    '/v1/codex/agent/start',
+    { method: 'POST', body: JSON.stringify({ target, prompt }) },
+    30_000,
+    fetchImpl,
+  );
+  if (body.ok !== true || !body.session?.id) throw new Error('The local Codex agent did not return a valid session.');
+  return body.session;
+}
+
+export async function getCodexAgentStatus(
+  config: LocalCompanionConfig,
+  sessionId: string,
+  after = 0,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CodexAgentSession> {
+  const query = new URLSearchParams({ sessionId, after: String(after) });
+  const body = await codexAgentRequest<{ ok?: boolean; session?: CodexAgentSession }>(
+    config,
+    '/v1/codex/agent/status?' + query.toString(),
+    { method: 'GET' },
+    10_000,
+    fetchImpl,
+  );
+  if (body.ok !== true || !body.session?.id) throw new Error('The local Codex agent status response was invalid.');
+  return body.session;
+}
+
+export async function respondCodexAgentApproval(
+  config: LocalCompanionConfig,
+  sessionId: string,
+  approvalId: string,
+  decision: 'accept' | 'decline' | 'cancel',
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const body = await codexAgentRequest<{ ok?: boolean }>(
+    config,
+    '/v1/codex/agent/approval',
+    { method: 'POST', body: JSON.stringify({ sessionId, approvalId, decision }) },
+    10_000,
+    fetchImpl,
+  );
+  if (body.ok !== true) throw new Error('The local Codex approval was not confirmed.');
+}
+
+export async function interruptCodexAgent(
+  config: LocalCompanionConfig,
+  sessionId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  const body = await codexAgentRequest<{ ok?: boolean; interrupted?: boolean }>(
+    config,
+    '/v1/codex/agent/interrupt',
+    { method: 'POST', body: JSON.stringify({ sessionId }) },
+    10_000,
+    fetchImpl,
+  );
+  return body.ok === true && body.interrupted === true;
+}
+
+export async function closeCodexAgent(
+  config: LocalCompanionConfig,
+  sessionId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const body = await codexAgentRequest<{ ok?: boolean }>(
+    config,
+    '/v1/codex/agent/close',
+    { method: 'POST', body: JSON.stringify({ sessionId }) },
+    10_000,
+    fetchImpl,
+  );
+  if (body.ok !== true) throw new Error('Could not close the local Codex agent session.');
 }
 
 export interface ReaStatus {
