@@ -158,6 +158,10 @@ export interface InvestigationReport {
   findings: InvestigationFinding[];
   /** What could not be determined. Must be reported, never omitted. */
   unknowns: string[];
+  /** Counts and coverage copied from REA's validated application graph. */
+  graphSummary?: { nodes: number; edges: number; coverage: string };
+  /** Bounded, evidence-linked node index for the UI; never presented as runtime proof. */
+  graphNodes?: { id: string; kind: string; path?: string }[];
 }
 export interface InvestigationAdapter extends ProviderAdapter {
   createInvestigation(target: string, auth: InvestigationAuthorization): Promise<Result<{ id: string }>>;
