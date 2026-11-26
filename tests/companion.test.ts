@@ -1,25 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, chmod, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createCompanionServer } from '../companion/server.mjs';
 import { getCodexStatus, isLoopbackCompanionUrl, probeCompanion, startCodexLogin } from '../src/companion/client';
 import { OpenAiAdapter } from '../src/adapters/openai';
+import { prepareCodexHome, renderCodexProfileConfig, resolveCodexPaths, validateCodexHome, buildCodexSandboxArgs } from '../companion/codex-profile.mjs';
 
 async function withServer<T>(
   fn: (url: string) => Promise<T>,
-  options: { codexCommand?: string } = {},
+  options: { codexCommand?: string; codexPaths?: ReturnType<typeof resolveCodexPaths> } = {},
 ): Promise<T> {
   const server = createCompanionServer({
     token: 'secret-token',
     origin: 'http://localhost:5173',
     ...(options.codexCommand ? { codexCommand: options.codexCommand } : {}),
+    ...(options.codexPaths ? { codexPaths: options.codexPaths } : {}),
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   try { return await fn(url); } finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
+}
+
+
+async function makeCodexProfile() {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-codex-profile-'));
+  const paths = resolveCodexPaths({ HOME: root, XDG_DATA_HOME: path.join(root, 'data') }, process.platform, root);
+  return { root, paths };
 }
 
 async function makeFakeCodex(script: string): Promise<{ directory: string; command: string }> {
@@ -30,11 +39,119 @@ async function makeFakeCodex(script: string): Promise<{ directory: string; comma
   return { directory, command };
 }
 
+
+test('AURIX Codex paths keep the canary outside CODEX_HOME and the workspace inside it', () => {
+  const paths = resolveCodexPaths({ HOME: '/home/tester', XDG_DATA_HOME: '/home/tester/.local/share' }, 'linux', '/home/tester');
+  assert.equal(paths.codexHome, '/home/tester/.local/share/aurix/Codex');
+  assert.equal(paths.workspaceRoot, path.join(paths.codexHome, 'workspaces', 'chat'));
+  assert.equal(paths.canaryRoot, '/home/tester/.local/share/aurix/SandboxCanary');
+  assert.equal(paths.canaryRoot.startsWith(paths.codexHome + path.sep), false);
+  assert.match(renderCodexProfileConfig(paths.workspaceRoot), /default_permissions = "aurix-chat-readonly"/);
+});
+
+test('AURIX creates and validates an immutable dedicated Codex profile', async () => {
+  const profile = await makeCodexProfile();
+  try {
+    const result = await prepareCodexHome(profile.paths);
+    assert.equal(result.ok, true);
+    assert.equal(result.canaryRoot, profile.paths.canaryRoot);
+    assert.equal((await validateCodexHome(profile.paths)).ok, true);
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('AURIX refuses a modified profile config and never overwrites it', async () => {
+  const profile = await makeCodexProfile();
+  try {
+    await prepareCodexHome(profile.paths);
+    await writeFile(profile.paths.configPath, 'default_permissions = ":danger-full-access"');
+    await assert.rejects(() => validateCodexHome(profile.paths), /changed outside AURIX/);
+    await assert.rejects(() => prepareCodexHome(profile.paths), /changed outside AURIX/);
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('Codex sandbox arguments require the explicit profile and managed config', () => {
+  const args = buildCodexSandboxArgs({
+    platform: 'linux',
+    profileName: 'aurix-chat-readonly',
+    workspaceRoot: '/tmp/aurix-workspace',
+    executable: '/usr/bin/node',
+    executableArgs: ['-e', 'process.exit(0)'],
+  });
+  assert.deepEqual(args.slice(0, 2), ['sandbox', 'linux']);
+  assert.ok(args.includes('--permission-profile'));
+  assert.ok(args.includes('aurix-chat-readonly'));
+  assert.ok(args.includes('--include-managed-config'));
+  assert.ok(args.includes('--cd'));
+  assert.ok(args.includes('/tmp/aurix-workspace'));
+  assert.ok(args.includes('--'));
+});
+
+test('Windows sandbox argument construction refuses command shell shims', () => {
+  assert.throws(() => buildCodexSandboxArgs({
+    platform: 'win32',
+    profileName: 'aurix-chat-readonly',
+    workspaceRoot: '/tmp/aurix-workspace',
+    executable: '/tmp/codex.cmd',
+  }), /native Codex/);
+});
+
+test('profile preparation uses a separate CODEX_HOME and fails closed when the sandbox canary fails', async () => {
+  const profile = await makeCodexProfile();
+  const logPath = path.join(profile.root, 'sandbox-args.json');
+  const fake = await makeFakeCodex(`
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  if (!process.env.CODEX_HOME) process.exit(91);
+  console.log('codex-cli 0.42.1'); process.exit(0);
+}
+if (args[0] === 'sandbox') {
+  fs.writeFileSync(${JSON.stringify(logPath)}, JSON.stringify(args));
+  process.exit(77);
+}
+if (args[0] === 'login' && args[1] === 'status') { console.log('Not logged in'); process.exit(1); }
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const response = await fetch(url + '/v1/codex/prepare', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json() as {
+        profilePrepared: boolean; sandboxVerified: boolean; profileName: string; code: string;
+      };
+      assert.equal(result.profilePrepared, true);
+      assert.equal(result.sandboxVerified, false);
+      assert.equal(result.profileName, 'aurix-chat-readonly');
+      assert.equal(result.code, 'SANDBOX_CANARY_FAILED');
+      const args = JSON.parse(await readFile(logPath, 'utf8')) as string[];
+      assert.deepEqual(args.slice(0, 2), ['sandbox', process.platform === 'darwin' ? 'macos' : 'linux']);
+      assert.ok(args.includes('--permission-profile'));
+      assert.ok(args.includes('--include-managed-config'));
+      assert.ok(args.includes(profile.paths.workspaceRoot));
+      assert.ok(args.includes('--'));
+      const status = await getCodexStatus({ url, token: 'secret-token' });
+      assert.equal(status.profilePrepared, true);
+      assert.equal(status.state, 'needs_login');
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
 test('probe connects with the correct token and reports only implemented capabilities', async () => {
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
@@ -92,16 +209,21 @@ test('companion rejects foreign origins rather than merely omitting CORS headers
   });
 });
 
-test('Codex status returns only parsed version, sign-in state and sanitised auth mode', async () => {
+test('Codex status returns only parsed sign-in data from the separate AURIX profile', async () => {
   const fake = await makeFakeCodex(`
 const args = process.argv.slice(2);
-if (args[0] === '--version') { console.log('codex-cli 0.42.1'); process.exit(0); }
+if (args[0] === '--version') {
+  if (!process.env.CODEX_HOME) process.exit(90);
+  console.log('codex-cli 0.42.1'); process.exit(0);
+}
 if (args[0] === 'login' && args[1] === 'status') {
   console.log('Logged in using ChatGPT. access_token=do-not-return-this-value');
   process.exit(0);
 }
 process.exit(2);
 `);
+  const profile = await makeCodexProfile();
+  await prepareCodexHome(profile.paths);
   try {
     await withServer(async (url) => {
       const status = await getCodexStatus({ url, token: 'secret-token' });
@@ -110,48 +232,63 @@ process.exit(2);
       assert.equal(status.signedIn, true);
       assert.equal(status.version, '0.42.1');
       assert.equal(status.authMode, 'chatgpt');
+      assert.equal(status.profilePrepared, true);
+      assert.equal(status.profileName, 'aurix-chat-readonly');
       assert.equal(JSON.stringify(status).includes('do-not-return-this-value'), false);
-    }, { codexCommand: fake.command });
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
   }
 });
 
-test('Codex status truthfully reports a missing CLI', async () => {
-  await withServer(async (url) => {
-    const status = await getCodexStatus({ url, token: 'secret-token' });
-    assert.equal(status.state, 'missing');
-    assert.equal(status.installed, false);
-    assert.equal(status.signedIn, false);
-  }, { codexCommand: path.join(os.tmpdir(), 'missing-aurix-codex-binary') });
+test('Codex status truthfully reports a missing CLI in the dedicated profile', async () => {
+  const profile = await makeCodexProfile();
+  await prepareCodexHome(profile.paths);
+  try {
+    await withServer(async (url) => {
+      const status = await getCodexStatus({ url, token: 'secret-token' });
+      assert.equal(status.state, 'missing');
+      assert.equal(status.installed, false);
+      assert.equal(status.signedIn, false);
+      assert.equal(status.profilePrepared, true);
+    }, { codexCommand: path.join(os.tmpdir(), 'missing-aurix-codex-binary'), codexPaths: profile.paths });
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
 });
 
-test('official sign-in handoff starts only when Codex is installed and not signed in', async () => {
+test('official sign-in handoff starts only inside the prepared AURIX profile', async () => {
   const fake = await makeFakeCodex(`
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('codex-cli 0.42.1'); process.exit(0); }
 if (args[0] === 'login' && args[1] === 'status') { console.log('Not logged in'); process.exit(1); }
-if (args[0] === 'login') { console.log('Starting official sign-in'); process.exit(0); }
+if (args[0] === 'login') { if (!process.env.CODEX_HOME) process.exit(90); console.log('Starting official sign-in'); process.exit(0); }
 process.exit(2);
 `);
+  const profile = await makeCodexProfile();
+  await prepareCodexHome(profile.paths);
   try {
     await withServer(async (url) => {
       const message = await startCodexLogin({ url, token: 'secret-token' });
-      assert.match(message, /official browser sign-in/);
-    }, { codexCommand: fake.command });
+      assert.match(message, /separate AURIX profile/);
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
   }
 });
 
 
-test('OpenAI adapter exposes connection status but no task capability before execution is approved', async () => {
+test('OpenAI adapter exposes profile sign-in but no task capability before execution is approved', async () => {
   const fake = await makeFakeCodex(`
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('codex-cli 0.42.1'); process.exit(0); }
 if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in using ChatGPT'); process.exit(0); }
 process.exit(2);
 `);
+  const profile = await makeCodexProfile();
+  await prepareCodexHome(profile.paths);
   try {
     await withServer(async (url) => {
       const adapter = new OpenAiAdapter();
@@ -159,10 +296,11 @@ process.exit(2);
       const status = await adapter.getStatus();
       assert.equal(status.state, 'connected');
       assert.equal(status.implementation, 'implemented_untested');
-      assert.match(status.detail ?? '', /Task execution remains disabled/);
+      assert.match(status.detail ?? '', /task execution remains disabled/i);
       assert.deepEqual(await adapter.getCapabilities(), []);
-    }, { codexCommand: fake.command });
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
   }
 });

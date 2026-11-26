@@ -13,7 +13,7 @@ export const openaiMeta: ProviderMeta = {
   constraints: [
     'The ChatGPT web conversation and its private runtime cannot be embedded in AURIX.',
     'Only local CLI installation and sign-in status are integrated at this stage.',
-    'Task execution remains disabled until a strictly scoped filesystem permission profile can be enforced and verified.',
+    'AURIX creates a separate Codex home and provides a local OS-sandbox canary; chat and coding task execution remain disabled until the execution and approval paths are implemented.',
     'AURIX never reads, copies, or exports Codex credentials.',
   ],
 };
@@ -61,7 +61,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
         state: 'connected' as const,
         implementation: 'implemented_untested' as const,
         summary: 'Codex CLI signed in',
-        detail: 'Version ' + (status.version ?? 'unknown') + '; AURIX has verified sign-in status only. Task execution remains disabled pending scoped sandbox verification.',
+        detail: 'Version ' + (status.version ?? 'unknown') + '; AURIX has verified sign-in in its separate profile only. Run the local sandbox check in Settings; task execution remains disabled until the executor and approvals are implemented.',
         checkedAt: Date.now(),
       };
     }
@@ -84,7 +84,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
       ok: false as const,
       error: {
         code: 'NOT_IMPLEMENTED' as const,
-        message: 'Codex sign-in is verified, but AURIX chat execution is not enabled until the filesystem permission profile is independently verified.',
+        message: 'The AURIX Codex profile is signed in, but chat execution is not implemented. The local sandbox check is a prerequisite, not an executor.',
       },
     });
   }

@@ -16,6 +16,8 @@ export type CompanionCapability =
   | 'terminal.exec'
   | 'cli.codex.status'
   | 'cli.codex.login'
+  | 'cli.codex.profile.prepare'
+  | 'cli.codex.sandbox.verify'
   | 'cli.grok-build'
   | 'cli.rea';
 
@@ -56,6 +58,19 @@ export interface CodexStatus {
   signedIn: boolean;
   version: string | null;
   authMode: CodexAuthMode;
+  message: string;
+  profilePrepared?: boolean;
+  profileName?: string;
+}
+
+export interface CodexPrepareResult {
+  profilePrepared: boolean;
+  sandboxVerified: boolean;
+  profileName: string;
+  platform: string;
+  cliInstalled: boolean;
+  version: string | null;
+  code: string;
   message: string;
 }
 
