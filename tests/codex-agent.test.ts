@@ -25,11 +25,14 @@ rl.on('line', (line) => {
     return;
   }
   if (message.method === 'thread/start') {
+    if (message.params.sandbox !== 'read-only') process.exit(94);
+    if (message.params.approvalPolicy?.granular?.request_permissions !== true) process.exit(95);
     root = message.params.cwd;
     send({ id: message.id, result: { thread: { id: 'thread-aurix-test' } } });
     return;
   }
   if (message.method === 'turn/start') {
+    if (message.params.sandboxPolicy?.type !== 'readOnly' || message.params.sandboxPolicy?.networkAccess !== false) process.exit(96);
     const text = message.params.input?.[0]?.text ?? '';
     scenario = text.includes('filesystem') ? 'filesystem' : text.includes('network') ? 'network' : 'command';
     send({ id: message.id, result: { turn: { id: 'turn-aurix-test', status: 'inProgress' } } });
