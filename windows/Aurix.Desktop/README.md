@@ -68,6 +68,17 @@ For text entry, AURIX must find exactly one visible editable field with the exac
 
 AURIX stores task execution metadata in `%LOCALAPPDATA%\\AURIX\\Desktop\\task-audit.jsonl`. The in-app **Open task log** control opens that folder. The log records only the action type, supported target application, UTC timestamp and outcome. It does not store spoken instructions, entered text, window titles or exception messages. The log is local to the current Windows account and rotates at a bounded size.
 
+## Remove the portable preview
+
+This CI package is a portable preview, not an installer. Before deleting its extracted folder:
+
+1. Pause hands-free from the main window or tray so the microphone is released.
+2. Use **Disable start with Windows** in AURIX.
+3. Exit AURIX from the tray menu.
+4. Delete the folder where you extracted the preview package.
+
+The local task audit folder under `%LOCALAPPDATA%\\AURIX\\Desktop` and the per-user wake-word preference may remain after the app folder is deleted. The audit folder contains only the limited task metadata described above. The preview has no automatic uninstaller or updater.
+
 ## Build on Windows 11
 
 Install the .NET 8 SDK, then from this directory:
