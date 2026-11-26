@@ -31,6 +31,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Documentation
 
+- [Launch readiness and release gates](docs/LAUNCH_READINESS.md)
 - [Windows code-signing policy and current status](docs/CODE_SIGNING_POLICY.md)
 
 - [Complete feature catalogue](docs/FEATURE_CATALOG.md)
