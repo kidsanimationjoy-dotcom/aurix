@@ -7,6 +7,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { analyzeReaTarget, reaStatus } from './rea.mjs';
+import { runCodexReadOnlyChat } from './codex-chat.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -189,6 +190,8 @@ async function readJson(req, limit = 4096) {
 
 export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [] }) {
   let loginChild = null;
+  // The companion process must re-prove the OS sandbox after every restart.
+  let sandboxVerified = false;
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
 
   return http.createServer(async (req, res) => {
@@ -230,7 +233,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
         grantedRoots: [],
       });
     }
@@ -249,7 +252,9 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
             : 'The profile preparation request must contain valid JSON.',
         });
       }
-      return send(200, await prepareAndVerifyCodex({ command: codexCommand, paths }));
+      const prepared = await prepareAndVerifyCodex({ command: codexCommand, paths });
+      sandboxVerified = prepared.profilePrepared === true && prepared.sandboxVerified === true;
+      return send(200, { ...prepared, sandboxVerified });
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/codex/status') {
@@ -258,12 +263,12 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       } catch {
         return send(200, {
           state: 'error', installed: false, signedIn: false, version: null, authMode: 'unknown',
-          profilePrepared: false, profileName: paths.profileName,
+          profilePrepared: false, sandboxVerified: false, profileName: paths.profileName,
           message: 'Prepare the separate AURIX Codex profile before checking its sign-in status.',
         });
       }
       const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
-      return send(200, { ...status, profilePrepared: true, profileName: paths.profileName });
+      return send(200, { ...status, profilePrepared: true, sandboxVerified, profileName: paths.profileName });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/login') {
@@ -322,6 +327,48 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         return send(400, { ok: false, error: 'REA_ANALYSIS_FAILED', message: error instanceof Error ? error.message.slice(0, 1200) : 'REA analysis failed.' });
       }
     }
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/chat') {
+      let body;
+      try { body = await readJson(req, 24_000); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, {
+          error: 'INVALID_REQUEST',
+          message: status === 413 ? 'The chat request is too large.' : 'The chat request must contain valid JSON.',
+        });
+      }
+      try {
+        if (!sandboxVerified) {
+          return send(409, { error: 'CODEX_SANDBOX_NOT_VERIFIED', message: 'Prepare the AURIX Codex profile and pass its local sandbox check before starting chat.' });
+        }
+        await validateCodexHome(paths);
+        const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
+        if (status.state !== 'ready') {
+          return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
+        }
+        const executable = process.platform === 'win32'
+          ? await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform)
+          : codexCommand;
+        const result = await runCodexReadOnlyChat({
+          command: executable,
+          workspaceRoot: paths.workspaceRoot,
+          env: safeEnvironment(paths.codexHome),
+          messages: body.messages,
+        });
+        return send(200, { ok: true, ...result });
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+        return send(400, {
+          ok: false,
+          error: 'CODEX_CHAT_FAILED',
+          message: code === 'ENOENT'
+            ? 'The local Codex CLI executable could not be started.'
+            : error instanceof Error ? error.message.slice(0, 600) : 'Codex chat failed.',
+        });
+      }
+    }
+
     if (req.method === 'GET' && url.pathname === '/v1/codex/exec') {
       return send(405, { error: 'METHOD_NOT_ALLOWED' });
     }
