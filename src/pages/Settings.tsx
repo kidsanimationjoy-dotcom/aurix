@@ -38,7 +38,7 @@ function Providers() {
                 <div><h3>Authentication</h3><small>{a.meta.authentication}</small></div>
                 <div><h3>Constraints</h3><ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{a.meta.constraints.map((c) => <li key={c}><small>{c}</small></li>)}</ul></div>
               </div>
-              <div className="row tight"><small>Planned: {a.meta.plannedCapabilities.join(', ')}</small></div>
+              {a.meta.plannedCapabilities.length > 0 && <div className="row tight"><small>Planned: {a.meta.plannedCapabilities.join(', ')}</small></div>}
               {a.meta.references.length > 0 && <div className="row">{a.meta.references.map((r) => <a key={r.url} href={r.url} target="_blank" rel="noreferrer noopener">{r.label}</a>)}</div>}
             </Panel>
           );
@@ -112,7 +112,7 @@ function Companion() {
             {' · Profile: ' + profileResult.profileName}
             {' · Platform: ' + profileResult.platform}
             {profileResult.version ? ' · Codex ' + profileResult.version : ''}
-            {profileResult.sandboxVerified ? ' · OS restrictions verified on this computer' : ' · Sandbox not verified; execution remains disabled'}
+            {profileResult.sandboxVerified ? ' · OS restrictions verified on this computer' : ' · Sandbox not verified; read-only chat remains disabled'}
           </Notice>
         )}
         <div className="row">
