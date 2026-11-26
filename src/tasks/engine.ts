@@ -46,6 +46,7 @@ function isTerminal(status: TaskStatus): boolean {
 
 export class TaskEngine {
   private readonly running = new Map<string, RunningTask>();
+  private recoveryPromise: Promise<number> | null = null;
 
   constructor(private readonly db: Db, private readonly adapters: ProviderAdapter[]) {}
 
@@ -206,21 +207,25 @@ export class TaskEngine {
   }
 
   /** Running or mid-preparation tasks cannot survive a browser reload; do not pretend they resumed. */
-  async recoverInterruptedTasks(): Promise<number> {
-    const interrupted = this.db.snapshot('tasks').filter((task) =>
-      task.status === 'queued' || task.status === 'classifying' || task.status === 'planning'
-      || task.status === 'running' || task.status === 'cancelling'
-    );
-    for (const task of interrupted) {
-      await this.db.update('tasks', task.id, {
-        status: 'failed',
-        errorCode: 'INTERRUPTED_AFTER_RELOAD',
-        errorMessage: 'The browser was closed or reloaded while this task was in progress. Submit it again to retry.',
-        finishedAt: Date.now(),
-      });
-      await this.event(task.id, 'task.interrupted', 'Task execution or preparation was interrupted by an app reload.', task.selectedProviderId);
-    }
-    return interrupted.length;
+  recoverInterruptedTasks(): Promise<number> {
+    if (this.recoveryPromise) return this.recoveryPromise;
+    this.recoveryPromise = (async () => {
+      const interrupted = this.db.snapshot('tasks').filter((task) =>
+        task.status === 'queued' || task.status === 'classifying' || task.status === 'planning'
+        || task.status === 'running' || task.status === 'cancelling'
+      );
+      for (const task of interrupted) {
+        await this.db.update('tasks', task.id, {
+          status: 'failed',
+          errorCode: 'INTERRUPTED_AFTER_RELOAD',
+          errorMessage: 'The browser was closed or reloaded while this task was in progress. Submit it again to retry.',
+          finishedAt: Date.now(),
+        });
+        await this.event(task.id, 'task.interrupted', 'Task execution or preparation was interrupted by an app reload.', task.selectedProviderId);
+      }
+      return interrupted.length;
+    })();
+    return this.recoveryPromise;
   }
 
   private async execute(taskId: string, adapter: ProviderAdapter & TaskExecutionAdapter, providerId: ProviderId): Promise<void> {
@@ -228,15 +233,26 @@ export class TaskEngine {
     const task = this.db.get('tasks', taskId);
     if (!task) return;
     const timeout = setTimeout(() => {
-      const latest = this.db.get('tasks', taskId);
-      if (latest && !isTerminal(latest.status)) {
-        void this.db.update('tasks', taskId, {
+      void (async () => {
+        const latest = this.db.get('tasks', taskId);
+        if (!latest || isTerminal(latest.status)) return;
+        await this.db.update('tasks', taskId, {
           status: 'cancelling',
           errorCode: 'TIMEOUT_REQUESTED',
           errorMessage: 'Time limit reached; waiting for the provider adapter to acknowledge the stop.',
-        }).then(() => this.event(taskId, 'task.timeout.requested', 'Task timeout reached; stop requested.', providerId)).catch(() => undefined);
-      }
-      controller.abort('timeout');
+        });
+        await this.event(taskId, 'task.timeout.requested', 'Task timeout reached; stop requested.', providerId);
+        const current = this.db.get('tasks', taskId);
+        if (current && !isTerminal(current.status)) controller.abort('timeout');
+      })().catch((error) => {
+        const message = error instanceof Error ? error.message : 'Timeout handling failed.';
+        void this.db.update('tasks', taskId, {
+          status: 'failed',
+          errorCode: 'TIMEOUT_HANDLING_FAILED',
+          errorMessage: message,
+          finishedAt: Date.now(),
+        }).then(() => this.event(taskId, 'task.failed', message.slice(0, 500), providerId)).catch(() => undefined);
+      });
     }, task.timeoutMs);
     const request: TaskExecutionRequest = {
       taskId,
