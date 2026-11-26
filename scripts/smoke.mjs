@@ -52,6 +52,9 @@ await page.goto(`${URL_}/#/tasks`);
 await page.getByLabel('Task description').fill('Build a responsive website dashboard');
 await page.getByRole('button', { name: 'Create task' }).click();
 await page.getByText('Build a responsive website dashboard').waitFor();
+await page.getByText(/coding · The request contains software-development terms/).waitFor();
+await page.getByText('Waiting for provider').waitFor();
+await page.getByText('Check coding capability').waitFor();
 check('task classifier recognises coding intent', await page.getByText(/coding · The request contains software-development terms/).isVisible());
 check('task waits honestly when no provider is connected', await page.getByText('Waiting for provider').isVisible());
 check('task has a visible plan', await page.getByText('Check coding capability').isVisible());
@@ -62,6 +65,7 @@ await page.reload();
 await page.waitForSelector('h1');
 check('task persists after reload', await page.getByText('Build a responsive website dashboard').isVisible());
 await page.getByRole('button', { name: 'Cancel task' }).click();
+await page.getByText('Cancelled', { exact: true }).waitFor();
 check('waiting task can be cancelled', await page.getByText('Cancelled', { exact: true }).isVisible());
 
 // Coding: file create, edit, diff, save
