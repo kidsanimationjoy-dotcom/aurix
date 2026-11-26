@@ -107,12 +107,12 @@ public partial class MainWindow : Window
 
     private void SpeechInput_PhraseRecognized(object? sender, string phrase)
     {
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(new Action(() =>
         {
             CommandInput.Text = phrase;
             CommandInput.CaretIndex = CommandInput.Text.Length;
             ListeningStatusText.Text = $"Heard: “{phrase}” — review it, then press Run task.";
-        });
+        }));
     }
 
     private void StopVoiceListening()
@@ -206,6 +206,8 @@ public partial class MainWindow : Window
     {
         if (!AllowClose)
         {
+            StopVoiceListening();
+            _taskCancellation?.Cancel();
             e.Cancel = true;
             Hide();
             return;
