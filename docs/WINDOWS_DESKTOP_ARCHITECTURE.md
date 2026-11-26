@@ -12,7 +12,8 @@
 ```text
 AURIX Desktop (signed-in user session)
   - WPF shell and system tray
-  - Explicit opt-in local speech dictation while the window is visible
+  - Explicitly enabled local wake-word listener
+  - Wake-only grammar before activation; one-command dictation after activation
   - Deterministic allowlisted app launcher and bounded task runner
   - Read-only inspection of visible windows and accessible UI Automation controls
   - Approval-gated Invoke / Value UI Automation actions
@@ -34,7 +35,21 @@ Microsoft Defender Antivirus
   - Quarantine and remediation
 ```
 
-The desktop process owns microphone access and UI Automation because those capabilities belong to the interactive user session. Microphone access starts only after the user presses the voice control, stops when the window is hidden or the app exits, and does not upload audio. Recognised words are placed in the command box for user review; speech is never an implicit approval to execute a task. A Windows service must not attempt to interact with the logged-in desktop. Any future IPC must use a named pipe with an explicit ACL limited to the current user and the service identity.
+The desktop process owns microphone access and UI Automation because those capabilities belong to the interactive user session. A user must explicitly enable the hands-free preference. The microphone is then active for a narrow local wake-word grammar; full dictation is enabled only after the wake phrase is recognised, captures one command, and returns to wake-only mode. AURIX does not save microphone recordings or send room audio to an AURIX cloud service. The tray status shows whether wake listening is enabled, the tray menu provides pause/resume, and Exit stops the process and releases microphone access. When the optional current-user startup entry is enabled, it starts AURIX hidden in the tray and restores wake listening only if the user's saved wake-word preference is still enabled.
+
+A Windows service must not attempt to interact with the logged-in desktop. Any future IPC must use a named pipe with an explicit ACL limited to the current user and the service identity.
+
+## Current hands-free voice slice
+
+- An explicit opt-in stores a per-Windows-user wake-word preference.
+- At standby, the recognizer loads a narrow grammar with `AURIX` and `Hey AURIX` choices. General dictation is not loaded in this state.
+- Once a wake phrase is recognised, AURIX switches to a dictation grammar for one command.
+- The recognised command is sent to the existing bounded local task planner.
+- The recognizer then unloads dictation and returns to the narrow wake grammar.
+- Closing the main window hides it to the tray without stopping hands-free listening.
+- Tray controls pause/resume wake listening or exit the application.
+- Startup registration launches AURIX with a background argument so it starts hidden in the tray.
+- A local English Windows speech recognizer and microphone permission are required. Live detection reliability still needs real-device testing.
 
 ## Current computer-use slice
 
@@ -66,23 +81,6 @@ Extend the current observe-plan-act-verify loop in stages:
 
 Coordinate-based input is a fallback only. Do not bypass Windows secure desktop, UAC, lock-screen, application permission prompts or access boundaries. Never capture passwords or payment credentials into model context.
 
-## Voice activation
-
-Current:
-
-- Explicit button-controlled Windows speech dictation through the installed local speech recognizer.
-- No audio recording file is written by the AURIX dictation service.
-- Recognised text is returned to the visible command box and must be reviewed and manually submitted.
-- Voice listening stops when the window is hidden or the application exits.
-- If no compatible Windows recognizer is installed, typed commands remain available.
-
-Future:
-
-- Local clap and wake-phrase detection.
-- A visible tray-level microphone indicator that remains accurate in all app states.
-- Sensitivity controls, hardware mute guidance and a global software pause.
-- Cloud transcription only as an explicit opt-in; cloud AI receives only the text needed for the approved task.
-
 ## Hybrid reasoning
 
 - Local layer: deterministic command parsing, device state, simple tasks and policy checks.
@@ -104,7 +102,7 @@ Future:
 
 Separate grants for:
 - microphone activation;
-- speech transcription;
+- wake-word and speech recognition;
 - screen observation;
 - UI Automation read access;
 - UI Automation action access;
@@ -118,10 +116,10 @@ High-impact operations (deleting files, installing software, changing security s
 ## Implementation stages
 
 1. **Desktop shell + Defender read/scan foundation:** implemented in `windows/Aurix.Desktop`.
-2. **Bounded local task console:** implemented — local dictation after explicit activation, allowlisted multi-app launch and read-only visible-window inspection.
+2. **Bounded local task console:** implemented — allowlisted multi-app launch and read-only visible-window inspection.
 3. **Scoped UI Automation slice:** implemented — inspect supported-app controls, approve exact named button clicks and field-value entry, refuse ambiguous/destructive/password targets.
-4. **Interactive computer use:** next — expand supported-app coverage, reliable foreground targeting, verify expected state changes and add persistent local audit history.
-5. **Hands-free activation:** future — local clap and wake phrase, always-visible state, mute and pause controls.
+4. **Hands-free wake-word loop:** implemented in this branch — opt-in local wake grammar, one-command dictation, tray pause/resume, hidden-at-startup support. Real-device microphone and wake-word testing remains required.
+5. **Interactive computer use:** next — expand supported-app coverage, reliable foreground targeting, verify expected state changes and add persistent local audit history.
 6. **Hybrid reasoning:** future — local policy router plus connected provider adapters.
 7. **Security event dashboard:** future — Defender history, scheduled scans and safe notifications.
 8. **Installer and release:** future — signed installer, startup controls, update/rollback and Windows 11 test matrix.
@@ -129,10 +127,12 @@ High-impact operations (deleting files, installing software, changing security s
 ## Acceptance criteria
 
 - App starts only after explicit user launch or explicit current-user startup opt-in.
-- Closing the window hides to tray; tray Exit actually stops the process.
-- Microphone is never used before the user enables voice dictation.
-- Voice listening stops when the window is hidden or the application exits.
-- Recognised speech is not executed until the user reviews and submits it.
+- Closing the window hides to tray without stopping enabled hands-free listening.
+- Tray menu can pause or resume wake-word listening; Exit releases the microphone.
+- Microphone is not opened until the user explicitly enables hands-free.
+- Wake standby listens only for the narrow wake phrase grammar, not general dictation.
+- Dictation is loaded only after the wake phrase and is limited to one command before returning to wake mode.
+- Recognised speech is not an implicit approval for a sensitive action.
 - UI Automation never runs against the secure desktop or locked session.
 - No model output is executed as arbitrary PowerShell or shell commands.
 - Defender status and scan failures are reported accurately.
