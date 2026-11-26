@@ -19,6 +19,7 @@ export type CompanionCapability =
   | 'cli.codex.profile.prepare'
   | 'cli.codex.sandbox.verify'
   | 'cli.codex.chat'
+  | 'cli.codex.agent'
   | 'cli.grok-build'
   | 'cli.rea'
   | 'rea.status'
@@ -34,6 +35,7 @@ export interface HealthResponse {
   capabilities: CompanionCapability[];
   /** Directories the user has explicitly granted. Empty until a grant flow exists. */
   grantedRoots: string[];
+  codexApprovedRootCount?: number;
 }
 
 /** Future: every side-effecting request must carry an approval id issued after user consent. */
@@ -83,4 +85,22 @@ export interface CodexPrepareResult {
 export interface LocalCompanionConfig {
   url: string;
   token: string;
+}
+
+export type CodexAgentStatus = 'starting' | 'running' | 'completed' | 'interrupted' | 'failed' | 'stopped';
+export interface CodexAgentEvent {
+  sequence: number;
+  at: number;
+  type: string;
+  [key: string]: unknown;
+}
+export interface CodexAgentSession {
+  id: string;
+  status: CodexAgentStatus;
+  threadId: string | null;
+  turnId: string | null;
+  projectRoot: string;
+  error: string;
+  nextCursor: number;
+  events: CodexAgentEvent[];
 }
