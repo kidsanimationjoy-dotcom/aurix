@@ -271,7 +271,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
@@ -344,6 +344,44 @@ process.exit(2);
       const body = await response.json();
       assert.equal(body.ok, true);
       assert.equal(body.result.report.normalized_result.candidates[0].family, 'electron');
+    }, { reaCommand: fake.command, reaRoots: [root] });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('REA Android APK inspection uses a fixed static command and approved file roots', async () => {
+  if (process.platform === 'win32') return;
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-rea-apk-root-'));
+  const target = path.join(root, 'sample.apk');
+  await writeFile(target, 'test apk placeholder');
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--help') { console.log('rea-agents help'); process.exit(0); }
+if (args[0] === 'inspect-android-package' && args[2] === '--json') {
+  console.log(JSON.stringify({ normalized_result: { package: 'example.test', manifest: { components: [] }, coverage: { status: 'complete' } } }));
+  process.exit(0);
+}
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const response = await fetch(url + '/v1/rea/analyze', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, kind: 'android' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.ok, true);
+      assert.equal(body.result.report.normalized_result.package, 'example.test');
+      const outside = await fetch(url + '/v1/rea/analyze', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: os.tmpdir() + path.sep + 'outside.apk', kind: 'android' }),
+      });
+      assert.equal(outside.status, 400);
     }, { reaCommand: fake.command, reaRoots: [root] });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
