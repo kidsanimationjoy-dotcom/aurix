@@ -89,6 +89,24 @@ test('a genuine test executor waits for explicit approval before running', async
   assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.completed'));
 });
 
+test('provider final results are bounded to the same 200k character limit as streamed output', async () => {
+  const db = await freshDb();
+  const executor: TaskExecutionAdapter['executeTask'] = async () => ({
+    output: 'x'.repeat(200_050),
+  });
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+
+  await engine.approve(task.id);
+  for (let i = 0; i < 40 && db.get('tasks', task.id)?.status !== 'succeeded'; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const finished = db.get('tasks', task.id)!;
+  assert.equal(finished.status, 'succeeded');
+  assert.equal(finished.output.length, 200_000);
+});
+
 test('declining a pending approval prevents provider execution', async () => {
   const db = await freshDb();
   let executions = 0;
