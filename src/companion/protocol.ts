@@ -64,6 +64,7 @@ export interface CodexStatus {
   authMode: CodexAuthMode;
   message: string;
   profilePrepared?: boolean;
+  sandboxVerified?: boolean;
   profileName?: string;
 }
 
@@ -76,6 +77,7 @@ export interface CodexPrepareResult {
   version: string | null;
   code: string;
   message: string;
+  sandboxVerified?: boolean;
 }
 
 export interface LocalCompanionConfig {
