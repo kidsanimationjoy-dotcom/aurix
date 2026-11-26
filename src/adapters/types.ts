@@ -63,6 +63,8 @@ export interface ProviderAdapter {
   getStatus(): Promise<ProviderStatus>;
   /** Actual, currently usable capabilities. Omit only for legacy adapters without runtime discovery. */
   getCapabilities?(): Promise<Capability[]>;
+  /** Capabilities available only through Task Center's explicit approval lifecycle. */
+  getTaskCapabilities?(): Promise<Capability[]>;
 }
 
 /* ---------- Chat ---------- */
