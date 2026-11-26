@@ -87,18 +87,19 @@ test('cancellation is only terminal after the adapter acknowledges its abort sig
   assert.equal(db.get('tasks', task.id)?.status, 'cancelled');
 });
 
-test('timeout is distinguished from provider failure', async () => {
+test('timeout is distinguished from provider failure after adapter stop acknowledgement', async () => {
   const db = await freshDb();
-  const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => new Promise((resolve, reject) => {
+  const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => new Promise((_resolve, reject) => {
     context.signal.addEventListener('abort', () => reject(new Error('adapter stopped')), { once: true });
   });
   const engine = new TaskEngine(db, [adapter(executor, true)]);
   const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude', timeoutMs: 1_000 });
-  // Force the timeout path without waiting a full second by aborting is covered by cancellation;
-  // the production timeout uses the same acknowledged-abort finalizer.
   assert.equal(task.status, 'running');
-  assert.equal(task.timeoutMs, 1_000);
-  await engine.cancel(task.id);
+  for (let i = 0; i < 300 && db.get('tasks', task.id)?.status !== 'timed_out'; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(db.get('tasks', task.id)?.status, 'timed_out');
+  assert.equal(db.get('tasks', task.id)?.errorCode, 'TIMEOUT');
 });
 
 test('interrupted tasks are marked failed after a reload rather than shown as still running', async () => {
