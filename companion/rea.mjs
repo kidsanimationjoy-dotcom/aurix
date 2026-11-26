@@ -12,9 +12,16 @@ function within(root, candidate) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+function safeEnvironment() {
+  const allowed = ['PATH', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'TMP', 'TEMP', 'TMPDIR', 'SystemRoot', 'WINDIR', 'APPDATA', 'LOCALAPPDATA', 'PATHEXT', 'LANG', 'LC_ALL'];
+  const env = {};
+  for (const key of allowed) if (typeof process.env[key] === 'string') env[key] = process.env[key];
+  return env;
+}
+
 function run(command, args, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: safeEnvironment() });
     let stdout = '';
     let stderr = '';
     let settled = false;
