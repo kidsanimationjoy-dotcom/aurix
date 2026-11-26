@@ -62,10 +62,13 @@ function Companion() {
   const checkCodex = async () => {
     setCodexBusy(true);
     setCodexMessage('');
-    const result = await getCodexStatus(localConfig);
-    setCodexStatus(result);
-    await refreshStatuses();
-    setCodexBusy(false);
+    try {
+      const result = await getCodexStatus(localConfig);
+      setCodexStatus(result);
+      await refreshStatuses();
+    } finally {
+      setCodexBusy(false);
+    }
   };
   return (
     <>
@@ -78,13 +81,21 @@ function Companion() {
         <div className="row">
           <button className="btn primary" disabled={busy} onClick={async () => {
             setBusy(true);
-            companionToken.set(token.trim());
-            await db.update('settings', settings.id, { companionUrl: url.trim() });
-            await checkCompanion();
-            await audit({ action: 'companion.test', target: url.trim() || 'none' });
-            const status = await getCodexStatus(localConfig);
-            setCodexStatus(status);
-            setBusy(false);
+            try {
+              companionToken.set(token.trim());
+              await db.update('settings', settings.id, { companionUrl: url.trim() });
+              await checkCompanion();
+              await audit({ action: 'companion.test', target: url.trim() || 'none' });
+              const status = await getCodexStatus(localConfig);
+              setCodexStatus(status);
+            } catch (error) {
+              setCodexStatus({
+                state: 'error', installed: false, signedIn: false, version: null, authMode: 'unknown',
+                message: error instanceof Error ? error.message : 'Could not save companion settings.',
+              });
+            } finally {
+              setBusy(false);
+            }
           }}>Save and test</button>
           <small>{companion.message}</small>
         </div>
