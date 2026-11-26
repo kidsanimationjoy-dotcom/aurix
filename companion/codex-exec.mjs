@@ -183,11 +183,13 @@ export function createCodexExecManager({
 
     const args = buildCodexExecArgs({ workspaceRoot, profileName });
     const detached = platform !== 'win32';
+    const childEnv = { ...env };
+    delete childEnv.OPENAI_API_KEY;
     let child;
     try {
       child = spawn(command, args, {
         cwd: path.resolve(workspaceRoot),
-        env,
+        env: childEnv,
         shell: false,
         detached,
         windowsHide: true,
@@ -211,7 +213,7 @@ export function createCodexExecManager({
       closeWaiters: [],
       child,
       detached,
-      env,
+      env: childEnv,
     };
 
     const notifyClose = (result) => {
