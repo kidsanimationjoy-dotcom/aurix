@@ -1,0 +1,15 @@
+# Phase 1 is a static single-page app (hash routing, local-first storage).
+# Server functions and secrets handling arrive in Phase 3.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
