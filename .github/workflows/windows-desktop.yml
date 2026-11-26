@@ -1,0 +1,41 @@
+name: Windows desktop companion
+
+on:
+  pull_request:
+    paths:
+      - "windows/Aurix.Desktop/**"
+      - ".github/workflows/windows-desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build native Windows companion
+        run: dotnet build windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release
+
+      - name: Publish self-contained Windows x64 application
+        run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"
+
+      - name: Package Windows x64 application
+        shell: pwsh
+        run: Compress-Archive -Path "$env:RUNNER_TEMP\aurix-publish\*" -DestinationPath "$env:RUNNER_TEMP\AURIX-Windows-x64.zip" -Force
+
+      - name: Upload Windows x64 build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-Windows-x64
+          path: ${{ runner.temp }}/AURIX-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
