@@ -23,7 +23,7 @@ public static class StartupRegistration
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true)
                             ?? Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
-            key.SetValue(ValueName, $"\\"{executable}\\"");
+            key.SetValue(ValueName, '"' + executable + '"');
             return new(true, "AURIX will start when you sign in to Windows. You can disable this later in Windows Settings > Apps > Startup.");
         }
         catch (UnauthorizedAccessException)
