@@ -18,6 +18,7 @@ export type CompanionCapability =
   | 'cli.codex.login'
   | 'cli.codex.profile.prepare'
   | 'cli.codex.sandbox.verify'
+  | 'cli.codex.chat.readonly'
   | 'cli.grok-build'
   | 'cli.rea';
 
@@ -60,6 +61,8 @@ export interface CodexStatus {
   authMode: CodexAuthMode;
   message: string;
   profilePrepared?: boolean;
+  /** True only after the local OS sandbox canary passed in this companion process. */
+  sandboxVerified?: boolean;
   profileName?: string;
 }
 
