@@ -24,7 +24,8 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Codex chat is available only through Task Center, after an explicit **Approve & run** action.
 - The provider is advertised for task routing only when its separate AURIX profile is signed in with ChatGPT and the latest sandbox canary passed for the same CLI version.
 - The companion repeats the OS canary before every actual chat dispatch.
-- Chat runs in an empty AURIX-owned workspace, uses a fixed read-only permission profile, disables command network, does not attach user project folders, and returns only the final assistant text.
+- Each chat gets a new, private, empty temporary subfolder under the AURIX chat root. If the root contains unexpected files, AURIX refuses to send the prompt. The temporary folder is removed before success is returned; cleanup failure is reported.
+- Chat uses a fixed read-only permission profile, disables command network, does not attach user project folders, and returns only the final assistant text.
 - Process output, prompt size, duration and concurrency are bounded. Cancellation attempts to stop the local process tree before the task settles.
 
 ## Still disabled
