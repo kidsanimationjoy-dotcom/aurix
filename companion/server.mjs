@@ -45,8 +45,11 @@ function spawnCodex(command, args, options = {}) {
   if (process.platform === 'win32') {
     // Windows npm installations expose .cmd shims. Node documents that these
     // require cmd.exe; only the fixed arguments above can reach this path.
-    const commandLine = [command, ...args].map((part) => '"' + String(part).replace(/"/g, '""') + '"').join(' ');
-    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', commandLine], options);
+    const executable = String(command).includes(' ')
+      ? '"' + String(command).replace(/"/g, '') + '"'
+      : String(command);
+    const commandLine = [executable, ...args].join(' ');
+    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', commandLine], options);
   }
 
   return spawn(command, args, options);
