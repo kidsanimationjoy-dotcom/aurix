@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
+import { randomBytes } from 'node:crypto';
+import { mkdir, readdir, lstat, realpath, rm } from 'node:fs/promises';
 
 export const CODEX_CHAT_MAX_PROMPT_CHARS = 10_000;
 export const CODEX_CHAT_MAX_OUTPUT_CHARS = 200_000;
@@ -9,6 +11,66 @@ export const CODEX_CHAT_TIMEOUT_MS = 90_000;
 
 function codedError(code, message) {
   return Object.assign(new Error(message), { code });
+}
+
+function isWithin(parent, child) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+/** Create a new, empty, private workspace directory beneath the pre-verified AURIX chat root. */
+export async function createCodexChatWorkspace(workspaceRoot) {
+  if (!workspaceRoot || !path.isAbsolute(workspaceRoot)) {
+    throw codedError('CODEX_CHAT_WORKSPACE_INVALID', 'The AURIX chat workspace root must be an absolute path.');
+  }
+  const root = path.resolve(workspaceRoot);
+  const existing = await readdir(root);
+  if (existing.length > 0) {
+    throw codedError('CODEX_CHAT_WORKSPACE_NOT_EMPTY', 'The isolated AURIX chat workspace is not empty. Move its contents elsewhere before using Codex chat.');
+  }
+
+  const taskRoot = path.join(root, 'task-' + randomBytes(16).toString('hex'));
+  try {
+    await mkdir(taskRoot, { mode: 0o700 });
+    const stat = await lstat(taskRoot);
+    const physical = await realpath(taskRoot);
+    const same = process.platform === 'win32'
+      ? physical.toLowerCase() === taskRoot.toLowerCase()
+      : physical === taskRoot;
+    if (!stat.isDirectory() || stat.isSymbolicLink() || !same || !isWithin(root, taskRoot)) {
+      throw codedError('CODEX_CHAT_WORKSPACE_UNSAFE', 'The temporary AURIX chat workspace is not a safe directory.');
+    }
+    if ((await readdir(taskRoot)).length !== 0) {
+      throw codedError('CODEX_CHAT_WORKSPACE_NOT_EMPTY', 'The new AURIX chat workspace was not empty at creation time.');
+    }
+    return taskRoot;
+  } catch (error) {
+    try { await rm(taskRoot, { recursive: true, force: true }); } catch {}
+    throw error;
+  }
+}
+
+/** Remove only a real directory that remains beneath the AURIX chat workspace root. */
+export async function removeCodexChatWorkspace(workspaceRoot, taskRoot) {
+  const root = path.resolve(workspaceRoot);
+  const target = path.resolve(taskRoot);
+  if (!isWithin(root, target) || target === root) {
+    throw codedError('CODEX_CHAT_WORKSPACE_UNSAFE', 'Refusing to remove a path outside the temporary AURIX chat workspace.');
+  }
+  let stat;
+  try { stat = await lstat(target); }
+  catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return;
+    throw error;
+  }
+  const physical = await realpath(target);
+  const same = process.platform === 'win32'
+    ? physical.toLowerCase() === target.toLowerCase()
+    : physical === target;
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !same) {
+    throw codedError('CODEX_CHAT_WORKSPACE_UNSAFE', 'Refusing to remove a redirected or non-directory chat workspace.');
+  }
+  await rm(target, { recursive: true, force: true });
 }
 
 export function buildCodexExecArgs({ workspaceRoot, profileName }) {
