@@ -11,6 +11,7 @@ A browser tab cannot directly inspect the user's computer. The companion is a sm
 - Implements authenticated `POST /v1/codex/login`, which starts the official `codex login` command in the companion terminal so the user completes Codex's own browser sign-in.
 - Does not read, copy, or export `~/.codex/auth.json`, environment credentials, cookies, or browser storage.
 - Uses an allowlisted environment for Codex subprocesses and does not pass `OPENAI_API_KEY` from the companion environment.
+- Supports Windows Codex command shims by invoking `cmd.exe` only for the fixed status/login argument set; no prompt or user-supplied command is sent through a shell.
 
 ## Not implemented
 
@@ -40,5 +41,7 @@ Copy the printed local URL and pairing token into **Settings → Local companion
 - Codex login output is inherited by the local terminal; it is not captured by the HTTP API.
 - The CLI handles its own credentials. AURIX never inspects its credential cache.
 - Codex task execution is explicitly disabled until a restricted filesystem permission profile is enforced and verified on each supported platform.
+
+Windows command-launch behaviour follows the Node.js child-process guidance for `.cmd` / `.bat` files: https://nodejs.org/api/child_process.html
 
 See `src/companion/protocol.ts` and `docs/CODEX_LOCAL_INTEGRATION.md` for the current API and roadmap.
