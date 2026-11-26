@@ -455,6 +455,8 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         const result = await runCodexReadOnlyChat({
           command: executable,
           workspaceRoot: paths.workspaceRoot,
+          profileName: paths.profileName,
+          platform: process.platform,
           env: safeEnvironment(paths.codexHome),
           messages: body.messages,
         });
