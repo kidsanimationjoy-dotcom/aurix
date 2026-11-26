@@ -68,7 +68,7 @@ export class Db {
 
   async remove(name: CollectionName, id: string): Promise<void> {
     this.assertLoaded();
-    if (name === 'audit') throw new Error('Audit log is append-only');
+    if (name === 'audit' || name === 'taskEvents') throw new Error(name === 'audit' ? 'Audit log is append-only' : 'Task event history is append-only');
     await this.backend.delete(name, id);
     this.cache.set(name, this.snapshot(name).filter((r) => r.id !== id));
     this.emit(name);
