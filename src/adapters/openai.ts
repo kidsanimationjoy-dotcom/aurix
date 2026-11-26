@@ -1,24 +1,26 @@
-import { getCodexStatus } from '../companion/client';
+import { executeCodexChatTask, getCodexStatus } from '../companion/client';
 import type { LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, ChatAdapter, CodingAgentAdapter, ChatRequest, ProviderMeta } from './types';
+import type { TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest } from '../tasks/types';
 
 export const openaiMeta: ProviderMeta = {
   id: 'openai',
   name: 'OpenAI / Codex',
   vendor: 'OpenAI',
-  role: 'Codex local agent and ChatGPT-plan-backed coding workflows',
+  role: 'Optional read-only chat through the official local Codex CLI',
   plannedCapabilities: ['chat', 'coding_agent', 'subagents', 'skills', 'mcp'],
   authentication: 'Official Codex CLI sign-in with ChatGPT; API-key setup is not required by AURIX.',
   references: [{ label: 'Codex CLI', url: 'https://github.com/openai/codex' }],
   constraints: [
     'The ChatGPT web conversation and its private runtime cannot be embedded in AURIX.',
-    'Only local CLI installation and sign-in status are integrated at this stage.',
-    'AURIX creates a separate Codex home and provides a local OS-sandbox canary; chat and coding task execution remain disabled until the execution and approval paths are implemented.',
+    'Read-only text chat is available only after the separate AURIX profile is signed in with ChatGPT and the local OS sandbox canary has passed for the same Codex version.',
+    'This adapter cannot inspect user projects, write files, run coding tasks, or access a general terminal. The chat workspace is isolated and empty.',
+    'AURIX re-runs the local OS sandbox canary before every chat dispatch; task-level approval is still required in Task Center.',
     'AURIX never reads, copies, or exports Codex credentials.',
   ],
 };
 
-export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
+export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecutionAdapter {
   readonly meta = openaiMeta;
   private getConfig: () => LocalCompanionConfig = () => ({ url: '', token: '' });
 
@@ -61,7 +63,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
         state: 'connected' as const,
         implementation: 'implemented_untested' as const,
         summary: 'Codex CLI signed in',
-        detail: 'Version ' + (status.version ?? 'unknown') + '; AURIX has verified sign-in in its separate profile only. Run the local sandbox check in Settings; task execution remains disabled until the executor and approvals are implemented.',
+        detail: 'Version ' + (status.version ?? 'unknown') + '; separate AURIX profile is signed in. ' + (status.sandboxVerified ? 'Read-only chat is available after Task Center approval.' : 'Run the local sandbox check in Settings to enable read-only chat; coding and project access remain disabled.');',
         checkedAt: Date.now(),
       };
     }
@@ -74,9 +76,43 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter {
     };
   }
 
-  /** No task capability is advertised until a safe, tested execution profile is available. */
+  /** Read-only chat is available only after the local sandbox has passed for this CLI version. */
   async getCapabilities(): Promise<Capability[]> {
-    return [];
+    const config = this.getConfig();
+    if (!config.url || !config.token) return [];
+    const status = await getCodexStatus(config);
+    if (status.state !== 'ready' || !status.installed || !status.signedIn ||
+        status.authMode !== 'chatgpt' || status.profilePrepared !== true ||
+        status.sandboxVerified !== true) {
+      return [];
+    }
+    return ['chat'];
+  }
+
+  /** Text-only chat in the empty AURIX workspace. Never runs coding or project tasks. */
+  async executeTask(
+    request: TaskExecutionRequest,
+    context: TaskExecutionContext,
+  ): Promise<{ output: string }> {
+    if (request.intent !== 'chat') {
+      throw new Error('AURIX Codex currently supports read-only chat only. Coding and project tasks are not enabled.');
+    }
+    if (context.signal.aborted) {
+      const error = new Error('Codex task was cancelled before it started.');
+      error.name = 'AbortError';
+      throw error;
+    }
+    const config = this.getConfig();
+    await context.emitProgress('Rechecking the local sandbox before read-only chat', 10);
+    const output = await executeCodexChatTask(config, request.taskId, request.prompt, context.signal);
+    if (context.signal.aborted) {
+      const error = new Error('Codex task was cancelled.');
+      error.name = 'AbortError';
+      throw error;
+    }
+    await context.emitProgress('Read-only Codex response received', 95);
+    await context.emitOutput(output);
+    return { output };
   }
 
   sendMessage(_request: ChatRequest) {
