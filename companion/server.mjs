@@ -449,9 +449,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         if (status.state !== 'ready') {
           return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
         }
-        const executable = process.platform === 'win32'
-          ? await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform)
-          : codexCommand;
+        const executable = await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform);
         const result = await runCodexReadOnlyChat({
           command: executable,
           workspaceRoot: paths.workspaceRoot,
