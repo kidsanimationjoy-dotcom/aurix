@@ -14,7 +14,8 @@ AURIX Desktop (signed-in user session)
   - WPF shell and system tray
   - Explicit opt-in local speech dictation while the window is visible
   - Deterministic allowlisted app launcher and bounded task runner
-  - Read-only UI Automation for visible top-level window titles/processes
+  - Read-only inspection of visible windows and accessible UI Automation controls
+  - Approval-gated Invoke / Value UI Automation actions
   - Permission prompts, task view and emergency stop
               |
        Future authenticated IPC
@@ -42,17 +43,22 @@ Implemented capabilities:
 - Parse a narrow set of explicit local commands.
 - Launch only applications in a hard-coded allowlist (Notepad, Calculator, Paint, File Explorer, Edge, Chrome, Windows Terminal, Discord and Spotify).
 - Execute a multi-app launch plan in order.
-- Inspect visible top-level window titles and process names through Windows UI Automation.
+- Inspect visible top-level window titles and process names.
+- Inspect named UI Automation controls in a selected supported application. Field values and password controls are not returned.
+- Activate one exact, uniquely named, visible, enabled button through the UI Automation Invoke pattern, after an explicit user approval prompt.
+- Replace the value of one exact, uniquely named editable UI Automation field through ValuePattern, after showing a preview and receiving approval. This action does not submit the form.
+- Refuse duplicate or ambiguous control matches.
+- Block button names that look destructive (delete, remove, erase, format, wipe, uninstall or reset).
+- Refuse password and common secret-field names (PIN, payment code, token, secret and recovery code).
 - Cancel remaining steps with the emergency-stop control.
-- Record task status in the UI for the current session.
 
-The current slice does **not** read document contents, capture screenshots, click controls, type into other applications or execute arbitrary shell commands.
+The current slice does **not** read document contents, capture screenshots, click arbitrary screen coordinates, simulate keyboard input, handle password fields or execute arbitrary shell commands. UI Automation is provider-dependent: an application that does not expose a named button or editable field cannot be operated through this slice.
 
 ## Computer-use engine roadmap
 
 Extend the current observe-plan-act-verify loop in stages:
 
-1. Observe visible windows and the accessible UI Automation tree, within user-approved scope.
+1. Observe visible windows and accessible UI Automation controls, within user-approved scope.
 2. Present proposed actions and their targets. Require approval for sensitive, ambiguous or external-impact operations.
 3. Execute only allowlisted UI Automation operations (for example, Invoke or Value patterns) against the intended application.
 4. Read the resulting UI state and verify the expected change.
@@ -113,11 +119,12 @@ High-impact operations (deleting files, installing software, changing security s
 
 1. **Desktop shell + Defender read/scan foundation:** implemented in `windows/Aurix.Desktop`.
 2. **Bounded local task console:** implemented — local dictation after explicit activation, allowlisted multi-app launch and read-only visible-window inspection.
-3. **Interactive computer use:** next — scoped UI Automation actions, approval cards, result verification and persistent audit history.
-4. **Hands-free activation:** future — local clap and wake phrase, always-visible state, mute and pause controls.
-5. **Hybrid reasoning:** future — local policy router plus connected provider adapters.
-6. **Security event dashboard:** future — Defender history, scheduled scans and safe notifications.
-7. **Installer and release:** future — signed installer, startup controls, update/rollback and Windows 11 test matrix.
+3. **Scoped UI Automation slice:** implemented — inspect supported-app controls, approve exact named button clicks and field-value entry, refuse ambiguous/destructive/password targets.
+4. **Interactive computer use:** next — expand supported-app coverage, reliable foreground targeting, verify expected state changes and add persistent local audit history.
+5. **Hands-free activation:** future — local clap and wake phrase, always-visible state, mute and pause controls.
+6. **Hybrid reasoning:** future — local policy router plus connected provider adapters.
+7. **Security event dashboard:** future — Defender history, scheduled scans and safe notifications.
+8. **Installer and release:** future — signed installer, startup controls, update/rollback and Windows 11 test matrix.
 
 ## Acceptance criteria
 
