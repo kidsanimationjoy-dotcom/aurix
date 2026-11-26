@@ -1,0 +1,33 @@
+name: Windows desktop companion
+
+on:
+  push:
+    branches:
+      - main
+      - feature/windows-desktop-companion-foundation
+    paths:
+      - "windows/Aurix.Desktop/**"
+      - ".github/workflows/windows-desktop.yml"
+  pull_request:
+    paths:
+      - "windows/Aurix.Desktop/**"
+      - ".github/workflows/windows-desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build native Windows companion
+        run: dotnet build windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release
