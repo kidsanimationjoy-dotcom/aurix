@@ -55,9 +55,11 @@ test('connected provider without a real task executor is never treated as execut
   assert.equal(task.output, '');
 });
 
-test('a genuine test executor completes a task and records provenance', async () => {
+test('a genuine test executor waits for explicit approval before running', async () => {
   const db = await freshDb();
+  let executions = 0;
   const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => {
+    executions += 1;
     await context.emitProgress('Working', 50);
     await context.emitOutput('Test ');
     await context.emitOutput('response');
@@ -65,15 +67,95 @@ test('a genuine test executor completes a task and records provenance', async ()
   };
   const engine = new TaskEngine(db, [adapter(executor, true)]);
   const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
-  // Execution is deliberately started through the task service; wait for its database result.
+  assert.equal(task.status, 'awaiting_approval');
+  assert.equal(task.approvalStatus, 'pending');
+  assert.equal(executions, 0);
+  assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.approval.requested'));
+
+  const approved = await engine.approve(task.id);
+  assert.equal(approved?.status, 'running');
+  assert.equal(approved?.approvalStatus, 'approved');
+  assert.equal(executions, 1);
+
   for (let i = 0; i < 20 && db.get('tasks', task.id)?.status !== 'succeeded'; i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   const finished = db.get('tasks', task.id)!;
   assert.equal(finished.status, 'succeeded');
+  assert.equal(finished.approvalStatus, 'approved');
   assert.equal(finished.output, 'Test response');
+  assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.approval.granted'));
   assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.output.delta'));
   assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.completed'));
+});
+
+test('declining a pending approval prevents provider execution', async () => {
+  const db = await freshDb();
+  let executions = 0;
+  const executor: TaskExecutionAdapter['executeTask'] = async () => {
+    executions += 1;
+    return { output: 'should never run' };
+  };
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+
+  assert.equal(await engine.decline(task.id), true);
+  assert.equal(await engine.approve(task.id), null);
+  assert.equal(db.get('tasks', task.id)?.status, 'cancelled');
+  assert.equal(db.get('tasks', task.id)?.approvalStatus, 'declined');
+  assert.equal(executions, 0);
+  assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.approval.denied'));
+});
+
+test('approval is revalidated against the same provider before execution', async () => {
+  const db = await freshDb();
+  let connected = true;
+  let executions = 0;
+  const status: ProviderStatus = {
+    state: 'connected', implementation: 'implemented_tested',
+    summary: 'Connected in test', checkedAt: Date.now(),
+  };
+  const changing: ProviderAdapter & TaskExecutionAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => ({ ...status, state: connected ? 'connected' : 'not_configured' }),
+    getCapabilities: async () => ['chat'],
+    executeTask: async () => {
+      executions += 1;
+      return { output: 'completed' };
+    },
+  };
+  const engine = new TaskEngine(db, [changing]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+  connected = false;
+
+  const firstAttempt = await engine.approve(task.id);
+  assert.equal(firstAttempt?.status, 'waiting_for_provider');
+  assert.equal(firstAttempt?.selectedProviderId, 'claude');
+  assert.equal(executions, 0);
+
+  connected = true;
+  const retried = await engine.retry(task.id);
+  assert.equal(retried?.status, 'awaiting_approval');
+  assert.equal(retried?.selectedProviderId, 'claude');
+  assert.equal(executions, 0);
+  const approved = await engine.approve(task.id);
+  assert.equal(approved?.status, 'running');
+  assert.equal(executions, 1);
+});
+
+test('pending approval survives app reload recovery without being marked interrupted', async () => {
+  const db = await freshDb();
+  const executor: TaskExecutionAdapter['executeTask'] = async () => ({ output: 'done' });
+  const firstEngine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await firstEngine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+
+  const reloadedEngine = new TaskEngine(db, []);
+  assert.equal(await reloadedEngine.recoverInterruptedTasks(), 0);
+  assert.equal(db.get('tasks', task.id)?.status, 'awaiting_approval');
+  assert.equal(db.get('tasks', task.id)?.approvalStatus, 'pending');
 });
 
 test('cancellation is only terminal after the adapter acknowledges its abort signal', async () => {
@@ -83,6 +165,8 @@ test('cancellation is only terminal after the adapter acknowledges its abort sig
   });
   const engine = new TaskEngine(db, [adapter(executor, true)]);
   const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+  await engine.approve(task.id);
   await engine.cancel(task.id);
   for (let i = 0; i < 20 && db.get('tasks', task.id)?.status !== 'cancelled'; i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -97,7 +181,9 @@ test('timeout is distinguished from provider failure after adapter stop acknowle
   });
   const engine = new TaskEngine(db, [adapter(executor, true)]);
   const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude', timeoutMs: 1_000 });
-  assert.equal(task.status, 'running');
+  assert.equal(task.status, 'awaiting_approval');
+  const approved = await engine.approve(task.id);
+  assert.equal(approved?.status, 'running');
   for (let i = 0; i < 300 && db.get('tasks', task.id)?.status !== 'timed_out'; i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
