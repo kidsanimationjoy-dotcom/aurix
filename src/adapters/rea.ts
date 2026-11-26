@@ -66,12 +66,37 @@ export class ReaAdapter implements InvestigationAdapter {
     }
     try {
       const value = await analyzeReaTarget(this.getConfig(), target);
-      const result = value as { report?: InvestigationReport };
-      if (!result.report || !Array.isArray(result.report.findings) || !Array.isArray(result.report.unknowns)) {
-        return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: 'REA returned an unexpected report format.' } };
+      const envelope = value as { report?: unknown };
+      const reportValue = envelope.report as { normalized_result?: unknown } | undefined;
+      const analysis = (reportValue?.normalized_result ?? reportValue) as {
+        graph?: { nodes?: unknown[]; edges?: unknown[]; coverage?: { status?: string } };
+        limitations?: unknown[];
+      } | undefined;
+      const graph = analysis?.graph;
+      if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+        return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: 'REA returned no validated JavaScript application graph. Check the installed REA CLI version and its JSON output.' } };
       }
+      const graphNodes = graph.nodes.slice(0, 200).flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const node = entry as { node_id?: unknown; kind?: unknown; observations?: unknown[] };
+        if (typeof node.node_id !== 'string' || typeof node.kind !== 'string') return [];
+        const observation = node.observations?.[0] as { evidence?: { location?: { available?: boolean; value?: { path?: string } } } } | undefined;
+        const path = observation?.evidence?.location?.available && typeof observation.evidence.location.value?.path === 'string'
+          ? observation.evidence.location.value.path : undefined;
+        return [{ id: node.node_id, kind: node.kind, ...(path ? { path } : {}) }];
+      });
+      const unknowns = [
+        ...(Array.isArray(analysis.limitations) ? analysis.limitations.filter((item): item is string => typeof item === 'string') : []),
+        ...(graph.coverage?.status && graph.coverage.status !== 'complete' ? ['REA graph coverage is ' + graph.coverage.status + '; missing facts must not be treated as absent.'] : []),
+      ];
+      const normalized: InvestigationReport = {
+        findings: [],
+        unknowns: unknowns.length ? unknowns : ['Static application structure was recovered. Runtime behavior was not established by this static analysis.'],
+        graphSummary: { nodes: graph.nodes.length, edges: graph.edges.length, coverage: graph.coverage?.status ?? 'not reported' },
+        graphNodes,
+      };
       const id = globalThis.crypto.randomUUID();
-      this.reports.set(id, result.report);
+      this.reports.set(id, normalized);
       return { ok: true as const, value: { id } };
     } catch (error) {
       return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'REA investigation failed.' } };
