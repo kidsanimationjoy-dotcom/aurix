@@ -258,8 +258,7 @@ export class TaskEngine {
         errorMessage: '',
       });
       await this.event(taskId, 'task.approval.granted', 'You approved this task for the selected provider.', providerId);
-      await this.event(taskId, 'task.started', 'Provider execution started after your approval.', providerId);
-      // Cancellation can arrive while the approval/start events are being persisted.
+      // Cancellation can arrive while the approval event is being persisted.
       // Re-check immediately before dispatch so a task cancelled in that window never runs.
       const readyToDispatch = this.db.get('tasks', taskId);
       if (!readyToDispatch || readyToDispatch.status !== 'running' || readyToDispatch.approvalStatus !== 'approved') {
@@ -397,7 +396,11 @@ export class TaskEngine {
 
     const promise = (async () => {
       try {
-        const result = await adapter.executeTask(request, context);
+        // Invoke the adapter first so the started event cannot claim execution began
+        // when the task was cancelled before the provider call was dispatched.
+        const execution = adapter.executeTask(request, context);
+        await this.event(taskId, 'task.started', 'Provider execution started after your approval.', providerId);
+        const result = await execution;
         if (controller.signal.aborted) {
           await this.finishAborted(taskId, controller.signal.reason, providerId);
           return;
