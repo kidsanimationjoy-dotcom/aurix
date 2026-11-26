@@ -38,8 +38,9 @@ function safeEnv(root: string): NodeJS.ProcessEnv {
 }
 
 test('Codex exec args are fixed, read-only-profile scoped and non-interactive', () => {
+  const workspaceRoot = path.join(os.tmpdir(), 'aurix-chat-workspace');
   const args = buildCodexExecArgs({
-    workspaceRoot: '/tmp/aurix-chat-workspace',
+    workspaceRoot,
     profileName: 'aurix-chat-readonly',
   });
   assert.deepEqual(args, [
@@ -48,7 +49,7 @@ test('Codex exec args are fixed, read-only-profile scoped and non-interactive', 
     '--strict-config',
     '--ephemeral',
     '--skip-git-repo-check',
-    '--cd', '/tmp/aurix-chat-workspace',
+    '--cd', path.resolve(workspaceRoot),
     '--ask-for-approval', 'never',
     '--config', 'default_permissions=aurix-chat-readonly',
     '-',
@@ -66,7 +67,8 @@ test('Codex exec args are fixed, read-only-profile scoped and non-interactive', 
   }), /profile/);
 });
 
-test('Codex exec manager reads the prompt from stdin and returns only the final assistant message', async () => {
+test('Codex exec manager reads the prompt from stdin and returns only the final assistant message', async (t) => {
+  if (process.platform === 'win32') { t.skip('Fake Codex uses a POSIX shebang.'); return; }
   const root = await makeTempRoot();
   const logPath = path.join(root, 'exec-log.json');
   const command = await makeFakeCodex(root, `
@@ -120,7 +122,8 @@ process.stdin.on('end', () => {
   }
 });
 
-test('Codex exec manager blocks cancellation before process launch', async () => {
+test('Codex exec manager blocks cancellation before process launch', async (t) => {
+  if (process.platform === 'win32') { t.skip('Fake Codex uses a POSIX shebang.'); return; }
   const root = await makeTempRoot();
   const marker = path.join(root, 'was-launched');
   const command = await makeFakeCodex(root, `
