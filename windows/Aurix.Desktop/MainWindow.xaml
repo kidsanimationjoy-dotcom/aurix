@@ -89,7 +89,7 @@
         <TextBlock Text="Type a task or turn on voice listening. Voice input stays on this PC and is not sent to a cloud service by this feature."
                    Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap" Margin="0,5,0,12"/>
         <TextBox x:Name="CommandInput" Height="48" VerticalContentAlignment="Center"
-                 ToolTip="Try: Open Calculator and Notepad, or Show open windows"
+                 ToolTip="Try: Open Notepad, Inspect controls in Notepad, Click button &quot;Save&quot; in Notepad"
                  KeyDown="CommandInput_KeyDown"/>
         <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
           <Button x:Name="ListenButton" Content="Start voice listening" Click="ListenButton_Click"/>
@@ -120,7 +120,7 @@
                 CornerRadius="12" Padding="16" Margin="9,0,0,0">
           <StackPanel>
             <TextBlock Text="TASK RESULT" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
-            <TextBlock x:Name="TaskOutputText" Text="AURIX is ready. It can open approved apps and inspect visible window titles."
+            <TextBlock x:Name="TaskOutputText" Text="AURIX is ready. It can launch apps, inspect visible controls, and perform approved UI actions."
                        TextWrapping="Wrap" FontSize="14" Margin="0,9,0,0"/>
           </StackPanel>
         </Border>
@@ -130,9 +130,9 @@
               CornerRadius="12" Padding="17">
         <StackPanel>
           <TextBlock Text="WHAT THIS BUILD CAN DO" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
-          <TextBlock Text="• Launch a limited set of common Windows applications from a typed or spoken request&#10;• Open several approved applications as one task&#10;• Read the titles of visible open windows when you request an inspection&#10;• Stop the remaining steps of a running task&#10;• Check Microsoft Defender status and request a confirmed quick scan"
+          <TextBlock Text="• Launch a limited set of Windows applications and open several as one task&#10;• Inspect visible window titles and accessible controls in supported applications&#10;• Click an exact named button only after you approve the action&#10;• Enter text only into an exact named editable field after showing you a preview&#10;• Block destructive button names and refuse password or secret fields&#10;• Stop the remaining steps of a running task&#10;• Check Microsoft Defender status and request a confirmed quick scan"
                      TextWrapping="Wrap" LineHeight="24" FontSize="13" Margin="0,10,0,0"/>
-          <TextBlock Text="Not implemented yet: wake phrase, clap activation, general screen reading, clicking and typing inside other apps, and connected AI reasoning. AURIX will not pretend these are available."
+          <TextBlock Text="Not implemented yet: wake phrase or clap activation, general screenshot understanding, arbitrary natural-language reasoning through a connected AI model, and a general-purpose action loop. Text entry depends on an app exposing a named UI Automation field; unsupported controls are not forced with simulated keystrokes."
                      TextWrapping="Wrap" Foreground="#F0C58C" FontSize="12" Margin="0,14,0,0"/>
         </StackPanel>
       </Border>
