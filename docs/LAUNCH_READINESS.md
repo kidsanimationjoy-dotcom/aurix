@@ -36,7 +36,9 @@
 ### Publisher identity and safe distribution
 - The preview ZIP is portable, **unsigned**, and not an installer. It has no automatic update or uninstall mechanism.
 - Do not disable SmartScreen or Microsoft Defender to run an unrecognised build. Wait for a verified signed distribution or use a separately reviewed test environment.
-- Choose a code-signing route only after the legal owner is eligible and has reviewed the provider requirements. No signing account, trusted certificate, signing project or production signing approval is currently configured.
+- Preferred trusted distribution path to investigate: package the desktop app as MSIX and submit it through the Microsoft Store, which re-signs certified Store MSIX packages. This requires real package identity/publisher details, a tested MSIX, Store policy/certification and a human-verified Partner Center account.
+- Alternative for direct downloads: apply to SignPath Foundation only after checking its open-source, release, privacy/security, MFA, team-role and manual-approval conditions. A commercial direct-download route may require a paid organization-validated certificate.
+- No Store developer account, MSIX package, trusted certificate, SignPath project, or production signing approval is currently configured. The human legal owner must complete account, identity/business and agreement steps; AI automation must not attempt those actions.
 - Never label a build signed until the final executable's Authenticode signature and publisher identity have been independently verified.
 
 ### Legal, privacy and release governance
