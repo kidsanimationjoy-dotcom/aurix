@@ -641,7 +641,7 @@ process.exit(2);
       const status = await adapter.getStatus();
       assert.equal(status.state, 'connected');
       assert.equal(status.implementation, 'implemented_untested');
-      assert.match(status.detail ?? '', /task execution remains disabled/i);
+      assert.match(status.detail ?? '', /sandbox/i);
       assert.deepEqual(await adapter.getCapabilities(), []);
     }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
