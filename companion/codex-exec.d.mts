@@ -8,6 +8,9 @@ export function buildCodexExecArgs(options: {
   profileName: string;
 }): string[];
 
+export function createCodexChatWorkspace(workspaceRoot: string): Promise<string>;
+export function removeCodexChatWorkspace(workspaceRoot: string, taskRoot: string): Promise<void>;
+
 export interface CodexExecManager {
   run(options: {
     taskId: string;
