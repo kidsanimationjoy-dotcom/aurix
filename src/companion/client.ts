@@ -178,7 +178,7 @@ export async function getReaStatus(config: LocalCompanionConfig, fetchImpl: type
   return body as ReaStatus;
 }
 
-export async function analyzeReaTarget(config: LocalCompanionConfig, target: string, fetchImpl: typeof fetch = fetch): Promise<unknown> {
+export async function analyzeReaTarget(config: LocalCompanionConfig, target: string, kind: 'javascript' | 'desktop' = 'javascript', fetchImpl: typeof fetch = fetch): Promise<unknown> {
   const base = companionBaseUrl(config.url);
   if (!config.token.trim()) throw new Error('Pair the local companion before running REA.');
   const response = await fetchImpl(base + '/v1/rea/analyze', {
@@ -187,7 +187,7 @@ export async function analyzeReaTarget(config: LocalCompanionConfig, target: str
       Authorization: 'Bearer ' + config.token.trim(),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ target }),
+    body: JSON.stringify({ target, kind }),
   });
   const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
   if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'REA analysis failed.');
