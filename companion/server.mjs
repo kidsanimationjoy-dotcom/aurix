@@ -17,7 +17,7 @@ import {
   validateCodexHome,
 } from './codex-profile.mjs';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
