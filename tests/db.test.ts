@@ -79,3 +79,17 @@ test('export omits asset blobs', async () => {
   assert.equal(out.assets[0].name, 'a.png');
   assert.equal('blob' in out.assets[0], false);
 });
+
+
+test('task event history is append-only', async () => {
+  const db = await fresh();
+  const event = await db.create('taskEvents', {
+    taskId: 'task-1',
+    type: 'task.created',
+    message: 'Created',
+    providerId: null,
+  });
+  await assert.rejects(() => db.update('taskEvents', event.id, { message: 'changed' }), /append-only/);
+  await assert.rejects(() => db.remove('taskEvents', event.id), /append-only/);
+  assert.equal(db.snapshot('taskEvents').length, 1);
+});
