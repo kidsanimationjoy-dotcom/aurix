@@ -371,7 +371,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         '',
         'User request:',
         userPrompt.trim(),
-      ].join('\\n');
+      ].join('\n');
 
       if (prompt.length > CODEX_CHAT_MAX_PROMPT_CHARS) {
         return send(400, { error: 'PROMPT_TOO_LONG', message: 'This Codex chat prompt is too long for the read-only local chat mode.' });
