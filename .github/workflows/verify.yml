@@ -1,0 +1,51 @@
+name: AURIX verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start preview server
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/aurix-preview.log 2>&1 &
+          echo $! > /tmp/aurix-preview.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/aurix-preview.log
+          exit 1
+      - name: Browser smoke tests
+        run: AURIX_URL=http://127.0.0.1:4173 npm run smoke
+      - name: Stop preview server
+        if: always()
+        run: |
+          if [ -f /tmp/aurix-preview.pid ]; then
+            kill "$(cat /tmp/aurix-preview.pid)" || true
+          fi
