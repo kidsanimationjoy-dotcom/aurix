@@ -11,7 +11,7 @@ import { checkLegacySystemConfig, hasLegacySandboxSetting, prepareCodexHome, ren
 
 async function withServer<T>(
   fn: (url: string) => Promise<T>,
-  options: { codexCommand?: string; codexPaths?: ReturnType<typeof resolveCodexPaths>; reaCommand?: string; reaRoots?: string[] } = {},
+  options: { codexCommand?: string; codexPaths?: ReturnType<typeof resolveCodexPaths>; reaCommand?: string; reaRoots?: string[]; codexRoots?: string[] } = {},
 ): Promise<T> {
   const server = createCompanionServer({
     token: 'secret-token',
@@ -20,6 +20,7 @@ async function withServer<T>(
     ...(options.codexPaths ? { codexPaths: options.codexPaths } : {}),
     ...(options.reaCommand ? { reaCommand: options.reaCommand } : {}),
     ...(options.reaRoots ? { reaRoots: options.reaRoots } : {}),
+    ...(options.codexRoots ? { codexRoots: options.codexRoots } : {}),
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
@@ -320,7 +321,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
