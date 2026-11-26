@@ -1,4 +1,5 @@
-import type { ProviderId, ProviderChoice } from '../domain/types';
+import type { ProviderId } from '../adapters/types';
+import type { ProviderChoice } from '../domain/types';
 
 export type TaskIntent = 'chat' | 'coding' | 'research' | 'media' | 'unknown';
 export type TaskStatus =
