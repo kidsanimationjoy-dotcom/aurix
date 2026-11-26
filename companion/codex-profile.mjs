@@ -271,7 +271,7 @@ export async function validateCodexHome(paths) {
   await assertSafeDirectory(paths.workspaceRoot);
   await assertSafeDirectory(paths.canaryRoot);
   await assertRegularFile(paths.configPath);
-  const expected = renderCodexProfileConfig(paths.workspaceRoot);
+  const expected = renderCodexProfileConfig(paths.workspaceRoot, paths.platform ?? process.platform);
   const actual = await readFile(paths.configPath, 'utf8');
   if (actual !== expected) {
     throw Object.assign(new Error('The AURIX Codex profile config was changed outside AURIX.'), { code: 'CODEX_PROFILE_MODIFIED' });
