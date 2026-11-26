@@ -271,7 +271,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
@@ -312,6 +312,38 @@ process.exit(2);
       });
       assert.equal(outside.status, 400);
       assert.match((await outside.json()).message, /outside the folders explicitly approved/);
+    }, { reaCommand: fake.command, reaRoots: [root] });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('REA desktop inspection uses its fixed command and the same approved-root boundary', async () => {
+  if (process.platform === 'win32') return;
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-rea-desktop-root-'));
+  const target = path.join(root, 'installed-app');
+  await import('node:fs/promises').then(({ mkdir }) => mkdir(target));
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--help') { console.log('rea-agents help'); process.exit(0); }
+if (args[0] === 'inspect-desktop-application' && args[2] === '--json') {
+  console.log(JSON.stringify({ normalized_result: { candidates: [{ family: 'electron', supporting_paths: ['resources/app.asar'] }] } }));
+  process.exit(0);
+}
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const response = await fetch(url + '/v1/rea/analyze', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, kind: 'desktop' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.ok, true);
+      assert.equal(body.result.report.normalized_result.candidates[0].family, 'electron');
     }, { reaCommand: fake.command, reaRoots: [root] });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
