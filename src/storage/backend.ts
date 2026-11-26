@@ -22,7 +22,7 @@ export class MemoryBackend implements Backend {
 }
 
 const DB_NAME = 'aurix';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function wrap<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((res, rej) => {
