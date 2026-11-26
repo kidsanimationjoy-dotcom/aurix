@@ -60,7 +60,7 @@ public static class DesktopWindowInspector
         }
 
         return results
-            .GroupBy(item => (item.Title, item.ProcessName), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(item => item.ProcessName + "\\0" + item.Title, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(item => item.ProcessName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
