@@ -158,6 +158,93 @@ test('pending approval survives app reload recovery without being marked interru
   assert.equal(db.get('tasks', task.id)?.approvalStatus, 'pending');
 });
 
+test('declining while the provider is being revalidated prevents a late approval dispatch', async () => {
+  const db = await freshDb();
+  let statusCalls = 0;
+  let executions = 0;
+  let signalCheckStarted!: () => void;
+  let releaseStatusCheck!: () => void;
+  const checkStarted = new Promise<void>((resolve) => { signalCheckStarted = resolve; });
+  const statusGate = new Promise<void>((resolve) => { releaseStatusCheck = resolve; });
+  const changing: ProviderAdapter & TaskExecutionAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => {
+      statusCalls += 1;
+      if (statusCalls === 2) {
+        signalCheckStarted();
+        await statusGate;
+      }
+      return {
+        state: 'connected',
+        implementation: 'implemented_tested',
+        summary: 'Connected in test',
+        checkedAt: Date.now(),
+      };
+    },
+    getCapabilities: async () => ['chat'],
+    executeTask: async () => {
+      executions += 1;
+      return { output: 'must not run' };
+    },
+  };
+  const engine = new TaskEngine(db, [changing]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+
+  const approval = engine.approve(task.id);
+  await checkStarted;
+  assert.equal(await engine.decline(task.id), true);
+  releaseStatusCheck();
+
+  const result = await approval;
+  assert.equal(result?.status, 'cancelled');
+  assert.equal(result?.approvalStatus, 'declined');
+  assert.equal(executions, 0);
+  assert.equal(db.snapshot('taskEvents').some((event) => event.type === 'task.started'), false);
+});
+
+test('concurrent approval clicks dispatch a provider task only once', async () => {
+  const db = await freshDb();
+  let statusCalls = 0;
+  let executions = 0;
+  let signalSecondCheck!: () => void;
+  let releaseSecondCheck!: () => void;
+  const secondCheckStarted = new Promise<void>((resolve) => { signalSecondCheck = resolve; });
+  const statusGate = new Promise<void>((resolve) => { releaseSecondCheck = resolve; });
+  const changing: ProviderAdapter & TaskExecutionAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => {
+      statusCalls += 1;
+      if (statusCalls === 2) {
+        signalSecondCheck();
+        await statusGate;
+      }
+      return {
+        state: 'connected',
+        implementation: 'implemented_tested',
+        summary: 'Connected in test',
+        checkedAt: Date.now(),
+      };
+    },
+    getCapabilities: async () => ['chat'],
+    executeTask: async () => {
+      executions += 1;
+      return { output: 'completed' };
+    },
+  };
+  const engine = new TaskEngine(db, [changing]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  const first = engine.approve(task.id);
+  await secondCheckStarted;
+  const duplicate = await engine.approve(task.id);
+  assert.equal(duplicate?.status, 'awaiting_approval');
+  releaseSecondCheck();
+
+  const approved = await first;
+  assert.equal(approved?.status, 'running');
+  assert.equal(executions, 1);
+});
+
 test('cancellation is only terminal after the adapter acknowledges its abort signal', async () => {
   const db = await freshDb();
   const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => new Promise((resolve, reject) => {
