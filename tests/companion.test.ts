@@ -240,6 +240,31 @@ process.exit(2);
   }
 });
 
+test('profile preparation rejects malformed and oversized JSON without crashing the companion', async () => {
+  await withServer(async (url) => {
+    const malformed = await fetch(url + '/v1/codex/prepare', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+      body: '{not-json',
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal((await malformed.json()).error, 'INVALID_REQUEST');
+
+    const oversized = await fetch(url + '/v1/codex/prepare', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ padding: 'x'.repeat(5000) }),
+    });
+    assert.equal(oversized.status, 413);
+    assert.equal((await oversized.json()).error, 'INVALID_REQUEST');
+
+    const health = await fetch(url + '/v1/health', {
+      headers: { Authorization: 'Bearer secret-token' },
+    });
+    assert.equal(health.status, 200);
+  });
+});
+
 test('probe connects with the correct token and reports only implemented capabilities', async () => {
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
