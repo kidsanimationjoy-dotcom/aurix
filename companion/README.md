@@ -85,3 +85,6 @@ See [docs/CODEX_LOCAL_INTEGRATION.md](../docs/CODEX_LOCAL_INTEGRATION.md) for th
 ### REA workflows
 
 The paired companion supports two fixed REA operations on approved local directories: `analyze-javascript-application` for JavaScript/Electron graph evidence and `inspect-desktop-application` for bounded installation/runtime-candidate discovery. AURIX selects between these fixed commands; it does not accept arbitrary shell commands or REA flags. Desktop discovery does not launch the inspected application. It is a static inventory, not a runtime trace.
+
+
+Android APK inspection is also available with the fixed `inspect-android-package` CLI operation. Select an APK file under an approved `AURIX_REA_ROOTS` directory; AURIX canonicalizes the file path and checks that it remains inside an approved root. The operation is static JADX-backed analysis and does not install or execute the APK.
