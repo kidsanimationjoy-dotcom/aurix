@@ -37,6 +37,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 - [Unified skills and plugin system](docs/EXTENSIONS.md)
 - [3D website studio](docs/3D_WEBSITE_STUDIO.md)
 - [Implementation roadmap and acceptance tests](docs/ROADMAP.md)
+- [Phase 2 orchestration contract](docs/PHASE_2_CONTRACT.md)
 
 ## Initial technical direction
 
@@ -49,7 +50,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Current status
 
-This repository contains the product blueprint. It is not yet a working multi-provider AI application. The roadmap defines what must be implemented and tested.
+The Phase 0–1 workspace is currently stored in the repository as `aurix-phase-0-1.zip`. CI extracts that archive temporarily and verifies the app; the application source has not yet been promoted into ordinary tracked source files. The Phase 2 orchestration contract is documented, but its runtime implementation has not started. A passing CI run is not a deployment and does not mean provider integrations are connected.
 
 ## Legal and technical note
 
