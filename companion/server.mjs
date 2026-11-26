@@ -279,7 +279,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         loginChild = child;
         child.once('error', () => { if (loginChild === child) loginChild = null; });
         child.once('close', () => { if (loginChild === child) loginChild = null; });
-        return send(202, { started: true, message: 'Codex sign-in opened in the companion terminal. Complete the official browser sign-in there, then check status again.' });
+        return send(202, { started: true, message: 'AURIX Codex sign-in opened in the companion terminal using its separate profile. Complete the official browser sign-in there, then check status again.' });
       } catch {
         loginChild = null;
         return send(500, { error: 'CODEX_LOGIN_START_FAILED', message: 'Could not start the official Codex sign-in process.' });

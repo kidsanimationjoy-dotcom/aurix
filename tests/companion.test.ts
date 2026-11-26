@@ -272,6 +272,7 @@ process.exit(2);
     await withServer(async (url) => {
       const message = await startCodexLogin({ url, token: 'secret-token' });
       assert.match(message, /separate AURIX profile/);
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
