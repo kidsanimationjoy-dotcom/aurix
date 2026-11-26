@@ -38,6 +38,8 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 - [3D website studio](docs/3D_WEBSITE_STUDIO.md)
 - [Implementation roadmap and acceptance tests](docs/ROADMAP.md)
 - [Phase 2 orchestration contract](docs/PHASE_2_CONTRACT.md)
+- [Phase 2 implementation notes](docs/PHASE_2_IMPLEMENTATION.md)
+- [Official Codex CLI local integration](docs/CODEX_LOCAL_INTEGRATION.md)
 
 ## Initial technical direction
 
@@ -50,7 +52,11 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Current status
 
-The Phase 0–1 workspace is currently stored in the repository as `aurix-phase-0-1.zip`. CI extracts that archive temporarily and verifies the app; the application source has not yet been promoted into ordinary tracked source files. The Phase 2 orchestration contract is documented, but its runtime implementation has not started. A passing CI run is not a deployment and does not mean provider integrations are connected.
+The Phase 0–1 application source is now available as ordinary tracked project files on the source-promotion branch. Its clean-source CI has verified dependency installation, TypeScript checks, unit tests, production build and browser smoke tests.
+
+The Phase 2 Task Center and local task engine are implemented on the current development branch: tasks persist locally, receive transparent rule-based classification, build plans, route only to eligible connected providers, store progress/output events, support retry, timeout and cancellation, and recover interrupted work honestly. The real Codex/Claude/Grok/Higgsfield/REA/21st.dev provider execution adapters are not yet connected; a task must remain waiting rather than fabricate an AI result. See the Phase 2 docs for exact acceptance and limitations.
+
+The official Codex CLI local integration path has been researched and documented. No API key is required for the supported ChatGPT sign-in path, but Codex use still follows the user's plan limits. AURIX is not yet deployed, and a passing CI run is not a deployment or proof of a connected provider.
 
 ## Legal and technical note
 
