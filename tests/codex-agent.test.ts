@@ -108,7 +108,7 @@ test('Codex App Server starts read-only, shows command approvals, and accepts on
   const manager = createCodexAgentManager({ command: fake.command, codexHome: path.join(root, '.codex-home'), roots: [root] });
   try {
     const session = await manager.start({ target: root, prompt: 'Inspect the project and report its structure.' });
-    assert.equal(session.status, 'starting');
+    assert.equal(session.status, 'running');
     const approval = await waitForApproval(manager, session.id);
     assert.equal(approval.kind, 'command');
     assert.deepEqual(approval.command, ['node', '--version']);
