@@ -77,7 +77,6 @@ export interface CodexPrepareResult {
   version: string | null;
   code: string;
   message: string;
-  sandboxVerified?: boolean;
 }
 
 export interface LocalCompanionConfig {
