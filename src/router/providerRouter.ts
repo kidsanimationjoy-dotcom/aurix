@@ -22,10 +22,10 @@ export type RouteDecision =
   | { ok: false; reason: string; considered: Considered[] };
 
 /**
- * Picks a provider for a task. Rules:
- *  - Only providers whose status is 'connected' are ever chosen.
- *  - A user-selected provider is never silently replaced by another one.
- *  - 'auto' takes the first connected, capable provider in registry order.
+ * Picks a provider for a task.
+ * Only connected providers with an actual runtime capability are eligible.
+ * Legacy adapters without runtime capability discovery use their planned capability list.
+ * A user-selected provider is never silently replaced.
  */
 export async function routeTask(
   adapters: ProviderAdapter[],
@@ -35,33 +35,48 @@ export async function routeTask(
   const considered: Considered[] = [];
   const usable: ProviderAdapter[] = [];
 
-  for (const a of adapters) {
-    if (!a.meta.plannedCapabilities.includes(need)) {
-      considered.push({ providerId: a.meta.id, name: a.meta.name, state: 'incapable', why: `Does not provide ${need}` });
+  for (const adapter of adapters) {
+    if (!adapter.meta.plannedCapabilities.includes(need)) {
+      considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: 'incapable', why: 'Does not provide ' + need });
       continue;
     }
     try {
-      const s = await a.getStatus();
-      considered.push({ providerId: a.meta.id, name: a.meta.name, state: s.state, why: s.summary });
-      if (s.state === 'connected') usable.push(a);
+      const status = await adapter.getStatus();
+      if (status.state !== 'connected') {
+        considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: status.state, why: status.summary });
+        continue;
+      }
+      const actual = adapter.getCapabilities ? await adapter.getCapabilities() : adapter.meta.plannedCapabilities;
+      if (!actual.includes(need)) {
+        considered.push({
+          providerId: adapter.meta.id,
+          name: adapter.meta.name,
+          state: 'incapable',
+          why: 'Connected, but AURIX has not enabled a tested ' + need + ' execution path for this provider.',
+        });
+        continue;
+      }
+      considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: 'connected', why: status.summary });
+      usable.push(adapter);
     } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Provider status check failed.';
-      considered.push({ providerId: a.meta.id, name: a.meta.name, state: 'error', why: detail });
+      const detail = error instanceof Error ? error.message : 'Provider status or capability check failed.';
+      considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: 'error', why: detail });
     }
   }
 
   const preferred = task.preferred ?? 'auto';
   if (preferred !== 'auto') {
-    const hit = usable.find((a) => a.meta.id === preferred);
-    if (hit) return { ok: true, providerId: hit.meta.id, mode: 'selected', reason: `${hit.meta.name} selected by you`, considered };
-    const c = considered.find((x) => x.providerId === preferred);
+    const hit = usable.find((adapter) => adapter.meta.id === preferred);
+    if (hit) return { ok: true, providerId: hit.meta.id, mode: 'selected', reason: hit.meta.name + ' selected by you', considered };
+    const result = considered.find((item) => item.providerId === preferred);
     return {
       ok: false,
-      reason: c ? `${c.name} cannot take this task: ${c.why}` : `${preferred} is not a registered provider`,
+      reason: result ? result.name + ' cannot take this task: ' + result.why : preferred + ' is not a registered provider',
       considered,
     };
   }
+
   const first = usable[0];
-  if (first) return { ok: true, providerId: first.meta.id, mode: 'auto', reason: `${first.meta.name} is the first connected provider with ${need}`, considered };
+  if (first) return { ok: true, providerId: first.meta.id, mode: 'auto', reason: first.meta.name + ' is the first connected provider with ' + need, considered };
   return { ok: false, reason: 'No connected provider can take this task.', considered };
 }
