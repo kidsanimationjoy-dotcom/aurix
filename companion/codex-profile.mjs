@@ -77,7 +77,7 @@ export function systemCodexConfigPaths(env = process.env, platform = process.pla
     const programData = env.ProgramData || 'C:\\ProgramData';
     return [path.join(programData, 'OpenAI', 'Codex', 'config.toml')];
   }
-  return ['/etc/codex/config.toml'];
+  return ['/etc/codex/config.toml', '/etc/codex/managed_config.toml'];
 }
 
 export async function prepareCodexHome(paths, options = {}) {
@@ -123,10 +123,8 @@ export async function prepareCodexHome(paths, options = {}) {
 }
 
 export async function checkLegacySystemConfig(paths, env = process.env, platform = process.platform) {
-  const { access } = await import('node:fs/promises');
   for (const file of systemCodexConfigPaths(env, platform)) {
     try {
-      await access(file);
       const text = await readFile(file, 'utf8');
       if (hasLegacySandboxSetting(text)) {
         return { ok: false, code: 'LEGACY_SYSTEM_SANDBOX_CONFIG', message: 'A machine-wide Codex config contains legacy sandbox settings. AURIX will not run until the effective profile can be verified.' };
