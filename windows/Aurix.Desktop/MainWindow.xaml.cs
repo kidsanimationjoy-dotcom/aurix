@@ -162,7 +162,12 @@ public partial class MainWindow : Window
             var result = await Task.Run(() => DesktopTaskRunner.Execute(
                 plan,
                 token,
-                message => Dispatcher.Invoke(() => TaskOutputText.Text = message)), token);
+                message => Dispatcher.Invoke(() => TaskOutputText.Text = message),
+                prompt => Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
+                    prompt,
+                    "Approve AURIX action",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)), token);
 
             TaskOutputText.Text = result.Output;
             ListeningStatusText.Text = result.Cancelled
