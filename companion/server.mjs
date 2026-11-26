@@ -5,7 +5,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createCodexExecManager, CODEX_CHAT_MAX_PROMPT_CHARS } from './codex-exec.mjs';
+import { createCodexChatWorkspace, createCodexExecManager, removeCodexChatWorkspace, CODEX_CHAT_MAX_PROMPT_CHARS } from './codex-exec.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -377,28 +377,51 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         return send(400, { error: 'PROMPT_TOO_LONG', message: 'This Codex chat prompt is too long for the read-only local chat mode.' });
       }
 
+      let taskWorkspaceRoot = null;
+      let taskResult = null;
+      let executionError = null;
       try {
-        const result = await codexExec.run({
+        taskWorkspaceRoot = await createCodexChatWorkspace(paths.workspaceRoot);
+        taskResult = await codexExec.run({
           taskId,
           command: executable,
-          workspaceRoot: paths.workspaceRoot,
+          workspaceRoot: taskWorkspaceRoot,
           profileName: paths.profileName,
           prompt,
           env,
         });
-        return send(200, { output: result.output, mode: 'read_only_chat' });
       } catch (error) {
-        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'CODEX_EXECUTION_FAILED';
+        executionError = error;
+      }
+
+      let cleanupFailed = false;
+      if (taskWorkspaceRoot) {
+        try {
+          await removeCodexChatWorkspace(paths.workspaceRoot, taskWorkspaceRoot);
+        } catch {
+          cleanupFailed = true;
+        }
+      }
+      if (cleanupFailed) {
+        return send(500, {
+          error: 'CODEX_CHAT_WORKSPACE_CLEANUP_FAILED',
+          message: 'AURIX could not confirm cleanup of the temporary chat workspace. Do not retry until the companion is checked.',
+        });
+      }
+      if (executionError) {
+        const code = executionError && typeof executionError === 'object' && 'code' in executionError ? String(executionError.code) : 'CODEX_EXECUTION_FAILED';
         const statusCode = code === 'CODEX_TASK_TIMEOUT' ? 504
           : code === 'CODEX_BUSY' ? 429
-          : code === 'CODEX_TASK_CANCELLED' ? 409
+          : code === 'CODEX_TASK_CANCELLED' || code === 'CODEX_CHAT_WORKSPACE_NOT_EMPTY' ? 409
           : 502;
         const message = code === 'CODEX_TASK_CANCELLED' ? 'The Codex task was cancelled.'
           : code === 'CODEX_TASK_TIMEOUT' ? 'The Codex task timed out and its local process was stopped.'
           : code === 'CODEX_BUSY' ? 'The local Codex executor is already handling another task.'
+          : code === 'CODEX_CHAT_WORKSPACE_NOT_EMPTY' ? 'The isolated AURIX chat workspace contains unexpected files. No prompt was sent to Codex.'
           : 'The read-only Codex task failed. The companion did not return raw process output.';
         return send(statusCode, { error: code, message });
       }
+      return send(200, { output: taskResult.output, mode: 'read_only_chat' });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/cancel') {
