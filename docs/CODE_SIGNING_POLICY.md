@@ -1,42 +1,61 @@
 # Windows code-signing policy
 
-**Current status: unsigned preview; no SignPath application or approval; no production signing configured.**
+**Current status: unsigned preview; no trusted publisher signature; no production signing configured.**
 
-The Windows desktop companion is currently published as a GitHub Actions preview artifact without an Authenticode signature. A SHA-256 checksum verifies file integrity against the published checksum; it does not establish publisher identity or make Windows SmartScreen trust the application.
+The Windows desktop companion is currently distributed as a portable GitHub Actions preview artifact without an Authenticode signature. A SHA-256 checksum verifies that a file matches the checksum published with it; it does not identify the publisher or make Windows SmartScreen trust the application.
 
-## Current evidence
+## Preferred distribution option: Microsoft Store MSIX
 
-- Current Windows preview build: [GitHub Actions run 45911494666](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45911494666).
-- Source commit: `92d890c745873d10bc476fadc2cc7de03edc57bf`.
-- The executable's checksum is included in `SHA256SUMS.txt`.
-- The executable's PE security directory is empty; no embedded Authenticode certificate is present.
-- There is no SignPath project, signing policy, production certificate, API token, trusted signing workflow or human approval configured.
+Microsoft's current Windows signing guidance says that when an app is submitted as an MSIX package through the Microsoft Store, Microsoft re-signs the package after certification. The publisher does not need to buy or manage a code-signing certificate for that Store package. Microsoft describes this route as worldwide and says Store MSIX installs do not show SmartScreen warnings.
 
-## Potential route: SignPath Foundation
+The repository currently produces a portable ZIP, **not an MSIX package**, so this route is not yet implemented. Before pursuing it, the project must:
+- create and test a valid MSIX package for the WPF app;
+- prepare correct package identity, publisher information, assets, capability declarations and Store listing;
+- pass Microsoft's app certification and Store policy checks;
+- test Store install, update and uninstall on supported Windows versions.
 
-The project may apply to the SignPath Foundation open-source code-signing programme only after it has independently confirmed it meets the programme's current requirements.
+A human legal owner must create and verify the Partner Center developer account, choose the correct legal account type, provide identity/business evidence and accept Microsoft's agreements. Individual accounts are intended for distribution not related to a business, trade or profession; distribution connected with a business requires the Company account type. Both account types currently have no registration fee in Microsoft's new onboarding flow, but verification is required. AI agents must not perform registration, identity/business verification or agreement acceptance.
 
-These include an OSI-approved open-source licence covering the project, a real public release and documented download page, active maintenance, a complete privacy policy, account MFA, defined author/reviewer/approver roles and manual approval for each production signing request.
+## Alternative: SignPath Foundation for direct downloads
 
-**No licence is selected or adopted by this document.** Choosing an open-source licence grants legal permissions to others and is a decision for the project owner, with any required parent/guardian guidance. Until a compatible licence is actually adopted and all eligibility gates are met, AURIX must not claim to qualify.
+SignPath Foundation offers free signing to qualifying open-source projects. Before applying, project maintainers must verify all current conditions, including:
+- an OSI-approved open-source licence for all project components, with no commercial dual-licensing and no proprietary project code;
+- an actively maintained project that is already released in the form to be signed, with its functionality described on the download page;
+- no features that compromise user privacy/security or qualify as prohibited hacking tools;
+- MFA for every team member's SignPath and source-repository access;
+- named author, reviewer and signing-approver roles, with human approval for every release signing request;
+- a code-signing policy on the project homepage/release page, with team roles and members listed;
+- an accurate privacy statement or privacy policy, including relevant third-party component/provider policies;
+- notices for system changes and a usable uninstall path whenever installation instructions or automated installation are supplied.
 
-If the project is accepted, it must use the provider's required wording and signing integration exactly as supplied. It must never claim SignPath acceptance or a signed binary before that happens.
+If an app transfers user data to systems not specifically requested by the user or installer/operator, SignPath requires a privacy policy, that policy to be displayed during installation, and installation options to disable those data transfers. The project must not publish a blanket “no network transfer” statement if connected-provider features send data when used.
+
+**No licence is selected or adopted by this document.** Choosing an open-source licence changes legal permissions and is a decision for the project owner with appropriate adult/guardian guidance. AURIX must not claim SignPath eligibility, acceptance or a signed binary until those requirements are actually met and the resulting Authenticode signature has been independently verified. Under a SignPath Foundation certificate, the publisher is SignPath Foundation, not the project owner.
+
+## Alternative: traditional code-signing certificate
+
+A recognised certificate authority may issue an organization-validated code-signing certificate after verifying the real legal identity of the applicant. This can support direct distribution outside the Store, but it involves a paid certificate, organization/identity checks and protected private-key handling. A valid signature alone does not guarantee that a brand-new download immediately avoids every SmartScreen reputation warning.
+
+## Current build evidence
+
+- Windows preview build: [GitHub Actions run 45911494666](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45911494666).
+- Build commit: `92d890c745873d10bc476fadc2cc7de03edc57bf`.
+- Executable SHA-256 is included in `SHA256SUMS.txt` and was checked against the executable inside the downloaded artifact.
+- The executable's PE security directory is empty; it has **no embedded Authenticode certificate**.
+- No SignPath application, approved project, certificate, trusted signing workflow, production token, or signing approval is configured.
+- The workflow labels the preview UNSIGNED and instructs users not to disable SmartScreen or Microsoft Defender.
 
 ## Signing controls
 
-- Sign only reviewed release binaries produced from the repository's verified build.
-- Keep the signing private key in the signing provider's hardware security module; do not put private keys in the repository or ordinary CI secrets.
-- Store provider-issued project/policy identifiers and tokens only in approved secret storage after onboarding.
-- Require the specified human approval for each production release signing request.
-- Verify the final Authenticode signature and exact publisher identity before distributing a signed build.
-- Keep unsigned preview builds clearly labelled unsigned.
-
-## Distribution safety
-
-Do not disable SmartScreen, Microsoft Defender or Windows security controls to run the unsigned preview. The release pipeline must not suggest bypassing those protections. Until trusted signing or another approved distribution route is in place, the current ZIP is a preview artifact and not a public-launch installer.
+- Sign only reviewed release binaries produced from the repository's verified source/build.
+- Keep signing private keys in the approved signing provider's protected hardware/security service; never commit keys or place raw private keys in ordinary CI secrets.
+- Store provider-issued project/policy IDs and tokens only in approved secret storage after onboarding.
+- Require the provider's mandated human approval for each production signing request.
+- Verify the final Authenticode signature and exact publisher identity before describing a binary as signed.
+- Keep all unsigned builds clearly labelled as unsigned.
 
 ## Official information
 
-- [SignPath Foundation](https://signpath.org/)
-- [Programme terms and eligibility](https://signpath.org/terms)
 - [Microsoft: Windows code-signing options](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)
+- [Microsoft: prepare and verify a Store developer account](https://learn.microsoft.com/en-us/windows/apps/publish/prepare-developer-account)
+- [SignPath Foundation terms and eligibility](https://signpath.org/terms)
