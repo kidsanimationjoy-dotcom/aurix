@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createCompanionServer } from '../companion/server.mjs';
 import { getCodexStatus, isLoopbackCompanionUrl, probeCompanion, startCodexLogin } from '../src/companion/client';
+import type { TaskExecutionContext, TaskExecutionRequest } from '../src/tasks/types';
 import { OpenAiAdapter } from '../src/adapters/openai';
 import { checkLegacySystemConfig, hasLegacySandboxSetting, prepareCodexHome, renderCodexProfileConfig, resolveCodexPaths, validateCodexHome, buildCodexSandboxArgs, systemCodexConfigPaths } from '../companion/codex-profile.mjs';
 
@@ -382,6 +383,106 @@ process.exit(2);
   }
 });
 
+
+test('Codex exposes read-only chat only after a successful local sandbox check', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('Fake CLI uses a POSIX shebang; Windows sandbox must be tested with the native Codex executable.');
+    return;
+  }
+  const profile = await makeCodexProfile();
+  const executionLog = path.join(profile.root, 'read-only-chat.json');
+  const fake = await makeFakeCodex(`
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  console.log('codex-cli 0.42.1');
+  process.exit(0);
+}
+if (args[0] === 'login' && args[1] === 'status') {
+  console.log('Logged in using ChatGPT');
+  process.exit(0);
+}
+if (args[0] === 'sandbox') {
+  console.log('AURIX_SANDBOX_CANARY_OK');
+  process.exit(0);
+}
+if (args[0] === 'exec') {
+  let prompt = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', chunk => { prompt += chunk; });
+  process.stdin.on('end', () => {
+    fs.writeFileSync(${JSON.stringify(executionLog)}, JSON.stringify({
+      args,
+      prompt,
+      apiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
+    }));
+    const emit = event => process.stdout.write(JSON.stringify(event) + '\\n');
+    emit({ type: 'thread.started', thread_id: 'fake-thread' });
+    emit({ type: 'item.completed', item: { type: 'agent_message', text: 'A read-only answer from fake Codex.' } });
+    emit({ type: 'turn.completed' });
+  });
+  process.exitCode = 0;
+  return;
+}
+process.exit(2);
+`);
+  try {
+    await prepareCodexHome(profile.paths);
+    await withServer(async (url) => {
+      const prepare = await fetch(url + '/v1/codex/prepare', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      assert.equal(prepare.status, 200);
+      const prepared = await prepare.json() as { sandboxVerified: boolean; version: string | null };
+      assert.equal(prepared.sandboxVerified, true);
+      assert.equal(prepared.version, '0.42.1');
+
+      const adapter = new OpenAiAdapter();
+      adapter.setCompanionConfigProvider(() => ({ url, token: 'secret-token' }));
+      const status = await getCodexStatus({ url, token: 'secret-token' });
+      assert.equal(status.sandboxVerified, true);
+      assert.deepEqual(await adapter.getCapabilities(), ['chat']);
+
+      const emitted: string[] = [];
+      const request: TaskExecutionRequest = {
+        taskId: 'task_readonly_chat',
+        projectId: null,
+        prompt: 'Explain how a simple gear train works.',
+        intent: 'chat',
+        plan: [],
+      };
+      const context: TaskExecutionContext = {
+        signal: new AbortController().signal,
+        emitProgress: async () => undefined,
+        emitOutput: async (delta) => { emitted.push(delta); },
+      };
+      const result = await adapter.executeTask(request, context);
+      assert.equal(result.output, 'A read-only answer from fake Codex.');
+      assert.deepEqual(emitted, ['A read-only answer from fake Codex.']);
+
+      const log = JSON.parse(await readFile(executionLog, 'utf8')) as {
+        args: string[];
+        prompt: string;
+        apiKeyPresent: boolean;
+      };
+      assert.match(log.prompt, /AURIX read-only chat mode/);
+      assert.match(log.prompt, /User request:/);
+      assert.match(log.prompt, /Explain how a simple gear train works/);
+      assert.equal(log.apiKeyPresent, false);
+      assert.ok(log.args.includes('--json'));
+      assert.ok(log.args.includes('--ephemeral'));
+      assert.ok(log.args.includes('default_permissions=aurix-chat-readonly'));
+      assert.equal(log.args.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+      assert.equal(log.args.includes('--add-dir'), false);
+      assert.equal(log.args.includes(request.prompt), false);
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
 
 test('OpenAI adapter exposes profile sign-in but no task capability before execution is approved', async () => {
   const fake = await makeFakeCodex(`
