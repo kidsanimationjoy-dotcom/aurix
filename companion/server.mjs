@@ -1,6 +1,6 @@
 // AURIX local companion — authenticated, loopback-only API.
-// Implemented: health, safe Codex CLI status check, and official local login handoff.
-// Not implemented: filesystem access, terminal execution, or Codex task execution.
+// Implemented: health, Codex chat, approved REA inspection, and scoped App Server coding sessions.
+// Generic filesystem and terminal endpoints remain disabled.
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { analyzeReaTarget, reaStatus } from './rea.mjs';
 import { runCodexReadOnlyChat } from './codex-chat.mjs';
+import { createCodexAgentManager } from './codex-agent.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -17,7 +18,7 @@ import {
   validateCodexHome,
 } from './codex-profile.mjs';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
@@ -188,13 +189,13 @@ async function readJson(req, limit = 4096) {
   }
 }
 
-export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [] }) {
+export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [], codexRoots = [] }) {
   let loginChild = null;
   // The companion process must re-prove the OS sandbox after every restart.
   let sandboxVerified = false;
+  let codexAgentManager = null;
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
-
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     const reqOrigin = req.headers.origin;
     const cors = {};
     if (reqOrigin && reqOrigin !== origin) {
@@ -233,8 +234,9 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
         grantedRoots: [],
+        codexApprovedRootCount: codexRoots.length,
       });
     }
 
@@ -328,6 +330,106 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       }
     }
 
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/agent/start') {
+      let body;
+      try { body = await readJson(req, 16_000); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, {
+          error: 'INVALID_REQUEST',
+          message: status === 413 ? 'The coding task request is too large.' : 'The coding task request must contain valid JSON.',
+        });
+      }
+      try {
+        if (!sandboxVerified) {
+          return send(409, { error: 'CODEX_SANDBOX_NOT_VERIFIED', message: 'Prepare the AURIX Codex profile and verify its local sandbox before starting a coding task.' });
+        }
+        if (!codexRoots.length) {
+          return send(409, { error: 'CODEX_PROJECT_ROOTS_NOT_CONFIGURED', message: 'Set AURIX_CODEX_ROOTS to the project folders you explicitly approve for coding.' });
+        }
+        await validateCodexHome(paths);
+        const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
+        if (status.state !== 'ready') {
+          return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
+        }
+        if (!codexAgentManager) {
+          const executable = process.platform === 'win32'
+            ? await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform)
+            : codexCommand;
+          codexAgentManager = createCodexAgentManager({
+            command: executable,
+            codexHome: paths.codexHome,
+            roots: codexRoots,
+          });
+        }
+        const result = await codexAgentManager.start({ target: body.target, prompt: body.prompt });
+        return send(200, { ok: true, session: result });
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+        return send(400, {
+          ok: false,
+          error: 'CODEX_AGENT_START_FAILED',
+          message: code === 'ENOENT'
+            ? 'The local Codex App Server could not be started. Check the official Codex CLI installation.'
+            : error instanceof Error ? error.message.slice(0, 800) : 'Could not start the local Codex coding agent.',
+        });
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/codex/agent/status') {
+      if (!codexAgentManager) return send(404, { error: 'AGENT_SESSION_NOT_FOUND' });
+      const sessionId = url.searchParams.get('sessionId') ?? '';
+      const afterRaw = Number(url.searchParams.get('after') ?? 0);
+      if (!sessionId || sessionId.length > 80 || !Number.isSafeInteger(afterRaw) || afterRaw < 0) {
+        return send(400, { error: 'INVALID_REQUEST', message: 'Provide a sessionId and non-negative event cursor.' });
+      }
+      const result = codexAgentManager.snapshot(sessionId, afterRaw);
+      return result ? send(200, { ok: true, session: result }) : send(404, { error: 'AGENT_SESSION_NOT_FOUND' });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/agent/approval') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, { error: 'INVALID_REQUEST', message: 'The approval request must contain valid JSON.' });
+      }
+      try {
+        if (!codexAgentManager || typeof body.sessionId !== 'string' || typeof body.approvalId !== 'string' ||
+            !['accept', 'decline', 'cancel'].includes(body.decision)) {
+          return send(400, { error: 'INVALID_REQUEST', message: 'Provide a valid session, approval, and one-time decision.' });
+        }
+        await codexAgentManager.approve(body.sessionId, body.approvalId, body.decision);
+        return send(200, { ok: true });
+      } catch (error) {
+        return send(400, { ok: false, error: 'APPROVAL_FAILED', message: error instanceof Error ? error.message.slice(0, 800) : 'Could not resolve the approval.' });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/agent/interrupt') {
+      let body;
+      try { body = await readJson(req, 2048); }
+      catch { return send(400, { error: 'INVALID_REQUEST', message: 'The interruption request must contain valid JSON.' }); }
+      try {
+        if (!codexAgentManager || typeof body.sessionId !== 'string') return send(400, { error: 'INVALID_REQUEST' });
+        const interrupted = await codexAgentManager.interrupt(body.sessionId);
+        return send(200, { ok: true, interrupted });
+      } catch (error) {
+        return send(400, { ok: false, error: 'INTERRUPT_FAILED', message: error instanceof Error ? error.message.slice(0, 600) : 'Could not interrupt the coding task.' });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/agent/close') {
+      let body;
+      try { body = await readJson(req, 2048); }
+      catch { return send(400, { error: 'INVALID_REQUEST' }); }
+      const closed = codexAgentManager && typeof body.sessionId === 'string'
+        ? await codexAgentManager.close(body.sessionId)
+        : false;
+      return send(closed ? 200 : 404, { ok: closed });
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/codex/chat') {
       let body;
       try { body = await readJson(req, 24_000); }
@@ -372,8 +474,10 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     if (req.method === 'GET' && url.pathname === '/v1/codex/exec') {
       return send(405, { error: 'METHOD_NOT_ALLOWED' });
     }
-    return send(501, { error: 'NOT_IMPLEMENTED', message: 'This companion build does not grant filesystem or task-execution access.' });
+    return send(501, { error: 'NOT_IMPLEMENTED', message: 'This companion build does not grant generic filesystem or terminal access.' });
   });
+  server.once('close', () => { void codexAgentManager?.closeAll(); });
+  return server;
 }
 
 // CLI entry
@@ -382,11 +486,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const origin = process.env.AURIX_ORIGIN || 'http://localhost:5173';
   const port = Number(process.env.AURIX_COMPANION_PORT || 4317);
   const reaRoots = (process.env.AURIX_REA_ROOTS || '').split(path.delimiter).filter(Boolean);
-  createCompanionServer({ token, origin, reaRoots }).listen(port, '127.0.0.1', () => {
+  const codexRoots = (process.env.AURIX_CODEX_ROOTS || '').split(path.delimiter).filter(Boolean);
+  createCompanionServer({ token, origin, reaRoots, codexRoots }).listen(port, '127.0.0.1', () => {
     console.log(`AURIX companion ${VERSION} listening on http://127.0.0.1:${port}`);
     console.log(`Allowed origin: ${origin}`);
     console.log(`Pairing token:  ${token}`);
-    console.log('Capabilities: health, Codex sign-in/status, and REA analysis of explicitly approved target folders.');
+    console.log('Capabilities: health, Codex read-only chat, project-scoped coding agent with explicit approvals, and REA analysis.');
     console.log('REA approved roots: ' + reaRoots.length);
+    console.log('Codex approved project roots: ' + codexRoots.length);
   });
 }
