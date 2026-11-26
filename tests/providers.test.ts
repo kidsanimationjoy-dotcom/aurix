@@ -69,3 +69,17 @@ test('capability gating: a chat-only provider cannot take media tasks', async ()
   const d = await routeTask([connected(claudeMeta)], { kind: 'media_video', preferred: 'auto' });
   assert.equal(d.ok, false);
 });
+
+
+test('router surfaces provider health-check errors without crashing or silently selecting it', async () => {
+  const broken: ProviderAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => { throw new Error('local companion unavailable'); },
+  };
+  const d = await routeTask([broken], { kind: 'chat', preferred: 'auto' });
+  assert.equal(d.ok, false);
+  if (!d.ok) {
+    assert.match(d.reason, /No connected provider/);
+    assert.ok(d.considered.some((item) => item.providerId === 'claude' && item.state === 'error'));
+  }
+});
