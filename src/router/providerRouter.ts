@@ -29,14 +29,15 @@ export type RouteDecision =
  */
 export async function routeTask(
   adapters: ProviderAdapter[],
-  task: { kind: TaskKind; preferred?: ProviderId | 'auto' },
+  task: { kind: TaskKind; preferred?: ProviderId | 'auto'; execution?: boolean },
 ): Promise<RouteDecision> {
   const need = REQUIRED[task.kind];
   const considered: Considered[] = [];
   const usable: ProviderAdapter[] = [];
 
   for (const adapter of adapters) {
-    if (!adapter.meta.plannedCapabilities.includes(need)) {
+    const taskOnly = task.execution === true && typeof adapter.getTaskCapabilities === 'function';
+    if (!taskOnly && !adapter.meta.plannedCapabilities.includes(need)) {
       considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: 'incapable', why: 'Does not provide ' + need });
       continue;
     }
@@ -46,7 +47,9 @@ export async function routeTask(
         considered.push({ providerId: adapter.meta.id, name: adapter.meta.name, state: status.state, why: status.summary });
         continue;
       }
-      const actual = adapter.getCapabilities ? await adapter.getCapabilities() : adapter.meta.plannedCapabilities;
+      const actual = task.execution === true
+        ? (adapter.getTaskCapabilities ? await adapter.getTaskCapabilities() : adapter.getCapabilities ? await adapter.getCapabilities() : adapter.meta.plannedCapabilities)
+        : (adapter.getCapabilities ? await adapter.getCapabilities() : adapter.meta.plannedCapabilities);
       if (!actual.includes(need)) {
         considered.push({
           providerId: adapter.meta.id,
