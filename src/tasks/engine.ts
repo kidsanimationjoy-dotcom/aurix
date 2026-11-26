@@ -135,7 +135,7 @@ export class TaskEngine {
 
     let decision;
     try {
-      decision = await routeTask(this.adapters, { kind, preferred: task.preferredProvider });
+      decision = await routeTask(this.adapters, { kind, preferred: task.preferredProvider, execution: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Provider status check failed.';
       await this.finishWithoutExecution(taskId, 'waiting_for_provider', 'PROVIDER_CHECK_FAILED', message, 'task.waiting_for_provider');
@@ -208,7 +208,7 @@ export class TaskEngine {
       let decision;
       try {
         // A specific provider choice is binding. Never route approval to a replacement.
-        decision = await routeTask(this.adapters, { kind, preferred: providerId });
+        decision = await routeTask(this.adapters, { kind, preferred: providerId, execution: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Provider status check failed during approval.';
         await this.finishWithoutExecution(
