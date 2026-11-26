@@ -45,6 +45,7 @@ export interface TaskRecord {
 
 export type TaskEventType =
   | 'task.created'
+  | 'task.retried'
   | 'task.classified'
   | 'task.plan.created'
   | 'provider.checked'
