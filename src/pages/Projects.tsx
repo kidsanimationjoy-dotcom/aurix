@@ -13,6 +13,7 @@ export function Projects() {
   const [provider, setProvider] = useState<ProviderChoice>('auto');
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: '', description: '' });
+  const [pathDrafts, setPathDrafts] = useState<Record<string, string>>({});
 
   async function create() {
     if (!name.trim()) return;
@@ -71,7 +72,16 @@ export function Projects() {
                   <>
                     <h3>{p.name}{settings.activeProjectId === p.id && <span className="pill s-connected" style={{ marginLeft: 8 }}>Active</span>}</h3>
                     <p>{p.description || 'No description'}</p>
-                    <small>Created {fmtTime(p.createdAt)} · Provider: {p.preferredProvider} · Local folder: not linked (needs the local companion)</small>
+                    <small>Created {fmtTime(p.createdAt)} · Provider: {p.preferredProvider}</small>
+                    <div className="row tight" style={{ marginTop: 8, flexWrap: 'nowrap' }}>
+                      <input aria-label={'Local folder path for ' + p.name} value={pathDrafts[p.id] ?? p.localPath ?? ''} placeholder="C:\\Projects\\MyApp" onChange={(e) => setPathDrafts((current) => ({ ...current, [p.id]: e.target.value }))} />
+                      <button className="btn sm" disabled={(pathDrafts[p.id] ?? p.localPath ?? '').trim() === (p.localPath ?? '')} onClick={async () => {
+                        const localPath = (pathDrafts[p.id] ?? '').trim() || null;
+                        await db.update('projects', p.id, { localPath });
+                        await audit({ action: 'project.local_path.set', target: p.id, detail: localPath ?? 'unlinked' });
+                      }}>Save folder</button>
+                    </div>
+                    <small className="muted">The path must also be inside a folder listed in AURIX_CODEX_ROOTS in your local companion. Saving it here does not grant access.</small>
                   </>
                 )}
               </div>
