@@ -6,6 +6,7 @@ export const NAV: NavItem[] = [
   { path: '/', label: 'Home', icon: 'home', group: 'Workspace' },
   { path: '/projects', label: 'Projects', icon: 'folder', group: 'Workspace' },
   { path: '/coding', label: 'Coding Studio', icon: 'code', group: 'Workspace' },
+  { path: '/tasks', label: 'Task Center', icon: 'list', group: 'Workspace' },
   { path: '/research', label: 'Research', icon: 'search', group: 'Workspace' },
   { path: '/media', label: 'Media Studio', icon: 'film', group: 'Create' },
   { path: '/3d', label: '3D Website Studio', icon: 'cube', group: 'Create' },
