@@ -1,0 +1,126 @@
+name: Promote Phase 0-1 archive into tracked source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-phase-1-source.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aurix-source-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Safely extract app source into a review branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate and extract uploaded archive
+        id: extract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f package.json ]; then
+            echo "Application source is already tracked; no archive promotion is needed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ARCHIVE=""
+          if [ -f aurix-phase-0-1-reviewed.zip ]; then
+            ARCHIVE="aurix-phase-0-1-reviewed.zip"
+          elif [ -f aurix-phase-0-1.zip ]; then
+            ARCHIVE="aurix-phase-0-1.zip"
+          fi
+          if [ -z "$ARCHIVE" ]; then
+            echo "::error::No Phase 0-1 archive found in repository root."
+            exit 1
+          fi
+
+          echo "Using repository archive: $ARCHIVE"
+          while IFS= read -r entry; do
+            case "$entry" in
+              aurix/*) ;;
+              *) echo "::error::Unexpected archive path. Refusing extraction."; exit 1 ;;
+            esac
+            case "/$entry/" in
+              */../*) echo "::error::Archive contains a parent-directory path."; exit 1 ;;
+            esac
+          done < <(unzip -Z1 "$ARCHIVE")
+
+          STAGE="$RUNNER_TEMP/aurix-archive"
+          mkdir -p "$STAGE"
+          unzip -q "$ARCHIVE" -d "$STAGE"
+          APP="$STAGE/aurix"
+          if [ ! -f "$APP/package.json" ]; then
+            echo "::error::Archive does not contain aurix/package.json."
+            exit 1
+          fi
+
+          if find "$APP" -type l -print -quit | grep -q .; then
+            echo "::error::Archive contains symbolic links; refusing promotion."
+            exit 1
+          fi
+          if find "$APP" -type f \( -name ".env" -o -name ".env.*" -o -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.pfx" -o -name "id_rsa*" \) -print -quit | grep -q .; then
+            echo "::error::Archive contains a credential-like file; refusing promotion."
+            exit 1
+          fi
+
+          # Preserve existing repository documentation and ignore generated files.
+          rsync -a --ignore-existing \
+            --exclude ".git/" \
+            --exclude "node_modules/" \
+            --exclude "dist/" \
+            --exclude "playwright-report/" \
+            --exclude "test-results/" \
+            "$APP/" "$GITHUB_WORKSPACE/"
+
+          if [ ! -f package.json ]; then
+            echo "::error::Application source was not copied into repository root."
+            exit 1
+          fi
+
+          touch .gitignore
+          for pattern in "node_modules/" "dist/" "playwright-report/" "test-results/" ".env" ".env.*"; do
+            grep -qxF "$pattern" .gitignore || printf '%s\n' "$pattern" >> .gitignore
+          done
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Source files staged in the temporary runner:"
+          find . -path ./.git -prune -o -path ./node_modules -prune -o -type f -print | sort | head -200
+
+      - name: Commit source on an isolated review branch
+        if: steps.extract.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="promotion/phase-1-source-${GITHUB_RUN_ID}"
+          git switch -c "$BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && {
+            echo "::error::Archive extraction produced no new tracked changes."
+            exit 1
+          }
+          git commit -m "chore: promote Phase 0-1 app into tracked source"
+          git push origin "HEAD:$BRANCH"
+          {
+            echo "## Source promotion branch created"
+            echo
+            echo "Branch: `$BRANCH`"
+            echo
+            echo "The uploaded archive was extracted with path, symlink, and credential-file checks. Existing repository files were preserved. Review this branch before merging."
+          } >> "$GITHUB_STEP_SUMMARY"
