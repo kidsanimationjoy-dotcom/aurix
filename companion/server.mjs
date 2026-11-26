@@ -230,7 +230,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
         grantedRoots: [],
       });
     }
@@ -315,7 +315,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         });
       }
       try {
-        const kind = body.kind === 'desktop' ? 'desktop' : 'javascript';
+        const kind = ['desktop', 'android'].includes(body.kind) ? body.kind : 'javascript';
         const result = await analyzeReaTarget({ target: body.target, roots: reaRoots, command: reaCommand, kind });
         return send(200, { ok: true, result });
       } catch (error) {
