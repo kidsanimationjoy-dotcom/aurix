@@ -133,9 +133,9 @@ export class TaskEngine {
       return this.db.get('tasks', task.id)!;
     }
 
-    const promise = this.execute(task.id, adapter, decision.providerId);
-    const controller = this.running.get(task.id)?.controller;
-    if (controller) this.running.set(task.id, { controller, promise });
+    await this.db.update('tasks', task.id, { status: 'running', startedAt: Date.now() });
+    await this.event(task.id, 'task.started', 'Provider execution started.', decision.providerId);
+    void this.execute(task.id, adapter, decision.providerId);
     return this.db.get('tasks', task.id)!;
   }
 
@@ -207,8 +207,6 @@ export class TaskEngine {
     };
 
     const promise = (async () => {
-      await this.db.update('tasks', taskId, { status: 'running', startedAt: Date.now(), selectedProviderId: providerId, errorCode: '', errorMessage: '' });
-      await this.event(taskId, 'task.started', 'Provider execution started.', providerId);
       try {
         const result = await adapter.executeTask(request, context);
         if (controller.signal.aborted) {
