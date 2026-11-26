@@ -22,7 +22,8 @@ export type CompanionCapability =
   | 'cli.rea'
   | 'rea.status'
   | 'rea.javascript.analyze'
-  | 'rea.desktop.inspect';
+  | 'rea.desktop.inspect'
+  | 'rea.android.inspect';
 
 export interface HealthResponse {
   service: 'aurix-companion';
