@@ -92,7 +92,7 @@ export function buildCodexExecArgs({ workspaceRoot, profileName }) {
     '--skip-git-repo-check',
     '--cd', path.resolve(workspaceRoot),
     '--ask-for-approval', 'never',
-    '--config', 'default_permissions=' + profileName,
+    '--config', 'default_permissions=\\"' + profileName + '\\"',
     '-',
   ];
 }
