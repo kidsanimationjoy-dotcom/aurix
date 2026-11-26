@@ -25,7 +25,7 @@ export function Research() {
   const [reaAuthorized, setReaAuthorized] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaError, setReaError] = useState('');
-  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[] } | null>(null);
+  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[]; graphSummary?: { nodes: number; edges: number; coverage: string }; graphNodes?: { id: string; kind: string; path?: string }[] } | null>(null);
 
   const needsSource = form.status === 'verified' && !validUrl(form.sourceUrl);
   const urlBad = form.sourceUrl !== '' && !validUrl(form.sourceUrl);
@@ -65,11 +65,11 @@ export function Research() {
           } finally { setReaBusy(false); }
         }}>{reaBusy ? 'Inspecting application…' : 'Run REA investigation'}</button></div>
         {reaReport ? <div className="stack">
-          <h3>REA findings ({reaReport.findings.length})</h3>
-          {reaReport.findings.map((finding, index) => <div className="item" key={index}>
-            <div><b>{finding.claim}</b><ul>{finding.evidence.map((evidence) => <li key={evidence.id}><code>{evidence.id}</code> — {evidence.description}</li>)}</ul></div>
-          </div>)}
-          <h3>Unknowns ({reaReport.unknowns.length})</h3>
+          <h3>Recovered application graph</h3>
+          {reaReport.graphSummary ? <p>{reaReport.graphSummary.nodes} nodes · {reaReport.graphSummary.edges} relationships · coverage: <b>{reaReport.graphSummary.coverage}</b></p> : null}
+          {reaReport.graphNodes?.length ? <ul>{reaReport.graphNodes.map((node) => <li key={node.id}><b>{node.kind}</b>{node.path ? ' — ' + node.path : ''} <code>{node.id}</code></li>)}</ul> : <p>No graph nodes were returned.</p>}
+          {reaReport.graphNodes && reaReport.graphNodes.length === 200 ? <p className="muted">Showing the first 200 nodes. The full graph remains in the REA result.</p> : null}
+          <h3>Unknowns and limitations ({reaReport.unknowns.length})</h3>
           {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
         </div> : null}
       </Panel>
