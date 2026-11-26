@@ -14,7 +14,7 @@ async function freshDb() {
   return db;
 }
 
-function adapter(executeTask?: TaskExecutionAdapter['executeTask'], connected = false): ProviderAdapter {
+function adapter(executeTask?: TaskExecutionAdapter['executeTask'], connected = false): ProviderAdapter & Partial<TaskExecutionAdapter> {
   const status: ProviderStatus = {
     state: connected ? 'connected' : 'not_configured',
     implementation: connected ? 'implemented_tested' : 'interface_only',
