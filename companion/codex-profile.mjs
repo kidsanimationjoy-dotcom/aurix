@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { access, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 
@@ -373,7 +374,8 @@ export function buildCodexSandboxArgs({ platform, profileName, workspaceRoot, ex
 
 const CANARY_PROGRAM = String.raw`
 const fs = require('node:fs');
-const [insidePath, outsidePath, outsideWritePath, workspaceWritePath, expected] = process.argv.slice(1);
+const net = require('node:net');
+const [insidePath, outsidePath, outsideWritePath, workspaceWritePath, expected, networkProbePort] = process.argv.slice(1);
 function denied(error) { return !!error && (error.code === 'EACCES' || error.code === 'EPERM'); }
 try {
   if (fs.readFileSync(insidePath, 'utf8') !== expected) process.exit(10);
@@ -398,11 +400,32 @@ try {
 } catch (error) {
   if (!denied(error)) process.exit(41);
 }
-process.stdout.write('AURIX_SANDBOX_CANARY_OK');
+function networkMustBeBlocked(port) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const socket = net.createConnection({ host: '127.0.0.1', port: Number(port) });
+    const finish = (blocked) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(blocked);
+    };
+    socket.once('connect', () => finish(false));
+    socket.once('error', (error) => finish(
+      ['EACCES', 'EPERM', 'ENETUNREACH', 'EHOSTUNREACH', 'ECONNREFUSED'].includes(error.code),
+    ));
+    socket.setTimeout(1200, () => finish(true));
+  });
+}
+networkMustBeBlocked(networkProbePort).then((blocked) => {
+  if (!blocked) process.exit(50);
+  process.stdout.write('AURIX_SANDBOX_CANARY_OK');
+}).catch(() => process.exit(51));
 `;
 
 export async function runCodexSandboxCanary({ paths, command = 'codex', env = process.env, platform = process.platform, timeoutMs = 20000 } = {}) {
   const created = [];
+  let networkProbeServer;
   try {
     await validateCodexHome(paths);
     const executable = await resolveNativeCodexCommand(command, env, platform);
@@ -417,10 +440,25 @@ export async function runCodexSandboxCanary({ paths, command = 'codex', env = pr
     }
     // Also clean the two write targets if a broken sandbox permits either write.
     created.push(outsideWritePath, workspaceWritePath);
+
+    let networkConnectionObserved = false;
+    networkProbeServer = createNetServer((socket) => {
+      networkConnectionObserved = true;
+      socket.destroy();
+    });
+    await new Promise((resolve, reject) => {
+      networkProbeServer.once('error', reject);
+      networkProbeServer.listen(0, '127.0.0.1', resolve);
+    });
+    const networkAddress = networkProbeServer.address();
+    if (!networkAddress || typeof networkAddress === 'string') {
+      throw Object.assign(new Error('Could not allocate the local network canary.'), { code: 'NETWORK_CANARY_SETUP_FAILED' });
+    }
+
     const args = buildCodexSandboxArgs({
       platform, profileName: paths.profileName, workspaceRoot: paths.workspaceRoot,
       executable: process.execPath,
-      executableArgs: ['-e', CANARY_PROGRAM, insidePath, outsidePath, outsideWritePath, workspaceWritePath, token],
+      executableArgs: ['-e', CANARY_PROGRAM, insidePath, outsidePath, outsideWritePath, workspaceWritePath, token, String(networkAddress.port)],
     });
     const result = await new Promise((resolve) => {
       let settled = false;
@@ -446,14 +484,25 @@ export async function runCodexSandboxCanary({ paths, command = 'codex', env = pr
         child.kill();
       }, timeoutMs);
     });
-    if (!result.ok) {
-      return { ok: false, code: result.code, message: 'Codex sandbox did not prove all required read/write restrictions. Execution remains disabled.' };
+    if (!result.ok || networkConnectionObserved) {
+      return {
+        ok: false,
+        code: networkConnectionObserved ? 'SANDBOX_NETWORK_NOT_BLOCKED' : result.code,
+        message: 'Codex sandbox did not prove all required filesystem and network restrictions. Execution remains disabled.',
+      };
     }
-    return { ok: true, code: 'VERIFIED', message: 'The OS sandbox allowed the AURIX workspace read and blocked outside reads and writes.' };
+    return {
+      ok: true,
+      code: 'VERIFIED',
+      message: 'The OS sandbox allowed the AURIX workspace read and blocked outside reads, all tested writes, and a loopback connection to a local probe.',
+    };
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'SANDBOX_CHECK_FAILED';
     return { ok: false, code, message: 'AURIX could not verify the Codex OS sandbox. Execution remains disabled.' };
   } finally {
+    if (networkProbeServer) {
+      await new Promise((resolve) => networkProbeServer.close(() => resolve()));
+    }
     for (const file of created) {
       try { await rm(file, { force: true }); } catch {}
     }
