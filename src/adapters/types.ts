@@ -165,6 +165,6 @@ export interface InvestigationReport {
   desktopSummary?: unknown;
 }
 export interface InvestigationAdapter extends ProviderAdapter {
-  createInvestigation(target: string, auth: InvestigationAuthorization): Promise<Result<{ id: string }>>;
+  createInvestigation(target: string, auth: InvestigationAuthorization, kind?: 'javascript' | 'desktop'): Promise<Result<{ id: string }>>;
   getReport(id: string): Promise<Result<InvestigationReport>>;
 }
