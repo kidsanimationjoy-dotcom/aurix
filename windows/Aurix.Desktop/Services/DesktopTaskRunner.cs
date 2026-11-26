@@ -18,8 +18,18 @@ public static class DesktopTaskRunner
         foreach (var step in plan.Steps)
         {
             if (cancellationToken.IsCancellationRequested)
+            {
+                AuditLogService.TryRecord(step, "cancelled");
                 return new DesktopTaskResult(false, true, Join(output, "Stopped before the next step."));
+            }
 
+            if (!AuditLogService.TryRecord(step, "started"))
+            {
+                output.Add("AURIX could not write its local task audit log, so it stopped before executing this action.");
+                return new DesktopTaskResult(false, false, Join(output, "Task stopped because the audit log was unavailable."));
+            }
+
+            var stepSucceeded = true;
             try
             {
                 switch (step.Kind)
@@ -42,6 +52,7 @@ public static class DesktopTaskRunner
                         var inspection = DesktopInteractionService.InspectControls(
                             step.TargetApp ?? string.Empty, cancellationToken);
                         output.Add(inspection.Message);
+                        stepSucceeded = inspection.Success;
                         hasFailure |= !inspection.Success;
                         break;
 
@@ -53,6 +64,7 @@ public static class DesktopTaskRunner
                             requestApproval,
                             cancellationToken);
                         output.Add(click.Message);
+                        stepSucceeded = click.Success;
                         hasFailure |= !click.Success;
                         break;
 
@@ -65,6 +77,7 @@ public static class DesktopTaskRunner
                             requestApproval,
                             cancellationToken);
                         output.Add(type.Message);
+                        stepSucceeded = type.Success;
                         hasFailure |= !type.Success;
                         break;
 
@@ -74,7 +87,8 @@ public static class DesktopTaskRunner
                         {
                             output.Add($"Skipped {step.Description}: no executable was configured.");
                             hasFailure = true;
-                            continue;
+                            stepSucceeded = false;
+                            break;
                         }
 
                         progress?.Invoke(step.Description + "…");
@@ -88,6 +102,7 @@ public static class DesktopTaskRunner
                         {
                             output.Add($"{step.Description}: Windows did not return a process handle.");
                             hasFailure = true;
+                            stepSucceeded = false;
                         }
                         else
                         {
@@ -96,13 +111,21 @@ public static class DesktopTaskRunner
                         }
                         break;
                 }
+
+                if (!AuditLogService.TryRecord(step, stepSucceeded ? "succeeded" : "not_completed"))
+                {
+                    output.Add("AURIX could not record this action's outcome in its local audit log.");
+                    hasFailure = true;
+                }
             }
             catch (OperationCanceledException)
             {
+                AuditLogService.TryRecord(step, "cancelled");
                 return new DesktopTaskResult(false, true, Join(output, "Task stopped."));
             }
             catch (Exception ex)
             {
+                AuditLogService.TryRecord(step, "failed");
                 output.Add($"{step.Description}: failed — {ex.Message}");
                 hasFailure = true;
             }
