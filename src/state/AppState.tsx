@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { recordAudit, type AuditInput } from '../audit/audit';
 import type { ProviderAdapter, ProviderId, ProviderStatus } from '../adapters/types';
+import { OpenAiAdapter } from '../adapters/openai';
 import { probeCompanion } from '../companion/client';
 import type { CompanionStatus } from '../companion/protocol';
 import type { CollectionName, Project, Schema, SettingsRecord } from '../domain/types';
@@ -23,6 +24,7 @@ interface Ctx {
   statuses: Record<string, ProviderStatus>;
   companion: CompanionStatus;
   checkCompanion: () => Promise<void>;
+  refreshStatuses: () => Promise<void>;
 }
 const AppCtx = createContext<Ctx | null>(null);
 
@@ -32,15 +34,34 @@ export function AppProvider(props: { db: Db; adapters: ProviderAdapter[]; persis
   const [statuses, setStatuses] = useState<Record<string, ProviderStatus>>({});
   const [companion, setCompanion] = useState<CompanionStatus>({ state: 'not_configured', message: 'No companion URL set.' });
 
-  useEffect(() => {
-    let live = true;
-    void Promise.all(adapters.map(async (a) => [a.meta.id, await a.getStatus()] as const)).then((rows) => {
-      if (live) setStatuses(Object.fromEntries(rows));
-    }).catch(() => {
-      if (live) setStatuses({});
-    });
-    return () => { live = false; };
+  const refreshStatuses = useCallback(async () => {
+    const entries = await Promise.all(adapters.map(async (adapter) => {
+      try { return [adapter.meta.id, await adapter.getStatus()] as const; }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Provider status check failed.';
+        return [adapter.meta.id, {
+          state: 'error' as const,
+          implementation: 'implemented_untested' as const,
+          summary: 'Provider status check failed',
+          detail: message,
+          checkedAt: Date.now(),
+        }] as const;
+      }
+    }));
+    setStatuses(Object.fromEntries(entries));
   }, [adapters]);
+
+  useEffect(() => {
+    for (const adapter of adapters) {
+      if (adapter instanceof OpenAiAdapter) {
+        adapter.setCompanionConfigProvider(() => ({
+          url: db.get('settings', SETTINGS_ID)?.companionUrl ?? '',
+          token: companionToken.get(),
+        }));
+      }
+    }
+    void refreshStatuses();
+  }, [adapters, db, refreshStatuses]);
 
   useEffect(() => {
     void taskEngine.recoverInterruptedTasks();
@@ -49,13 +70,16 @@ export function AppProvider(props: { db: Db; adapters: ProviderAdapter[]; persis
   const checkCompanion = useCallback(async () => {
     const url = db.get('settings', SETTINGS_ID)?.companionUrl ?? '';
     setCompanion(await probeCompanion({ url, token: companionToken.get() }));
-  }, [db]);
+    await refreshStatuses();
+  }, [db, refreshStatuses]);
 
   useEffect(() => {
     if ((db.get('settings', SETTINGS_ID)?.companionUrl ?? '') && companionToken.get()) void checkCompanion();
   }, [db, checkCompanion]);
 
-  const value = useMemo(() => ({ db, adapters, taskEngine, persistent, statuses, companion, checkCompanion }), [db, adapters, taskEngine, persistent, statuses, companion, checkCompanion]);
+  const value = useMemo(() => ({
+    db, adapters, taskEngine, persistent, statuses, companion, checkCompanion, refreshStatuses,
+  }), [db, adapters, taskEngine, persistent, statuses, companion, checkCompanion, refreshStatuses]);
   return <AppCtx.Provider value={value}>{props.children}</AppCtx.Provider>;
 }
 
