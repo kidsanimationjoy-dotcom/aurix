@@ -50,14 +50,14 @@ rl.on('line', (line) => {
     } else {
       send({
         method: 'item/started',
-        params: { item: { id: 'item-1', type: 'commandExecution', command: ['node', '--version'], cwd: root, status: 'inProgress' } }
+        params: { item: { id: 'item-1', type: 'commandExecution', command: 'node --version', cwd: root, status: 'inProgress' } }
       });
       send({
         id: 42,
         method: 'item/commandExecution/requestApproval',
         params: {
           itemId: 'item-1', threadId: 'thread-aurix-test', turnId: 'turn-aurix-test',
-          command: ['node', '--version'], cwd: root,
+          command: 'node --version', cwd: root,
           ...(scenario === 'network' ? { networkApprovalContext: { host: 'example.invalid', protocol: 'https' } } : {})
         }
       });
@@ -111,7 +111,7 @@ test('Codex App Server starts read-only, shows command approvals, and accepts on
     assert.equal(session.status, 'running');
     const approval = await waitForApproval(manager, session.id);
     assert.equal(approval.kind, 'command');
-    assert.deepEqual(approval.command, ['node', '--version']);
+    assert.deepEqual(approval.command, ['node --version']);
     await assert.rejects(
       () => manager.approve(session.id, String(approval.id), 'acceptForSession'),
       /Unsupported approval decision/,
