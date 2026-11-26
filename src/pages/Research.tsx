@@ -22,7 +22,7 @@ export function Research() {
   const [form, setForm] = useState(EMPTY);
   const [filter, setFilter] = useState<ClaimStatus | 'all'>('all');
   const [reaTarget, setReaTarget] = useState('');
-  const [reaKind, setReaKind] = useState<'javascript' | 'desktop'>('javascript');
+  const [reaKind, setReaKind] = useState<'javascript' | 'desktop' | 'android'>('javascript');
   const [reaAuthorized, setReaAuthorized] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaError, setReaError] = useState('');
@@ -44,12 +44,13 @@ export function Research() {
       <Panel title="Inspect an application with REA">
         <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
         <Field label="Analysis workflow">
-          <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop')}>
+          <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop' | 'android')}>
             <option value="javascript">JavaScript / Electron application graph</option>
             <option value="desktop">Desktop installation discovery</option>
+            <option value="android">Android APK static inspection</option>
           </select>
         </Field>
-        <Field label="Local application folder path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
+        <Field label="Local application folder or APK file path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
           <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
         </Field>
         <label className="check"><input type="checkbox" checked={reaAuthorized} onChange={(e) => setReaAuthorized(e.target.checked)} /> I own this application or have permission to inspect it.</label>
