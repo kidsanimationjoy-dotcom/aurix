@@ -42,6 +42,55 @@ async function makeFakeCodex(script: string): Promise<{ directory: string; comma
 }
 
 
+
+test('Codex chat requires a verified sandbox and runs only in read-only mode', async () => {
+  if (process.platform === 'win32') return;
+  const profile = await makeCodexProfile();
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--version') { console.log('codex 1.0.0'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in with ChatGPT'); process.exit(0); }
+if (args[0] === 'sandbox') { console.log('AURIX_SANDBOX_CANARY_OK'); process.exit(0); }
+if (args[0] === 'exec') {
+  if (!args.includes('--sandbox') || args[args.indexOf('--sandbox') + 1] !== 'read-only') process.exit(21);
+  if (!args.includes('--ephemeral') || !args.includes('--json') || !args.includes('--cd')) process.exit(22);
+  if (Object.hasOwn(process.env, 'OPENAI_API_KEY')) process.exit(23);
+  console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-test-123' }));
+  console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'Hello from isolated Codex chat.' } }));
+  process.exit(0);
+}
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const headers = { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' };
+      const payload = { messages: [{ role: 'user', content: 'Hello' }] };
+      const blocked = await fetch(url + '/v1/codex/chat', { method: 'POST', headers, body: JSON.stringify(payload) });
+      assert.equal(blocked.status, 409);
+      assert.equal((await blocked.json()).error, 'CODEX_SANDBOX_NOT_VERIFIED');
+
+      const prepared = await fetch(url + '/v1/codex/prepare', { method: 'POST', headers, body: '{}' });
+      assert.equal(prepared.status, 200);
+      assert.equal((await prepared.json()).sandboxVerified, true);
+
+      const status = await fetch(url + '/v1/codex/status', { headers: { Authorization: 'Bearer secret-token' } });
+      const statusBody = await status.json();
+      assert.equal(statusBody.state, 'ready');
+      assert.equal(statusBody.sandboxVerified, true);
+
+      const response = await fetch(url + '/v1/codex/chat', { method: 'POST', headers, body: JSON.stringify(payload) });
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.ok, true);
+      assert.equal(result.sessionId, 'thread-test-123');
+      assert.equal(result.content, 'Hello from isolated Codex chat.');
+    }, { codexCommand: fake.command, codexPaths: profile.paths });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
 test('AURIX Codex paths keep the canary outside CODEX_HOME and the workspace inside it', () => {
   const paths = resolveCodexPaths({ HOME: '/home/tester', XDG_DATA_HOME: '/home/tester/.local/share' }, 'linux', '/home/tester');
   assert.equal(paths.platform, 'linux');
@@ -271,7 +320,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'cli.codex.chat']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
