@@ -18,6 +18,7 @@ export type CompanionCapability =
   | 'cli.codex.login'
   | 'cli.codex.profile.prepare'
   | 'cli.codex.sandbox.verify'
+  | 'cli.codex.chat'
   | 'cli.grok-build'
   | 'cli.rea'
   | 'rea.status'
