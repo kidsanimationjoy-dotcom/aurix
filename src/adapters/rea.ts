@@ -60,17 +60,17 @@ export class ReaAdapter implements InvestigationAdapter {
     }
   }
 
-  async createInvestigation(target: string, auth: InvestigationAuthorization, kind: 'javascript' | 'desktop' = 'javascript') {
+  async createInvestigation(target: string, auth: InvestigationAuthorization, kind: 'javascript' | 'desktop' | 'android' = 'javascript') {
     if (!auth || !auth.statement?.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
       return { ok: false as const, error: { code: 'AUTHORIZATION_REQUIRED' as const, message: 'Confirm that you are authorised to inspect this local application.' } };
     }
     try {
       const value = await analyzeReaTarget(this.getConfig(), target, kind);
       const envelope = value as { report?: unknown };
-      if (kind === 'desktop') {
+      if (kind === 'desktop' || kind === 'android') {
         const normalized: InvestigationReport = {
           findings: [],
-          unknowns: ['Desktop directory inspection reports runtime candidates and supporting file evidence. It does not run the application or prove runtime behavior. Review the raw REA result for full evidence and follow-up probes.'],
+          unknowns: [kind === 'desktop' ? 'Desktop directory inspection reports runtime candidates and supporting file evidence. It does not run the application or prove runtime behavior. Review the raw REA result for full evidence and follow-up probes.' : 'Android APK inspection is static analysis. It does not install or execute the APK, prove server-side behavior, or establish runtime permissions. Review the raw REA result and its coverage limitations.'],
           desktopSummary: envelope.report,
         };
         const id = globalThis.crypto.randomUUID();
