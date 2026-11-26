@@ -148,8 +148,12 @@
     <DockPanel Grid.Row="3" Margin="0,16,0,0">
       <TextBlock Text="Closing this window keeps AURIX running in the system tray. Use the tray menu to pause or exit."
                  Foreground="#8197B5" VerticalAlignment="Center" FontSize="11"/>
-      <Button Content="Enable start with Windows" DockPanel.Dock="Right"
-              Click="StartupButton_Click" Margin="8,0,0,0" Padding="12,7"/>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Content="Open task log" Click="OpenAuditLogButton_Click"
+                Margin="8,0,0,0" Padding="12,7"/>
+        <Button x:Name="StartupButton" Content="Enable start with Windows"
+                Click="StartupButton_Click" Margin="8,0,0,0" Padding="12,7"/>
+      </StackPanel>
     </DockPanel>
   </Grid>
 </Window>
