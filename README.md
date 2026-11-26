@@ -31,6 +31,8 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Documentation
 
+- [Windows desktop companion guide](windows/Aurix.Desktop/README.md)
+- [Windows desktop architecture and current limits](docs/WINDOWS_DESKTOP_ARCHITECTURE.md)
 - [Complete feature catalogue](docs/FEATURE_CATALOG.md)
 - [System architecture](docs/ARCHITECTURE.md)
 - [Provider and authentication matrix](docs/PROVIDER_MATRIX.md)
