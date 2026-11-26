@@ -158,10 +158,16 @@ export function createCodexExecManager({
   maxConcurrent = 1,
 } = {}) {
   const running = new Map();
+  const cancelledBeforeStart = new Map();
 
   async function run({ taskId, command, workspaceRoot, profileName, prompt, env }) {
     if (!/^[A-Za-z0-9_-]{1,96}$/.test(String(taskId ?? ''))) {
       throw codedError('INVALID_TASK_ID', 'The task identifier is invalid.');
+    }
+    const cancelledExpiry = cancelledBeforeStart.get(taskId);
+    if (cancelledExpiry) {
+      cancelledBeforeStart.delete(taskId);
+      if (cancelledExpiry > Date.now()) throw codedError('CODEX_TASK_CANCELLED', 'Codex task was cancelled before process launch.');
     }
     if (running.has(taskId)) throw codedError('TASK_ALREADY_RUNNING', 'This Codex task is already running.');
     if (running.size >= maxConcurrent) throw codedError('CODEX_BUSY', 'The AURIX Codex executor is busy with another task.');
@@ -295,7 +301,21 @@ export function createCodexExecManager({
 
   async function cancel(taskId) {
     const entry = running.get(taskId);
-    if (!entry) return false;
+    if (!entry) {
+      // Cancellation may arrive while sandbox preflight is still running and
+      // before the exec manager has spawned Codex. Tombstones close that race.
+      const now = Date.now();
+      for (const [id, expiresAt] of cancelledBeforeStart) {
+        if (expiresAt <= now) cancelledBeforeStart.delete(id);
+      }
+      while (cancelledBeforeStart.size >= 1000) {
+        const oldest = cancelledBeforeStart.keys().next().value;
+        if (oldest === undefined) break;
+        cancelledBeforeStart.delete(oldest);
+      }
+      cancelledBeforeStart.set(taskId, now + 120_000);
+      return true;
+    }
     entry.cancelled = true;
     return terminateProcessTree(entry, platform, entry.env ?? process.env);
   }
