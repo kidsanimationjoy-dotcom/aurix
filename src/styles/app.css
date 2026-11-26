@@ -151,3 +151,20 @@ th { color: var(--muted); font-weight: 500; font-size: 13px; }
 }
 :root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before { transition: none !important; animation: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+
+/* Phase 2 task workspace */
+.task-card { display: flex; flex-direction: column; gap: 12px; }
+.task-card > .row:first-child { gap: 14px; }
+.task-card strong { overflow-wrap: anywhere; }
+.task-card small { line-height: 1.5; }
+.task-status.succeeded { color: var(--ok); border-color: rgba(62, 207, 142, 0.4); }
+.task-status.failed, .task-status.timed_out { color: var(--bad); border-color: rgba(240, 97, 122, 0.4); }
+.task-status.running { color: var(--blue); border-color: rgba(77, 124, 255, 0.45); }
+.task-status.cancelling, .task-status.waiting_for_provider, .task-status.needs_clarification { color: var(--warn); border-color: rgba(240, 180, 41, 0.4); }
+.task-progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.task-progress span { display: block; height: 100%; background: var(--blue); transition: width 0.2s ease; }
+.task-output { border-left: 2px solid var(--blue); padding: 8px 12px; background: var(--raised); border-radius: 0 8px 8px 0; }
+.task-output p { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; }
+.task-card details { color: var(--muted); font-size: 13px; }
+.task-card summary { cursor: pointer; }
