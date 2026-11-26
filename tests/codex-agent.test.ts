@@ -136,7 +136,8 @@ test('Codex filesystem permission approval grants only the approved project path
     const session = await manager.start({ target: root, prompt: 'Request filesystem permission for this project.' });
     const approval = await waitForApproval(manager, session.id);
     assert.equal(approval.kind, 'filesystem');
-    assert.deepEqual(approval.requestedPermissions.fileSystem.entries[0].path, { type: 'path', path: root });
+    const requestedPermissions = approval.requestedPermissions as { fileSystem: { entries: { path: unknown }[] } };
+    assert.deepEqual(requestedPermissions.fileSystem.entries[0]?.path, { type: 'path', path: root });
     await manager.approve(session.id, String(approval.id), 'accept');
     const completed = await waitForStatus(manager, session.id, 'completed');
     assert.ok(completed.events.some((event) => event.type === 'agent.approval.responded' && event.decision === 'accept'));
