@@ -8,11 +8,13 @@ export const openaiMeta: ProviderMeta = {
   name: 'OpenAI / Codex',
   vendor: 'OpenAI',
   role: 'Optional read-only chat through the official local Codex CLI',
-  plannedCapabilities: ['chat', 'coding_agent', 'subagents', 'skills', 'mcp'],
+  // Read-only chat is task-only and requires Task Center approval; not exposed in Home chat.
+  plannedCapabilities: [],
   authentication: 'Official Codex CLI sign-in with ChatGPT; API-key setup is not required by AURIX.',
   references: [{ label: 'Codex CLI', url: 'https://github.com/openai/codex' }],
   constraints: [
     'The ChatGPT web conversation and its private runtime cannot be embedded in AURIX.',
+    'Codex is not offered in Home chat: its text-only chat capability is exposed only through Task Center after explicit approval.',
     'Read-only text chat is available only after the separate AURIX profile is signed in with ChatGPT and the local OS sandbox canary has passed for the same Codex version.',
     'This adapter cannot inspect user projects, write files, run coding tasks, or access a general terminal. The chat workspace is isolated and empty.',
     'AURIX re-runs the local OS sandbox canary before every chat dispatch; task-level approval is still required in Task Center.',
@@ -76,8 +78,13 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
     };
   }
 
-  /** Read-only chat is available only after the local sandbox has passed for this CLI version. */
+  /** Normal Home chat is deliberately unavailable: Codex chat must go through Task Center approval. */
   async getCapabilities(): Promise<Capability[]> {
+    return [];
+  }
+
+  /** Task Center-only capability, gated by a current local sandbox verification. */
+  async getTaskCapabilities(): Promise<Capability[]> {
     const config = this.getConfig();
     if (!config.url || !config.token) return [];
     const status = await getCodexStatus(config);
@@ -120,7 +127,7 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
       ok: false as const,
       error: {
         code: 'NOT_IMPLEMENTED' as const,
-        message: 'The AURIX Codex profile is signed in, but chat execution is not implemented. The local sandbox check is a prerequisite, not an executor.',
+        message: 'Use Task Center for sandbox-gated read-only Codex chat. Home chat does not dispatch to Codex, and coding or project tasks are not enabled.',
       },
     });
   }
