@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { buildCodexSandboxArgs } from './codex-profile.mjs';
 
 const MAX_MESSAGES = 12;
 const MAX_MESSAGE_CHARS = 6_000;
@@ -41,6 +42,8 @@ export function runCodexReadOnlyChat({
   command = 'codex',
   workspaceRoot,
   env = process.env,
+  profileName = 'aurix-chat-readonly',
+  platform = process.platform,
   messages,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
@@ -48,14 +51,13 @@ export function runCodexReadOnlyChat({
     return Promise.reject(new Error('The AURIX read-only workspace must be an absolute path.'));
   }
   const prompt = buildCodexConversationPrompt(messages);
-  const args = [
-    'exec',
-    '--sandbox', 'read-only',
-    '--ephemeral',
-    '--json',
-    '--cd', workspaceRoot,
-    prompt,
-  ];
+  const args = buildCodexSandboxArgs({
+    platform,
+    profileName,
+    workspaceRoot,
+    executable: command,
+    executableArgs: ['exec', '--ephemeral', '--json', '--cd', workspaceRoot, prompt],
+  });
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: workspaceRoot,
