@@ -259,6 +259,12 @@ export class TaskEngine {
       });
       await this.event(taskId, 'task.approval.granted', 'You approved this task for the selected provider.', providerId);
       await this.event(taskId, 'task.started', 'Provider execution started after your approval.', providerId);
+      // Cancellation can arrive while the approval/start events are being persisted.
+      // Re-check immediately before dispatch so a task cancelled in that window never runs.
+      const readyToDispatch = this.db.get('tasks', taskId);
+      if (!readyToDispatch || readyToDispatch.status !== 'running' || readyToDispatch.approvalStatus !== 'approved') {
+        return readyToDispatch ?? null;
+      }
       void this.execute(taskId, adapter, providerId);
       return this.db.get('tasks', taskId) ?? null;
     } finally {
