@@ -471,6 +471,26 @@ process.exit(2);
   }
 });
 
+
+test('Codex project agent refuses to start until the local sandbox is freshly verified', async () => {
+  const profile = await makeCodexProfile();
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-codex-agent-allowlist-'));
+  try {
+    await withServer(async (url) => {
+      const response = await fetch(url + '/v1/codex/agent/start', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: root, prompt: 'Inspect the project safely.' }),
+      });
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).error, 'CODEX_SANDBOX_NOT_VERIFIED');
+    }, { codexPaths: profile.paths, codexRoots: [root] });
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('probe reports unauthorized for a wrong token', async () => {
   await withServer(async (url) => {
     assert.equal((await probeCompanion({ url, token: 'wrong' })).state, 'unauthorized');
