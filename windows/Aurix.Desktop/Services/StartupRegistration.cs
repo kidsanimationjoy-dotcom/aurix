@@ -10,6 +10,36 @@ public static class StartupRegistration
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "AURIXDesktop";
 
+    public static bool IsEnabled
+    {
+        get
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: false);
+                return !string.IsNullOrWhiteSpace(key?.GetValue(ValueName) as string);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    public static StartupResult Disable()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            key?.DeleteValue(ValueName, throwOnMissingValue: false);
+            return new(true, "AURIX will no longer start automatically when you sign in to Windows.");
+        }
+        catch (Exception ex)
+        {
+            return new(false, $"Could not disable startup: {ex.Message}");
+        }
+    }
+
     public static StartupResult Enable()
     {
         var executable = Environment.ProcessPath;
