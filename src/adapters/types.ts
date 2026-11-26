@@ -162,6 +162,7 @@ export interface InvestigationReport {
   graphSummary?: { nodes: number; edges: number; coverage: string };
   /** Bounded, evidence-linked node index for the UI; never presented as runtime proof. */
   graphNodes?: { id: string; kind: string; path?: string }[];
+  desktopSummary?: unknown;
 }
 export interface InvestigationAdapter extends ProviderAdapter {
   createInvestigation(target: string, auth: InvestigationAuthorization): Promise<Result<{ id: string }>>;
