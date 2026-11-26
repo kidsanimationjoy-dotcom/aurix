@@ -41,7 +41,7 @@ export function Shell({ route, children }: { route: string; children: ReactNode 
             </div>
           ))}
         </nav>
-        <div className="sidebar-foot">Phase 1 foundation. Providers are not connected yet.</div>
+        <div className="sidebar-foot">Phase 2 task planner. Provider execution remains disabled until a real adapter is connected.</div>
       </aside>
       {open && <button className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} />}
       <div className="main-col">
