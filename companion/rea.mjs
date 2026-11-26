@@ -83,6 +83,17 @@ async function resolveApprovedTarget(target, roots) {
   return canonicalTarget;
 }
 
+async function resolveApprovedFile(target, roots) {
+  if (typeof target !== 'string' || !target.trim() || target.length > 2048) throw new Error('Provide a valid local artifact file.');
+  if (!Array.isArray(roots) || roots.length === 0) throw new Error('No REA target folders have been approved. Configure AURIX_REA_ROOTS first.');
+  const canonicalTarget = await realpath(target);
+  const targetStat = await stat(canonicalTarget);
+  if (!targetStat.isFile()) throw new Error('The REA Android target must be a file.');
+  const canonicalRoots = await Promise.all(roots.map(root => realpath(root)));
+  if (!canonicalRoots.some(root => within(root, canonicalTarget))) throw new Error('This file is outside the folders explicitly approved for REA inspection.');
+  return canonicalTarget;
+}
+
 async function runJsonAnalysis(command, args, canonicalTarget) {
   const result = await run(command, args);
   let report;
@@ -92,7 +103,8 @@ async function runJsonAnalysis(command, args, canonicalTarget) {
 }
 
 export async function analyzeReaTarget({ target, roots = [], command = 'rea', kind = 'javascript' }) {
-  const canonicalTarget = await resolveApprovedTarget(target, roots);
+  const canonicalTarget = kind === 'android' ? await resolveApprovedFile(target, roots) : await resolveApprovedTarget(target, roots);
+  if (kind === 'android') return runJsonAnalysis(command, ['inspect-android-package', canonicalTarget, '--json'], canonicalTarget);
   if (kind === 'javascript') return runJsonAnalysis(command, ['analyze-javascript-application', canonicalTarget, '--json'], canonicalTarget);
   if (kind === 'desktop') return runJsonAnalysis(command, ['inspect-desktop-application', canonicalTarget, '--json'], canonicalTarget);
   throw new Error('Unsupported REA analysis workflow.');
