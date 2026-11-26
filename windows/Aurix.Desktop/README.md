@@ -39,6 +39,9 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - Ambiguous or duplicate control matches are refused rather than guessed.
 - No coordinate-based clicking or simulated keyboard fallback.
 - Emergency stop cancels remaining task steps.
+- Local task audit log records action type, target application, timestamp and outcome.
+- Audit log intentionally excludes dictated instructions, entered field contents, window titles and exception messages.
+- Startup registration can be enabled or disabled from the AURIX window.
 - Microsoft Defender status query and user-confirmed quick-scan request.
 
 ## First supported task commands
@@ -60,6 +63,10 @@ Spoken commands are submitted after one wake phrase and one utterance. The task 
 For a button click, AURIX must find exactly one visible, enabled button with that exact name. Buttons whose names suggest sending, sharing, purchasing, paying, transferring, submitting or publishing display an additional warning. Destructive button names are blocked.
 
 For text entry, AURIX must find exactly one visible editable field with the exact name requested. It shows the text preview and asks for approval before replacing the field's current value. It will not submit the form. UI Automation providers differ, so some applications or fields may not expose a usable named control; AURIX reports that limitation rather than forcing input.
+
+## Local task audit log
+
+AURIX stores task execution metadata in `%LOCALAPPDATA%\\AURIX\\Desktop\\task-audit.jsonl`. The in-app **Open task log** control opens that folder. The log records only the action type, supported target application, UTC timestamp and outcome. It does not store spoken instructions, entered text, window titles or exception messages. The log is local to the current Windows account and rotates at a bounded size.
 
 ## Build on Windows 11
 
