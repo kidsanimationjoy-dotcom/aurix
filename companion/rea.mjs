@@ -65,7 +65,7 @@ export async function reaStatus({ command = 'rea' } = {}) {
   }
 }
 
-export async function analyzeReaTarget({ target, roots = [], command = 'rea' }) {
+async function resolveApprovedTarget(target, roots) {
   if (typeof target !== 'string' || !target.trim() || target.length > 2048) {
     throw new Error('Provide a valid local application directory.');
   }
@@ -80,15 +80,20 @@ export async function analyzeReaTarget({ target, roots = [], command = 'rea' }) 
     throw new Error('This target is outside the folders explicitly approved for REA inspection.');
   }
 
-  // Fixed documented command and argument array; no shell, scripts, or user-supplied flags.
-  const result = await run(command, ['analyze-javascript-application', canonicalTarget, '--json']);
+  return canonicalTarget;
+}
+
+async function runJsonAnalysis(command, args, canonicalTarget) {
+  const result = await run(command, args);
   let report;
   try { report = JSON.parse(result.stdout); }
   catch { throw new Error('REA did not return valid JSON. Raw output was withheld.'); }
-  return {
-    target: canonicalTarget,
-    engine: 'rea-agents',
-    analyzedAt: new Date().toISOString(),
-    report,
-  };
+  return { target: canonicalTarget, engine: 'rea-agents', analyzedAt: new Date().toISOString(), report };
+}
+
+export async function analyzeReaTarget({ target, roots = [], command = 'rea', kind = 'javascript' }) {
+  const canonicalTarget = await resolveApprovedTarget(target, roots);
+  if (kind === 'javascript') return runJsonAnalysis(command, ['analyze-javascript-application', canonicalTarget, '--json'], canonicalTarget);
+  if (kind === 'desktop') return runJsonAnalysis(command, ['inspect-desktop-application', canonicalTarget, '--json'], canonicalTarget);
+  throw new Error('Unsupported REA analysis workflow.');
 }
