@@ -10,13 +10,13 @@ import { ReaAdapter } from '../src/adapters/rea';
 import { TwentyFirstAdapter } from '../src/adapters/twentyfirst';
 import { ClaudeAdapter } from '../src/adapters/claude';
 
-test('all six providers are registered, interface-only and not connected', async () => {
+test('all six providers are registered and correctly report their current connection state', async () => {
   const adapters = createDefaultAdapters();
   assert.deepEqual(adapters.map((a) => a.meta.id), ['claude', 'grok', 'openai', 'higgsfield', 'twentyfirst', 'rea']);
   for (const a of adapters) {
     const s = await a.getStatus();
     assert.equal(s.state, 'not_configured');
-    assert.equal(s.implementation, 'interface_only');
+    assert.equal(s.implementation, a.meta.id === 'openai' ? 'implemented_untested' : 'interface_only');
   }
 });
 
