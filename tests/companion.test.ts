@@ -319,6 +319,38 @@ process.exit(2);
   }
 });
 
+test('REA JavaScript analysis accepts an ASAR file inside an explicitly approved root', async () => {
+  if (process.platform === 'win32') return;
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-rea-asar-root-'));
+  const target = path.join(root, 'sample-app.asar');
+  await writeFile(target, 'test archive placeholder');
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--help') { console.log('rea-agents help'); process.exit(0); }
+if (args[0] === 'analyze-javascript-application' && args[2] === '--json') {
+  console.log(JSON.stringify({ graph: { nodes: [], edges: [] }, limitations: [] }));
+  process.exit(0);
+}
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const response = await fetch(url + '/v1/rea/analyze', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, kind: 'javascript' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.ok, true);
+      assert.equal(body.result.target, target);
+    }, { reaCommand: fake.command, reaRoots: [root] });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('REA desktop inspection uses its fixed command and the same approved-root boundary', async () => {
   if (process.platform === 'win32') return;
   const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-rea-desktop-root-'));
