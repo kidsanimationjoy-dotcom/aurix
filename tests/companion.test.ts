@@ -52,8 +52,8 @@ test('AURIX Codex paths keep the canary outside CODEX_HOME and the workspace ins
 
 test('Windows profile prefers MXC and uses elevated rather than the weaker unelevated fallback', () => {
   const config = renderCodexProfileConfig('/tmp/aurix-windows-workspace', 'win32');
-  assert.match(config, /\\[features\\]\\nprefer_mxc = true/);
-  assert.match(config, /\\[windows\\]\\nsandbox = "elevated"/);
+  assert.ok(config.includes('[features]\nprefer_mxc = true'));
+  assert.ok(config.includes('[windows]\nsandbox = "elevated"'));
   assert.doesNotMatch(config, /sandbox = "unelevated"/);
   assert.match(config, /enabled = false/);
 });
@@ -107,7 +107,7 @@ test('AURIX upgrades only its exact v2 config to the platform-aware v3 profile',
     '[permissions.aurix-chat-readonly.network]',
     'enabled = false',
     '',
-  ].join('\\n');
+  ].join('\n');
   try {
     await prepareCodexHome(paths);
     await writeFile(paths.configPath, legacy);
