@@ -11,6 +11,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   planning: 'Planning',
   needs_clarification: 'Needs clarification',
   waiting_for_provider: 'Waiting for provider',
+  awaiting_approval: 'Awaiting your approval',
   running: 'Running',
   cancelling: 'Stopping',
   succeeded: 'Completed',
@@ -157,14 +158,37 @@ export function Tasks() {
                     </details>
                   )}
 
+                  {task.status === 'awaiting_approval' && (
+                    <Notice tone="warn">
+                      Review the selected provider and plan before starting this task. This approval only authorizes the provider to begin the task; any future file, command, network, or deployment operation must still pass its own scoped permission checks.
+                    </Notice>
+                  )}
+
                   <div className="row">
+                    {task.status === 'awaiting_approval' && (
+                      <>
+                        <button className="btn primary sm" onClick={async () => {
+                          const approved = await engine.approve(task.id);
+                          if (approved) await audit({
+                            action: 'task.approve',
+                            target: task.id,
+                            detail: `provider=${task.selectedProviderId ?? 'none'}; status=${approved.status}`,
+                            outcome: approved.status === 'running' ? 'success' : 'info',
+                          });
+                        }}>Approve &amp; run task</button>
+                        <button className="btn sm" onClick={async () => {
+                          const declined = await engine.decline(task.id);
+                          if (declined) await audit({ action: 'task.approval.decline', target: task.id, outcome: 'denied' });
+                        }}>Decline</button>
+                      </>
+                    )}
                     {task.status === 'waiting_for_provider' && (
                       <button className="btn sm" onClick={async () => {
                         const retried = await engine.retry(task.id);
                         if (retried) await audit({ action: 'task.retry', target: task.id, outcome: 'info' });
                       }}>Check provider again</button>
                     )}
-                    {!isTerminal(task.status) && (
+                    {!isTerminal(task.status) && task.status !== 'awaiting_approval' && (
                       <button className="btn sm" onClick={async () => {
                         const ok = await engine.cancel(task.id);
                         if (ok) await audit({ action: 'task.cancel', target: task.id, outcome: 'info' });
