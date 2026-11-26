@@ -61,6 +61,8 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: AdapterErro
 export interface ProviderAdapter {
   readonly meta: ProviderMeta;
   getStatus(): Promise<ProviderStatus>;
+  /** Actual, currently usable capabilities. Omit only for legacy adapters without runtime discovery. */
+  getCapabilities?(): Promise<Capability[]>;
 }
 
 /* ---------- Chat ---------- */
