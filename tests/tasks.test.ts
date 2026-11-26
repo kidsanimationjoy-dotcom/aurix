@@ -59,6 +59,8 @@ test('a genuine test executor completes a task and records provenance', async ()
   const db = await freshDb();
   const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => {
     await context.emitProgress('Working', 50);
+    await context.emitOutput('Test ');
+    await context.emitOutput('response');
     return { output: 'Test response' };
   };
   const engine = new TaskEngine(db, [adapter(executor, true)]);
@@ -70,6 +72,7 @@ test('a genuine test executor completes a task and records provenance', async ()
   const finished = db.get('tasks', task.id)!;
   assert.equal(finished.status, 'succeeded');
   assert.equal(finished.output, 'Test response');
+  assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.output.delta'));
   assert.ok(db.snapshot('taskEvents').some((e) => e.type === 'task.completed'));
 });
 
