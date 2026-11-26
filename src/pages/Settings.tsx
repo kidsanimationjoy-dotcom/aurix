@@ -94,7 +94,7 @@ function Companion() {
       <Panel title="OpenAI Codex CLI" aside={codexStatus && <span className="pill">{codexStatus.state.replace('_', ' ')}</span>}>
         <p className="muted">AURIX checks the official CLI on this computer. Sign-in happens through Codex itself in the companion terminal; AURIX never reads the local credential store.</p>
         {codexStatus && (
-          <Notice tone={codexStatus.state === 'ready' ? 'good' : codexStatus.state === 'error' ? 'bad' : 'info'}>
+          <Notice tone={codexStatus.state === 'ready' ? 'info' : codexStatus.state === 'error' ? 'bad' : 'warn'}>
             {codexStatus.message}
             {codexStatus.version ? ' · Version ' + codexStatus.version : ''}
             {codexStatus.signedIn ? ' · Sign-in: ' + codexStatus.authMode.replace('_', ' ') : ''}
