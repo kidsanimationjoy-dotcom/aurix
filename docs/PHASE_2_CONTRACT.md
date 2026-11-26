@@ -18,8 +18,8 @@ Use discriminated unions and exhaustive switches. Avoid `any` at adapter boundar
 type TaskIntent = "chat" | "coding" | "research" | "media" | "unknown";
 type TaskStatus =
   | "queued" | "classifying" | "planning" | "waiting_for_provider"
-  | "running" | "cancelling" | "succeeded" | "failed"
-  | "cancelled" | "timed_out";
+  | "awaiting_approval" | "running" | "cancelling"
+  | "succeeded" | "failed" | "cancelled" | "timed_out";
 
 type ProviderId =
   | "openai-codex" | "claude-code" | "grok-build"
@@ -107,6 +107,9 @@ Persist append-only task events. Minimum event names:
 - `provider.checked`
 - `provider.selected`
 - `task.plan.created`
+- `task.approval.requested`
+- `task.approval.granted`
+- `task.approval.denied`
 - `task.started`
 - `task.progress`
 - `task.output.delta`
@@ -117,11 +120,17 @@ Persist append-only task events. Minimum event names:
 
 Each event includes `eventId`, `taskId`, `timestamp`, and a typed payload. Do not store secrets, access tokens, environment variables, or full credential-bearing command lines in event payloads.
 
-## 6. Lifecycle and cancellation
+## 6. Task approval, lifecycle and cancellation
 
 Allowed terminal states are succeeded, failed, cancelled, and timed_out. A terminal task cannot transition back to running.
 
-- Start a timeout when execution begins, not while the user is still reviewing a plan.
+- Once a real adapter is selected, AURIX persists the plan and enters `awaiting_approval`. It must not send the task prompt to the provider before the user approves.
+- The UI shows the selected provider and full plan with explicit **Approve & run** and **Decline** actions.
+- Approval re-checks the exact selected provider and its runtime capability. If it is unavailable, the task returns to `waiting_for_provider`; AURIX must not substitute another provider.
+- Declining marks the task cancelled and records that no provider work was started.
+- A pending approval survives app reload. It is not treated as an interrupted running task.
+- Task-level approval authorizes only the task dispatch. It does not grant blanket filesystem, terminal, network, browser, or deployment access; future adapters must enforce narrower scoped approvals for those operations.
+- Start a timeout when execution begins after approval, not while the user is still reviewing a plan.
 - Cancellation changes the state to cancelling, aborts the adapter signal, and awaits adapter shutdown.
 - Mark cancelled only after the adapter has acknowledged/settled cancellation. If a child process is later introduced, verify that the process has exited before reporting cancellation.
 - Timeout aborts execution and produces a timed_out result, not a generic failure.
@@ -155,6 +164,10 @@ A disconnected provider must be visibly disconnected. Never use a green connecte
 
 1. Explicit intent hint wins over heuristic classification.
 2. Unknown intent remains unknown; it is not guessed into a provider.
+3. A connected execution adapter does not receive the prompt until the task is explicitly approved.
+4. Declining a pending task produces no provider execution.
+5. Approval re-checks the same selected provider and never silently routes to a replacement.
+6. A pending approval survives app reload without being marked as interrupted.
 3. Specific disconnected provider does not silently fall back.
 4. Auto routing selects only a healthy compatible adapter.
 5. No compatible provider produces a truthful waiting state.
