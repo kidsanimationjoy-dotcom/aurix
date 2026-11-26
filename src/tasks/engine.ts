@@ -409,7 +409,7 @@ export class TaskEngine {
         await this.db.update('tasks', taskId, {
           status: 'succeeded',
           progress: 100,
-          output: result.output || latest?.output || '',
+          output: (result.output || latest?.output || '').slice(0, MAX_OUTPUT_CHARS),
           errorCode: '',
           errorMessage: '',
           finishedAt: Date.now(),
