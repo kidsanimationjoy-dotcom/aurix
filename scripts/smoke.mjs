@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 
 const URL_ = process.env.AURIX_URL ?? 'http://localhost:4173';
 const SHOTS = process.env.AURIX_SHOTS ?? '';
-const ROUTES = ['/', '/projects', '/coding', '/research', '/media', '/3d', '/agents', '/skills', '/plugins', '/mcp', '/memory', '/assets', '/usage', '/activity', '/settings'];
+const ROUTES = ['/', '/projects', '/coding', '/tasks', '/research', '/media', '/3d', '/agents', '/skills', '/plugins', '/mcp', '/memory', '/assets', '/usage', '/activity', '/settings'];
 let failed = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
 
@@ -17,7 +17,7 @@ page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.(googleapis|gst
 
 await page.goto(URL_ + '/#/');
 await page.waitForSelector('nav a');
-check('shell renders with 15 nav links', (await page.locator('nav a').count()) === 15);
+check('shell renders with 16 nav links', (await page.locator('nav a').count()) === 16);
 check('provider ledger is honest (0 of 6)', await page.getByText('0 of 6 providers connected').isVisible());
 
 for (const r of ROUTES) {
@@ -46,6 +46,23 @@ check('chat message is marked saved locally, not sent', true);
 check('chat explains that no provider answered', await page.getByText(/Not sent to any provider/).isVisible());
 await page.reload(); await page.waitForSelector('h1');
 check('conversation persists after reload', await page.getByText('Build me a todo app').first().isVisible());
+
+// Task Center: deterministic classification, truthful provider wait, persistence, retry and cancel
+await page.goto(`${URL_}/#/tasks`);
+await page.getByLabel('Task description').fill('Build a responsive website dashboard');
+await page.getByRole('button', { name: 'Create task' }).click();
+await page.getByText('Build a responsive website dashboard').waitFor();
+check('task classifier recognises coding intent', await page.getByText(/coding · The request contains software-development terms/).isVisible());
+check('task waits honestly when no provider is connected', await page.getByText('Waiting for provider').isVisible());
+check('task has a visible plan', await page.getByText('Check coding capability').isVisible());
+await page.getByRole('button', { name: 'Check provider again' }).click();
+await page.getByText('Build a responsive website dashboard').waitFor();
+check('task can re-check the provider without creating a duplicate', (await page.getByText('Build a responsive website dashboard').count()) === 1);
+await page.reload();
+await page.waitForSelector('h1');
+check('task persists after reload', await page.getByText('Build a responsive website dashboard').isVisible());
+await page.getByRole('button', { name: 'Cancel task' }).click();
+check('waiting task can be cancelled', await page.getByText('Cancelled', { exact: true }).isVisible());
 
 // Coding: file create, edit, diff, save
 await page.goto(`${URL_}/#/coding`);
