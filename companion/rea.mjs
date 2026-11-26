@@ -49,8 +49,8 @@ function run(command, args, timeoutMs = DEFAULT_TIMEOUT_MS) {
 
 export async function reaStatus({ command = 'rea' } = {}) {
   try {
-    const result = await run(command, ['--version'], 5000);
-    return { available: true, version: (result.stdout || result.stderr).trim().slice(0, 160) || 'installed' };
+    const result = await run(command, ['--help'], 5000);
+    return { available: true, version: 'installed (help command verified)' };
   } catch (error) {
     return { available: false, version: null, message: error instanceof Error && error.code === 'ENOENT'
       ? 'REA CLI was not found. Install the official rea-agents package locally.'
