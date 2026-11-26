@@ -66,9 +66,4 @@ public static class StartupRegistration
         }
     }
 
-    public static void Disable()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-        key?.DeleteValue(ValueName, throwOnMissingValue: false);
-    }
 }
