@@ -6,11 +6,13 @@ A browser cannot directly run or safely inspect software on the user's computer.
 
 - Binds to `127.0.0.1` only.
 - Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
-- Implements authenticated health, Codex status, official Codex sign-in handoff, and read-only Codex chat.
+- Implements authenticated health, Codex status and sign-in, read-only Codex chat, and project-scoped Codex App Server sessions.
 - Runs the official local REA CLI's documented JavaScript/Electron application analyzer through authenticated `/v1/rea/*` endpoints, without API keys.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
-- Runs `codex exec --sandbox read-only --ephemeral --json` for AURIX chat only after the local OS sandbox canary passes during the current companion session. It captures assistant-message events, bounds the request and output, and never grants project-folder access or command-write permission.
+- Runs `codex exec --sandbox read-only --ephemeral --json` for AURIX chat only after the local OS sandbox canary passes during the current companion session.
+- Runs project coding sessions through the documented Codex App Server JSONL protocol. Each selected project must be inside `AURIX_CODEX_ROOTS`; initial access is read-only and all additional command, file-change and filesystem permission requests are shown in Coding Studio for a one-time user decision.
+- Filesystem grants are reduced to explicit paths under the selected project and the current turn only. Command approvals show the exact command and working directory. Network permission requests are always refused. Timeouts automatically decline pending approval prompts.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
 - The canary checks that the sandbox can read its own workspace file, cannot read an existing file outside that workspace, and cannot write either outside the workspace or into the read-only workspace.
 - It also attempts a connection to a temporary loopback-only listener on the companion host. Any accepted connection fails verification, so the canary checks that sandboxed commands cannot reach that local service without contacting an external host.
@@ -48,23 +50,30 @@ After preparing the separate AURIX Codex profile, passing its OS sandbox canary,
 
 This provides a local Codex-backed chat capability, not access to the private runtime of this ChatGPT conversation and not an identical Astra model. It cannot access a user's project folder, edit files, or execute project tasks.
 
+## Project coding agent
+
+Set `AURIX_CODEX_ROOTS` before launching the companion to the parent directory or directories that contain projects you explicitly approve for local coding. Use the platform path separator between entries (semicolon on Windows, colon on macOS/Linux). A path stored in the Projects screen is only a project selection; it does not grant access by itself. The companion canonicalizes the selected path and each approved root, then refuses projects outside those roots.
+
+The Coding Studio starts a Codex App Server session in the selected project with read-only access. Codex may ask for extra permissions. AURIX shows the reason, requested files, command, and working directory before presenting a decision. Accepted filesystem paths must stay within the selected project and are granted for the current turn only. Commands are approved individually and are denied when they request network access or run outside the project. Session-wide approvals are not offered. Stop sends a turn interruption; closing the session terminates the local App Server process.
+
+The App Server process uses the separate AURIX Codex profile and an allowlisted environment without `OPENAI_API_KEY`. It does not use a general-purpose shell or expose arbitrary filesystem/terminal endpoints to the browser. This is a project coding integration, not broad desktop control.
+
 ## Still disabled
 
-- No project coding/task execution endpoint. The chat endpoint is read-only and cannot edit project files.
-- No terminal or general filesystem endpoint.
-- No user project folder grants.
-- No task approval UI or execution/cancellation bridge.
-- Codex does not receive a project folder or broad write permission.
+- Generic filesystem and terminal APIs.
+- Cross-application keyboard/mouse and operating-system control.
+- Browser-wide control beyond explicitly wired REA inspection.
+- AI image/video generation and other disconnected provider adapters.
 
-**Even when the sandbox canary passes, AURIX task execution stays disabled.** The canary is a security prerequisite, not the task executor. A later implementation must add narrow project approvals, visible task plans, cancellation, bounded output, and audit events before it may advertise a task capability.
+**The local App Server path has automated fake-server tests; this is not proof that your installed Codex version, Windows sandbox, or real project folder has been verified.** Run it locally after setting up the companion and inspect every permission request.
 
 ## Set up the companion
 
-1. Run `npm install` and then `npm run companion` on the computer that has the Codex CLI installed.
+1. Run `npm install` and then `npm run companion` on the computer that has the Codex CLI installed. Set `AURIX_REA_ROOTS` and `AURIX_CODEX_ROOTS` to the separate folders you explicitly authorize, when needed.
 2. Copy the local URL and pairing token printed in the companion terminal into **Settings → Local companion**.
 3. Select **Prepare AURIX profile & verify sandbox**. This creates the separate profile and invokes the real local Codex sandbox. AURIX reports failure when the CLI, platform helper, permission profile, or managed settings cannot be verified.
 4. After profile creation, select **Sign in to AURIX Codex with ChatGPT**. This sign-in is separate from the user's normal Codex profile.
-5. Check status again.
+5. Check status again. For a project coding task, store its local folder path in Projects and ensure it is inside one of the directories in `AURIX_CODEX_ROOTS`.
 
 For a hosted AURIX origin, set `AURIX_ORIGIN=https://your-site.example` and `AURIX_COMPANION_PORT=4317` before running the companion. The companion still binds to loopback.
 
