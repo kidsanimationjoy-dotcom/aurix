@@ -229,6 +229,7 @@ process.exit(2);
       assert.ok(args.includes('--include-managed-config'));
       assert.ok(args.includes(profile.paths.workspaceRoot));
       assert.ok(args.includes('--'));
+      assert.match(args.at(-1) ?? '', /^\\d+$/); // local loopback probe port is passed to the sandboxed canary
       const status = await getCodexStatus({ url, token: 'secret-token' });
       assert.equal(status.profilePrepared, true);
       assert.equal(status.state, 'needs_login');
