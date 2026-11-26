@@ -40,9 +40,14 @@ export async function routeTask(
       considered.push({ providerId: a.meta.id, name: a.meta.name, state: 'incapable', why: `Does not provide ${need}` });
       continue;
     }
-    const s = await a.getStatus();
-    considered.push({ providerId: a.meta.id, name: a.meta.name, state: s.state, why: s.summary });
-    if (s.state === 'connected') usable.push(a);
+    try {
+      const s = await a.getStatus();
+      considered.push({ providerId: a.meta.id, name: a.meta.name, state: s.state, why: s.summary });
+      if (s.state === 'connected') usable.push(a);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Provider status check failed.';
+      considered.push({ providerId: a.meta.id, name: a.meta.name, state: 'error', why: detail });
+    }
   }
 
   const preferred = task.preferred ?? 'auto';
