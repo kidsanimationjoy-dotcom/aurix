@@ -128,6 +128,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     {
         string? command = null;
         string? status = null;
+        SpeechRecognitionEngine? engineToDispose = null;
 
         lock (_gate)
         {
@@ -173,16 +174,30 @@ public sealed class HandsFreeVoiceService : IDisposable
             {
                 _state = ListeningState.Stopped;
                 _disposed = true;
+                engineToDispose = _engine;
+                _engine = null;
+                _wakeGrammar = null;
                 status = $"Hands-free voice stopped: {ex.Message}";
-                try { _engine.RecognizeAsyncCancel(); } catch { }
             }
         }
+
+        if (engineToDispose is not null)
+            DisposeEngine(engineToDispose);
 
         if (!string.IsNullOrWhiteSpace(status))
             StatusChanged?.Invoke(status);
 
         if (!string.IsNullOrWhiteSpace(command))
             CommandRecognized?.Invoke(command);
+    }
+
+    private void DisposeEngine(SpeechRecognitionEngine engine)
+    {
+        engine.SpeechRecognized -= OnSpeechRecognized;
+        engine.RecognizeCompleted -= OnRecognizeCompleted;
+        try { engine.RecognizeAsyncCancel(); } catch { }
+        try { engine.SetInputToNull(); } catch { }
+        engine.Dispose();
     }
 
     public void Dispose()
@@ -203,11 +218,7 @@ public sealed class HandsFreeVoiceService : IDisposable
 
         if (engine is not null)
         {
-            engine.SpeechRecognized -= OnSpeechRecognized;
-            engine.RecognizeCompleted -= OnRecognizeCompleted;
-            try { engine.RecognizeAsyncCancel(); } catch { }
-            try { engine.SetInputToNull(); } catch { }
-            engine.Dispose();
+            DisposeEngine(engine);
         }
 
         StatusChanged?.Invoke("AURIX wake-word listening is paused. The microphone is no longer in use.");
