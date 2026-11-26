@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createCompanionServer } from '../companion/server.mjs';
 import { getCodexStatus, isLoopbackCompanionUrl, probeCompanion, startCodexLogin } from '../src/companion/client';
+import { OpenAiAdapter } from '../src/adapters/openai';
 
 async function withServer<T>(
   fn: (url: string) => Promise<T>,
@@ -137,6 +138,29 @@ process.exit(2);
     await withServer(async (url) => {
       const message = await startCodexLogin({ url, token: 'secret-token' });
       assert.match(message, /official browser sign-in/);
+    }, { codexCommand: fake.command });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+  }
+});
+
+
+test('OpenAI adapter exposes connection status but no task capability before execution is approved', async () => {
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--version') { console.log('codex-cli 0.42.1'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in using ChatGPT'); process.exit(0); }
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const adapter = new OpenAiAdapter();
+      adapter.setCompanionConfigProvider(() => ({ url, token: 'secret-token' }));
+      const status = await adapter.getStatus();
+      assert.equal(status.state, 'connected');
+      assert.equal(status.implementation, 'implemented_untested');
+      assert.match(status.detail ?? '', /Task execution remains disabled/);
+      assert.deepEqual(await adapter.getCapabilities(), []);
     }, { codexCommand: fake.command });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
