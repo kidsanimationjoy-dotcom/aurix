@@ -29,7 +29,7 @@ function safeEnvironment() {
   const allowed = [
     'PATH', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
     'TMP', 'TEMP', 'TMPDIR', 'SystemRoot', 'WINDIR',
-    'APPDATA', 'LOCALAPPDATA', 'CODEX_HOME', 'LANG', 'LC_ALL',
+    'APPDATA', 'LOCALAPPDATA', 'CODEX_HOME', 'PATHEXT', 'LANG', 'LC_ALL',
   ];
   const env = {};
   for (const key of allowed) {
