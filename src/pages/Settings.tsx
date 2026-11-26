@@ -159,7 +159,7 @@ function Companion() {
             }
           }}>Sign in to AURIX Codex with ChatGPT</button>
         </div>
-        <small>The sandbox verification is a local check on this computer, not a GitHub test. Even after a successful check, AURIX task execution remains disabled until the execution engine is implemented and separately tested.</small>
+        <small>The sandbox verification is a local check on this computer, not a GitHub test. A successful check permits only text-only read-only chat through Task Center after approval. Coding, project files, terminal commands and deployment remain disabled.</small>
       </Panel>
     </>
   );
@@ -199,7 +199,8 @@ function Security() {
     ['Destructive actions', 'Two-step confirmation', 'Implemented for deletes in this browser.'],
     ['Audit log', 'Append-only, local', 'Implemented. Not tamper-proof against someone with access to this browser profile.'],
     ['Secrets', 'Pairing token in session memory only; Codex credentials stay with the official CLI', 'Implemented. AURIX never reads or exports Codex credentials.'],
-    ['Command approval, sandboxing, network controls', 'Per-command approval via companion', 'Not built. Needs the companion.'],
+    ['Codex read-only chat sandbox', 'AURIX-managed profile, managed-policy checks and per-task OS canary', 'Implemented for read-only Task Center chat; a real local canary is required.'],
+    ['Project files, terminal and deployment permissions', 'Narrow user approval before each operation', 'Not built. No such companion endpoints are exposed.'],
     ['Emergency stop, rate limiting, authentication', 'Planned for the security phase', 'Not built.'],
   ];
   return (
