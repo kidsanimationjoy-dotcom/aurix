@@ -54,6 +54,7 @@ export type TaskEventType =
   | 'task.waiting_for_provider'
   | 'task.started'
   | 'task.progress'
+  | 'task.output.delta'
   | 'task.cancel.requested'
   | 'task.timeout.requested'
   | 'task.completed'
@@ -90,6 +91,7 @@ export interface TaskExecutionRequest {
 export interface TaskExecutionContext {
   signal: AbortSignal;
   emitProgress: (message: string, progress?: number) => Promise<void>;
+  emitOutput: (delta: string) => Promise<void>;
 }
 
 export interface TaskExecutionResult {
