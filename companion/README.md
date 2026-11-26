@@ -7,6 +7,7 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Binds to `127.0.0.1` only.
 - Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
 - Implements authenticated health, Codex status, and official Codex sign-in handoff.
+- Runs the official local REA CLI's documented JavaScript/Electron application analyzer through authenticated `/v1/rea/*` endpoints, without API keys.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
@@ -20,6 +21,25 @@ A browser cannot directly run or safely inspect software on the user's computer.
 ## Request validation
 
 The profile-preparation endpoint accepts only a small JSON request body. Malformed JSON receives a `400` response and oversized bodies receive `413`; both responses are sanitized and do not terminate the companion process. Regression tests verify that the health endpoint remains available after either rejected request.
+
+## REA local investigation
+
+Install REA from its official source (`npx rea-agents setup` or the documented global CLI installation). Set `AURIX_REA_ROOTS` before starting the companion to a path or list of paths you explicitly approve for inspection. Use the platform path separator between multiple roots (`;` on Windows, `:` on macOS/Linux). AURIX canonicalises both the approved roots and requested target, rejects paths outside those roots (including symlink escapes), and invokes only `rea analyze-javascript-application <target> --json` with `shell: false`. Output is capped at 1 MB and the process is limited to 90 seconds. This first bridge supports JavaScript/Electron analysis; native binary workflows are not exposed by this endpoint.
+
+Example on Windows PowerShell:
+
+```powershell
+$env:AURIX_REA_ROOTS = 'D:\\AppsToInspect'
+npm run companion
+```
+
+Example on macOS/Linux:
+
+```bash
+AURIX_REA_ROOTS="$HOME/apps-to-inspect" npm run companion
+```
+
+Only add folders containing software you own or are authorised to inspect. The bridge does not bypass login, DRM, network controls, or provider protections and does not extract credentials or private model weights.
 
 ## Still disabled
 
