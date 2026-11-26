@@ -195,7 +195,7 @@ public partial class MainWindow : Window
     private void StartupButton_Click(object sender, RoutedEventArgs e)
     {
         var result = StartupRegistration.Enable();
-        MessageBox.Show(
+        System.Windows.MessageBox.Show(
             result.Message,
             result.Success ? "AURIX startup" : "Startup not enabled",
             System.Windows.MessageBoxButton.OK,
