@@ -8,6 +8,7 @@ export type TaskStatus =
   | 'planning'
   | 'needs_clarification'
   | 'waiting_for_provider'
+  | 'awaiting_approval'
   | 'running'
   | 'cancelling'
   | 'succeeded'
@@ -22,6 +23,8 @@ export interface TaskPlanStep {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 }
 
+export type TaskApprovalStatus = 'not_required' | 'pending' | 'approved' | 'declined';
+
 export interface TaskRecord {
   id: string;
   createdAt: number;
@@ -33,6 +36,9 @@ export interface TaskRecord {
   preferredProvider: ProviderChoice;
   selectedProviderId: ProviderId | null;
   status: TaskStatus;
+  /** Optional for records created by earlier AURIX versions. */
+  approvalStatus?: TaskApprovalStatus;
+  approvedAt?: number | null;
   plan: TaskPlanStep[];
   progress: number;
   output: string;
@@ -52,6 +58,9 @@ export type TaskEventType =
   | 'provider.selected'
   | 'task.waiting_for_clarification'
   | 'task.waiting_for_provider'
+  | 'task.approval.requested'
+  | 'task.approval.granted'
+  | 'task.approval.denied'
   | 'task.started'
   | 'task.progress'
   | 'task.output.delta'
