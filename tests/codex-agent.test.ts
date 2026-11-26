@@ -13,6 +13,7 @@ const readline = require('node:readline');
 const args = process.argv.slice(2);
 if (args[0] !== 'app-server' || args[1] !== '--listen' || args[2] !== 'stdio://') process.exit(90);
 if (process.env.OPENAI_API_KEY) process.exit(91);
+if (!process.env.CODEX_HOME) process.exit(93);
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
 let root = process.cwd();
@@ -25,14 +26,14 @@ rl.on('line', (line) => {
     return;
   }
   if (message.method === 'thread/start') {
-    if (message.params.sandbox !== 'read-only') process.exit(94);
+    if (message.params.sandbox !== undefined) process.exit(94);
     if (message.params.approvalPolicy?.granular?.request_permissions !== true) process.exit(95);
     root = message.params.cwd;
     send({ id: message.id, result: { thread: { id: 'thread-aurix-test' } } });
     return;
   }
   if (message.method === 'turn/start') {
-    if (message.params.sandboxPolicy?.type !== 'readOnly' || message.params.sandboxPolicy?.networkAccess !== false) process.exit(96);
+    if (message.params.sandboxPolicy !== undefined) process.exit(96);
     const text = message.params.input?.[0]?.text ?? '';
     scenario = text.includes('filesystem') ? 'filesystem' : text.includes('network') ? 'network' : 'command';
     send({ id: message.id, result: { turn: { id: 'turn-aurix-test', status: 'inProgress' } } });
@@ -104,7 +105,7 @@ async function waitForStatus(manager: ReturnType<typeof createCodexAgentManager>
   throw new Error('The Codex App Server did not reach ' + status + '.');
 }
 
-test('Codex App Server starts read-only, shows command approvals, and accepts only one-time decisions', async () => {
+test('Codex App Server inherits the AURIX permission profile and accepts only one-time command approvals', async () => {
   if (process.platform === 'win32') return;
   const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-codex-agent-root-'));
   const fake = await makeFakeAppServer();
