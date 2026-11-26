@@ -135,14 +135,14 @@ test('Codex system policy paths include requirements.toml for Windows and Unix',
 
 test('legacy sandbox settings are detected in requirements and managed files', async () => {
   assert.equal(hasLegacySandboxSetting('sandbox_mode = "workspace-write"'), true);
-  assert.equal(hasLegacySandboxSetting('[sandbox_workspace_write]\\nnetwork_access = false'), true);
+  assert.equal(hasLegacySandboxSetting('[sandbox_workspace_write]\nnetwork_access = false'), true);
   assert.equal(hasLegacySandboxSetting('windows.require_mxc = true'), false);
 
   const profile = await makeCodexProfile();
   try {
     await prepareCodexHome(profile.paths);
     const managedPath = path.join(profile.paths.codexHome, 'managed_config.toml');
-    await writeFile(managedPath, 'sandbox_mode = "workspace-write"\\n');
+    await writeFile(managedPath, 'sandbox_mode = "workspace-write"\n');
     const result = await checkLegacySystemConfig(profile.paths, {}, process.platform, []);
     assert.equal(result.ok, false);
     assert.equal(result.code, 'LEGACY_SYSTEM_SANDBOX_CONFIG');
@@ -156,7 +156,7 @@ test('modern managed requirements remain eligible for the effective local sandbo
   const requirements = path.join(profile.root, 'requirements.toml');
   try {
     await prepareCodexHome(profile.paths);
-    await writeFile(requirements, 'windows.require_mxc = true\\n');
+    await writeFile(requirements, 'windows.require_mxc = true\n');
     const result = await checkLegacySystemConfig(profile.paths, {}, process.platform, [requirements]);
     assert.equal(result.ok, true);
     assert.match(result.message, /included in the real Codex sandbox canary/);
