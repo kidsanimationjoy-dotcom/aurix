@@ -246,7 +246,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat.readonly']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
@@ -286,7 +286,8 @@ test('companion does not expose filesystem, terminal, or Codex task execution en
       headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: 'Hello' }),
     });
-    assert.equal(post.status, 501);
+    assert.equal(post.status, 400);
+    assert.deepEqual(await post.json(), { error: 'INVALID_REQUEST', message: 'A valid task ID and a prompt of 1 to 9,000 characters are required.' });
   });
 });
 
@@ -504,7 +505,8 @@ process.exit(2);
       const status = await adapter.getStatus();
       assert.equal(status.state, 'connected');
       assert.equal(status.implementation, 'implemented_untested');
-      assert.match(status.detail ?? '', /task execution remains disabled/i);
+      assert.match(status.detail ?? '', /local sandbox check in Settings/i);
+      assert.deepEqual(await adapter.getTaskCapabilities(), []);
       assert.deepEqual(await adapter.getCapabilities(), []);
     }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
