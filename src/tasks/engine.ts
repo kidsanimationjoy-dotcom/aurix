@@ -72,70 +72,109 @@ export class TaskEngine {
       finishedAt: null,
     });
     await this.event(task.id, 'task.created', 'Task saved to this device.', null);
+    return this.processTask(task.id);
+  }
 
-    await this.setStatus(task.id, 'classifying');
-    const classification = classifyIntent(prompt);
-    await this.db.update('tasks', task.id, {
+  /** Re-check a task that is waiting for a provider, without losing its original task ID or history. */
+  async retry(taskId: string): Promise<TaskRecord | null> {
+    const task = this.db.get('tasks', taskId);
+    if (!task || task.status !== 'waiting_for_provider') return null;
+    if (this.running.has(taskId)) return this.db.get('tasks', taskId) ?? null;
+
+    await this.db.update('tasks', taskId, {
+      status: 'queued',
+      intent: 'unknown',
+      intentReason: '',
+      selectedProviderId: null,
+      plan: [],
+      progress: 0,
+      output: '',
+      errorCode: '',
+      errorMessage: '',
+      startedAt: null,
+      finishedAt: null,
+    });
+    await this.event(taskId, 'task.retried', 'Re-checking provider availability for this saved task.', null);
+    return this.processTask(taskId);
+  }
+
+  private async processTask(taskId: string): Promise<TaskRecord> {
+    const task = this.db.get('tasks', taskId);
+    if (!task) throw new Error(`Task ${taskId} not found.`);
+
+    await this.setStatus(taskId, 'classifying');
+    const classification = classifyIntent(task.prompt);
+    await this.db.update('tasks', taskId, {
       intent: classification.intent,
       intentReason: classification.reason,
     });
-    await this.event(task.id, 'task.classified', `Classified as ${classification.intent}: ${classification.reason}`, null);
+    await this.event(taskId, 'task.classified', `Classified as ${classification.intent}: ${classification.reason}`, null);
 
     const plan = createPlan(classification.intent);
-    await this.db.update('tasks', task.id, { status: 'planning', plan });
-    await this.event(task.id, 'task.plan.created', `Created a ${plan.length}-step plan.`, null);
+    await this.db.update('tasks', taskId, { status: 'planning', plan });
+    await this.event(taskId, 'task.plan.created', `Created a ${plan.length}-step plan.`, null);
 
-    const kind = routeKind(classification.intent, prompt);
+    const kind = routeKind(classification.intent, task.prompt);
     if (!kind) {
       await this.finishWithoutExecution(
-        task.id,
+        taskId,
         'needs_clarification',
         'NEEDS_CLARIFICATION',
         'Please add more detail so AURIX can identify the right task type.',
         'task.waiting_for_clarification',
       );
-      return this.db.get('tasks', task.id)!;
+      return this.db.get('tasks', taskId)!;
     }
 
     let decision;
     try {
-      decision = await routeTask(this.adapters, { kind, preferred: input.preferredProvider });
+      decision = await routeTask(this.adapters, { kind, preferred: task.preferredProvider });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Provider status check failed.';
-      await this.finishWithoutExecution(task.id, 'waiting_for_provider', 'PROVIDER_CHECK_FAILED', message, 'task.waiting_for_provider');
-      return this.db.get('tasks', task.id)!;
+      await this.finishWithoutExecution(taskId, 'waiting_for_provider', 'PROVIDER_CHECK_FAILED', message, 'task.waiting_for_provider');
+      return this.db.get('tasks', taskId)!;
+    }
+
+    for (const item of decision.considered) {
+      await this.event(taskId, 'provider.checked', `${item.name}: ${item.state} — ${item.why}`.slice(0, 500), item.providerId);
     }
 
     if (!decision.ok) {
-      await this.finishWithoutExecution(task.id, 'waiting_for_provider', 'NO_PROVIDER', decision.reason, 'task.waiting_for_provider');
-      return this.db.get('tasks', task.id)!;
+      await this.finishWithoutExecution(taskId, 'waiting_for_provider', 'NO_PROVIDER', decision.reason, 'task.waiting_for_provider');
+      return this.db.get('tasks', taskId)!;
     }
 
     const adapter = this.adapters.find((candidate) => candidate.meta.id === decision.providerId);
     if (!adapter) {
-      await this.finishWithoutExecution(task.id, 'waiting_for_provider', 'ADAPTER_MISSING', 'The selected provider adapter is not registered.', 'task.waiting_for_provider');
-      return this.db.get('tasks', task.id)!;
+      await this.finishWithoutExecution(taskId, 'waiting_for_provider', 'ADAPTER_MISSING', 'The selected provider adapter is not registered.', 'task.waiting_for_provider');
+      return this.db.get('tasks', taskId)!;
     }
 
-    await this.db.update('tasks', task.id, { selectedProviderId: decision.providerId });
-    await this.event(task.id, 'provider.selected', `Selected ${adapter.meta.name} (${decision.mode}).`, decision.providerId);
+    await this.db.update('tasks', taskId, { selectedProviderId: decision.providerId });
+    await this.event(taskId, 'provider.selected', `Selected ${adapter.meta.name} (${decision.mode}).`, decision.providerId);
 
     if (!isExecutionAdapter(adapter)) {
       await this.finishWithoutExecution(
-        task.id,
+        taskId,
         'waiting_for_provider',
         'EXECUTOR_NOT_IMPLEMENTED',
         `${adapter.meta.name} reports a connection but has no AURIX task-execution adapter. No work was sent.`,
         'task.waiting_for_provider',
         decision.providerId,
       );
-      return this.db.get('tasks', task.id)!;
+      return this.db.get('tasks', taskId)!;
     }
 
-    await this.db.update('tasks', task.id, { status: 'running', startedAt: Date.now() });
-    await this.event(task.id, 'task.started', 'Provider execution started.', decision.providerId);
-    void this.execute(task.id, adapter, decision.providerId);
-    return this.db.get('tasks', task.id)!;
+    const startedAt = Date.now();
+    const planInProgress = plan.map((step, index) => ({ ...step, status: index === 0 ? 'running' as const : 'pending' as const }));
+    await this.db.update('tasks', taskId, {
+      status: 'running',
+      startedAt,
+      plan: planInProgress,
+    });
+    await this.event(taskId, 'task.started', 'Provider execution started.', decision.providerId);
+    void this.execute(taskId, adapter, decision.providerId);
+    return this.db.get('tasks', taskId)!;
   }
 
   async cancel(taskId: string): Promise<boolean> {
@@ -166,7 +205,7 @@ export class TaskEngine {
     return true;
   }
 
-  /** Running tasks cannot survive a browser reload; mark them interrupted instead of pretending they resumed. */
+  /** Running or mid-preparation tasks cannot survive a browser reload; do not pretend they resumed. */
   async recoverInterruptedTasks(): Promise<number> {
     const interrupted = this.db.snapshot('tasks').filter((task) =>
       task.status === 'queued' || task.status === 'classifying' || task.status === 'planning'
@@ -176,10 +215,10 @@ export class TaskEngine {
       await this.db.update('tasks', task.id, {
         status: 'failed',
         errorCode: 'INTERRUPTED_AFTER_RELOAD',
-        errorMessage: 'The browser was closed or reloaded while this task was running. Submit it again to retry.',
+        errorMessage: 'The browser was closed or reloaded while this task was in progress. Submit it again to retry.',
         finishedAt: Date.now(),
       });
-      await this.event(task.id, 'task.interrupted', 'Task execution was interrupted by an app reload.', task.selectedProviderId);
+      await this.event(task.id, 'task.interrupted', 'Task execution or preparation was interrupted by an app reload.', task.selectedProviderId);
     }
     return interrupted.length;
   }
@@ -225,6 +264,7 @@ export class TaskEngine {
           await this.finishAborted(taskId, controller.signal.reason, providerId);
           return;
         }
+        const latest = this.db.get('tasks', taskId);
         await this.db.update('tasks', taskId, {
           status: 'succeeded',
           progress: 100,
@@ -232,7 +272,7 @@ export class TaskEngine {
           errorCode: '',
           errorMessage: '',
           finishedAt: Date.now(),
-          plan: this.db.get('tasks', taskId)!.plan.map((step) => ({ ...step, status: 'completed' })),
+          plan: (latest?.plan ?? []).map((step) => ({ ...step, status: 'completed' })),
         });
         await this.event(taskId, 'task.completed', 'Provider returned a completed result.', providerId);
       } catch (error) {
@@ -241,11 +281,13 @@ export class TaskEngine {
           return;
         }
         const message = error instanceof Error ? error.message : 'Provider task failed.';
+        const latest = this.db.get('tasks', taskId);
         await this.db.update('tasks', taskId, {
           status: 'failed',
           errorCode: 'PROVIDER_EXECUTION_FAILED',
           errorMessage: message,
           finishedAt: Date.now(),
+          plan: (latest?.plan ?? []).map((step) => step.status === 'running' ? { ...step, status: 'failed' as const } : step),
         });
         await this.event(taskId, 'task.failed', message.slice(0, 500), providerId);
       } finally {
@@ -264,11 +306,13 @@ export class TaskEngine {
     const message = timedOut
       ? 'The task timed out and the provider adapter acknowledged the stop.'
       : 'The provider adapter acknowledged cancellation.';
+    const latest = this.db.get('tasks', taskId);
     await this.db.update('tasks', taskId, {
       status,
       errorCode: timedOut ? 'TIMEOUT' : 'CANCELLED',
       errorMessage: message,
       finishedAt: Date.now(),
+      plan: (latest?.plan ?? []).map((step) => step.status === 'running' ? { ...step, status: 'skipped' as const } : step),
     });
     await this.event(taskId, timedOut ? 'task.timed_out' : 'task.cancelled', message, providerId);
   }
