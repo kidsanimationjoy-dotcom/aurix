@@ -83,10 +83,11 @@ async function runTaskkill(child, env) {
   const executable = path.join(root, 'System32', 'taskkill.exe');
   return await new Promise((resolve) => {
     let settled = false;
+    let timer;
     const finish = (ok) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       resolve(ok);
     };
     let killer;
@@ -103,7 +104,7 @@ async function runTaskkill(child, env) {
     }
     killer.once('error', () => finish(false));
     killer.once('close', (code) => finish(code === 0));
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       try { killer.kill(); } catch {}
       finish(false);
     }, 4000);
@@ -115,25 +116,34 @@ async function terminateProcessTree(entry, platform, env) {
   if (!isAlive(child)) return true;
 
   if (platform === 'win32') {
-    await runTaskkill(child, env);
-    if (isAlive(child)) {
+    const treeKilled = await runTaskkill(child, env);
+    if (!treeKilled && isAlive(child)) {
+      // Best-effort direct-child fallback, but do not report a verified
+      // process-tree termination when taskkill could not confirm it.
       try { child.kill(); } catch {}
+      await waitForClose(entry, 3000);
+      return false;
     }
-  } else if (child.pid && entry.detached) {
-    try { process.kill(-child.pid, 'SIGTERM'); } catch {}
-  } else {
-    try { child.kill('SIGTERM'); } catch {}
+    return Boolean(await waitForClose(entry, 3000));
   }
 
+  if (child.pid && entry.detached) {
+    try { process.kill(-child.pid, 'SIGTERM'); }
+    catch (error) {
+      if (error?.code === 'ESRCH') return !isAlive(child);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    try { process.kill(-child.pid, 'SIGKILL'); }
+    catch (error) {
+      if (error?.code !== 'ESRCH') return false;
+    }
+    return Boolean(await waitForClose(entry, 3000));
+  }
+
+  try { child.kill('SIGTERM'); } catch {}
   const closed = await waitForClose(entry, 1500);
   if (closed) return true;
-
-  if (platform !== 'win32' && child.pid && entry.detached) {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch {}
-  } else {
-    try { child.kill('SIGKILL'); } catch { try { child.kill(); } catch {} }
-  }
-
+  try { child.kill('SIGKILL'); } catch { try { child.kill(); } catch {} }
   return Boolean(await waitForClose(entry, 3000));
 }
 
