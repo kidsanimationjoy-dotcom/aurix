@@ -2,10 +2,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { access, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 
 export const AURIX_CODEX_PROFILE = 'aurix-chat-readonly';
-export const AURIX_PROFILE_VERSION = 2;
+export const AURIX_PROFILE_VERSION = 3;
 
 function requireAbsolute(value, label) {
   if (!value || !path.isAbsolute(value)) throw new Error(label + ' must be an absolute path.');
@@ -36,6 +36,7 @@ export function resolveCodexPaths(env = process.env, platform = process.platform
   const appRoot = path.resolve(dataRoot, platform === 'linux' ? 'aurix' : 'AURIX');
   const codexHome = path.join(appRoot, 'Codex');
   return {
+    platform,
     appRoot,
     codexHome,
     configPath: path.join(codexHome, 'config.toml'),
@@ -52,7 +53,7 @@ function tomlString(value) {
 }
 
 /** Strict read-only chat profile with one dedicated AURIX workspace and no command network. */
-export function renderCodexProfileConfig(workspaceRoot) {
+function renderLegacyCodexProfileConfigV2(workspaceRoot) {
   const root = requireAbsolute(workspaceRoot, 'Codex workspace root');
   const profile = AURIX_CODEX_PROFILE;
   return [
@@ -77,9 +78,69 @@ export function renderCodexProfileConfig(workspaceRoot) {
     '[permissions.' + profile + '.network]',
     'enabled = false',
     '',
-  ].join('\n');
+  ].join('\\n');
 }
 
+/** Strict read-only chat profile with one dedicated AURIX workspace and no command network. */
+export function renderCodexProfileConfig(workspaceRoot, platform = process.platform) {
+  const root = requireAbsolute(workspaceRoot, 'Codex workspace root');
+  const profile = AURIX_CODEX_PROFILE;
+  const lines = [
+    'default_permissions = ' + tomlString(profile),
+    '',
+  ];
+
+  if (platform === 'win32') {
+    // MXC is preferred on compatible Windows devices. The elevated legacy
+    // backend is the only fallback here because unelevated cannot enforce
+    // the denied-read boundary that this profile requires.
+    lines.push(
+      '[features]',
+      'prefer_mxc = true',
+      '',
+      '[windows]',
+      'sandbox = "elevated"',
+      '',
+    );
+  }
+
+  lines.push(
+    '[permissions.' + profile + ']',
+    'description = "AURIX isolated read-only chat profile"',
+    'extends = ":read-only"',
+    '',
+    '[permissions.' + profile + '.workspace_roots]',
+    tomlString(root) + ' = true',
+    '',
+    '[permissions.' + profile + '.filesystem]',
+    '":root" = "deny"',
+    '":minimal" = "read"',
+    '":tmpdir" = "deny"',
+    '":slash_tmp" = "deny"',
+    '',
+    '[permissions.' + profile + '.filesystem.":workspace_roots"]',
+    '"." = "read"',
+    '',
+    '[permissions.' + profile + '.network]',
+    'enabled = false',
+    '',
+  );
+  return lines.join('\\n');
+}
+
+async function replaceManagedProfileAtomically(target, content) {
+  const temporary = path.join(
+    path.dirname(target),
+    '.aurix-config-' + randomBytes(12).toString('hex') + '.tmp',
+  );
+  try {
+    await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    // rename replaces the existing regular file rather than following a final-component symlink.
+    await rename(temporary, target);
+  } finally {
+    try { await rm(temporary, { force: true }); } catch {}
+  }
+}
 export function hasLegacySandboxSetting(configText) {
   const text = String(configText ?? '');
   return /^(\s*sandbox_mode\s*=|\s*sandbox_workspace_write(?:\.|\s*=)|\s*\[sandbox_workspace_write(?:\.|\]))/m.test(text);
@@ -164,7 +225,7 @@ export async function prepareCodexHome(paths, options = {}) {
   await ensureSafeDirectory(paths.workspaceRoot, mode);
   await ensureSafeDirectory(paths.canaryRoot, mode);
 
-  const expected = renderCodexProfileConfig(paths.workspaceRoot);
+  const expected = renderCodexProfileConfig(paths.workspaceRoot, paths.platform ?? process.platform);
   let existing;
   try {
     await assertRegularFile(paths.configPath);
@@ -185,7 +246,14 @@ export async function prepareCodexHome(paths, options = {}) {
   }
 
   if (existing !== expected) {
-    throw Object.assign(new Error('The AURIX Codex profile config was changed outside AURIX. Restore the managed profile before verification.'), { code: 'CODEX_PROFILE_MODIFIED' });
+    const legacy = renderLegacyCodexProfileConfigV2(paths.workspaceRoot);
+    if (existing === legacy) {
+      await assertRegularFile(paths.configPath);
+      await replaceManagedProfileAtomically(paths.configPath, expected);
+      existing = expected;
+    } else {
+      throw Object.assign(new Error('The AURIX Codex profile config was changed outside AURIX. Restore the managed profile before verification.'), { code: 'CODEX_PROFILE_MODIFIED' });
+    }
   }
   return {
     ok: true,
