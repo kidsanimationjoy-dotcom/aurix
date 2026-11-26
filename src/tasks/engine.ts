@@ -1,7 +1,6 @@
 import type { ProviderAdapter, ProviderId } from '../adapters/types';
 import type { Db } from '../storage/db';
 import { routeTask, type TaskKind } from '../router/providerRouter';
-import { newId } from '../lib/id';
 import { classifyIntent, createPlan } from './classifier';
 import type {
   CreateTaskInput,
@@ -169,7 +168,10 @@ export class TaskEngine {
 
   /** Running tasks cannot survive a browser reload; mark them interrupted instead of pretending they resumed. */
   async recoverInterruptedTasks(): Promise<number> {
-    const interrupted = this.db.snapshot('tasks').filter((task) => task.status === 'running' || task.status === 'cancelling');
+    const interrupted = this.db.snapshot('tasks').filter((task) =>
+      task.status === 'queued' || task.status === 'classifying' || task.status === 'planning'
+      || task.status === 'running' || task.status === 'cancelling'
+    );
     for (const task of interrupted) {
       await this.db.update('tasks', task.id, {
         status: 'failed',
@@ -186,7 +188,17 @@ export class TaskEngine {
     const controller = new AbortController();
     const task = this.db.get('tasks', taskId);
     if (!task) return;
-    const timeout = setTimeout(() => controller.abort('timeout'), task.timeoutMs);
+    const timeout = setTimeout(() => {
+      const latest = this.db.get('tasks', taskId);
+      if (latest && !isTerminal(latest.status)) {
+        void this.db.update('tasks', taskId, {
+          status: 'cancelling',
+          errorCode: 'TIMEOUT_REQUESTED',
+          errorMessage: 'Time limit reached; waiting for the provider adapter to acknowledge the stop.',
+        }).then(() => this.event(taskId, 'task.timeout.requested', 'Task timeout reached; stop requested.', providerId)).catch(() => undefined);
+      }
+      controller.abort('timeout');
+    }, task.timeoutMs);
     const request: TaskExecutionRequest = {
       taskId,
       projectId: task.projectId,
@@ -273,7 +285,7 @@ export class TaskEngine {
       status,
       errorCode: code,
       errorMessage: message,
-      finishedAt: Date.now(),
+      finishedAt: null,
       selectedProviderId: providerId,
     });
     await this.event(taskId, eventType, message.slice(0, 500), providerId);
