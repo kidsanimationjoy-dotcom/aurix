@@ -238,6 +238,8 @@ function Workspace({ projectId, name, localPath }: { projectId: string; name: st
                     {typeof event.reason === 'string' && <p>{event.reason}</p>}
                     {Array.isArray(event.command) && event.command.length > 0 && <><small>Command (review before approving)</small><pre className="code-block">{JSON.stringify(event.command, null, 2)}</pre></>}
                     {typeof event.cwd === 'string' && <small>Working folder: <code>{event.cwd}</code></small>}
+                    {typeof event.grantRoot === 'string' && event.grantRoot && <Notice tone="warn">Codex requested a session-scoped write root: <code>{event.grantRoot}</code>. AURIX will not approve session-wide root grants; ask for an explicit per-turn path permission instead.</Notice>}
+                    {Array.isArray(event.commandActions) && event.commandActions.length > 0 && <><small>Parsed command actions</small><pre className="code-block">{JSON.stringify(event.commandActions, null, 2)}</pre></>}
                     {Array.isArray(event.changes) && event.changes.map((change, index) => (
                       <div key={index}>
                         <small>{String((change as Record<string, unknown>).kind ?? 'change')}: {String((change as Record<string, unknown>).path ?? '')}</small>
