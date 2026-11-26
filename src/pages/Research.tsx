@@ -42,15 +42,15 @@ export function Research() {
       />
       <Notice>Web search is not connected, so sources are added by hand. A claim can only be marked <b>verified</b> when it has a valid source link; everything else stays unverified or an assumption in exports.</Notice>
       <Panel title="Inspect an application with REA">
-        <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
+        <p className="muted">Run the real REA engine on a JavaScript/Electron application folder or ASAR archive inside a folder approved in the AURIX companion. Desktop discovery accepts installation folders only. No API key is used.</p>
         <Field label="Analysis workflow">
           <select value={reaKind} onChange={(e) => setReaKind(e.target.value as 'javascript' | 'desktop')}>
             <option value="javascript">JavaScript / Electron application graph</option>
             <option value="desktop">Desktop installation discovery</option>
           </select>
         </Field>
-        <Field label="Local application folder path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
-          <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
+        <Field label="Local application path" hint="Choose an application folder or .asar archive inside one of the approved AURIX_REA_ROOTS folders. Desktop discovery requires an installation folder.">
+          <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp or app.asar" />
         </Field>
         <label className="check"><input type="checkbox" checked={reaAuthorized} onChange={(e) => setReaAuthorized(e.target.checked)} /> I own this application or have permission to inspect it.</label>
         {reaError ? <Notice>{reaError}</Notice> : null}
