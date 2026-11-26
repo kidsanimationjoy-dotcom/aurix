@@ -62,20 +62,17 @@ The Codex CLI permission-profile feature is beta and may change between versions
 
 A successful canary is evidence that the tested Codex sandbox command allowed the dedicated workspace read and blocked the specific outside-read and write probes on that computer. It is repeated immediately before each read-only chat dispatch; a changed CLI version or failed canary blocks the request.
 
-It does **not** mean:
-- AURIX can already send chat prompts to Codex;
-- AURIX can run coding tasks;
+For each request, AURIX requires the dedicated chat root to be empty, creates a new private temporary subfolder, and passes only that path to `codex exec`. The folder must be removed before the response is reported as successful. Unexpected root content or cleanup failure blocks success.
+
+This enables only bounded text-only chat through Task Center after explicit approval. It does **not** mean:
+- Home chat can dispatch to Codex;
+- AURIX can run coding-agent or project tasks;
 - a user project folder has been granted;
-- a future task-execution path is automatically safe;
+- the model can write files or use a general terminal;
+- browser, network or deployment access is available;
 - another computer, CLI version, or OS configuration has passed the test.
 
-AURIX task execution remains disabled. The provider adapter advertises no task capabilities and returns `NOT_IMPLEMENTED` for chat/coding execution until the following are implemented and independently tested:
-- project folder selection and visible scoped approvals;
-- TaskEngine-to-Codex process execution with bounded JSONL parsing;
-- task-level cancellation, timeout, and process-exit verification;
-- capped outputs and redacted audit records;
-- permission prompts surfaced safely to the user;
-- tests for success, denial, timeouts, cancellation, and paths outside the approved project.
+The provider adapter exposes only a task-specific `chat` capability after the local sandbox status is verified. Normal Home chat receives no Codex capability. All project, coding, terminal and deployment operations remain disabled until scoped permission and execution paths are separately designed and tested.
 
 ## 5. Local API
 
