@@ -52,10 +52,13 @@ const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('codex 1.0.0'); process.exit(0); }
 if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in with ChatGPT'); process.exit(0); }
 if (args[0] === 'sandbox') { console.log('AURIX_SANDBOX_CANARY_OK'); process.exit(0); }
-if (args[0] === 'exec') {
-  if (!args.includes('--sandbox') || args[args.indexOf('--sandbox') + 1] !== 'read-only') process.exit(21);
-  if (!args.includes('--ephemeral') || !args.includes('--json') || !args.includes('--cd')) process.exit(22);
-  if (Object.hasOwn(process.env, 'OPENAI_API_KEY')) process.exit(23);
+if (args[0] === 'sandbox') {
+  const profileIndex = args.indexOf('--permission-profile');
+  const separator = args.indexOf('--');
+  if (profileIndex < 0 || args[profileIndex + 1] !== 'aurix-chat-readonly') process.exit(21);
+  if (!args.includes('--include-managed-config') || !args.includes('--cd') || separator < 0) process.exit(22);
+  if (args[separator + 2] !== 'exec' || !args.includes('--ephemeral') || !args.includes('--json')) process.exit(23);
+  if (args.includes('--sandbox') || Object.hasOwn(process.env, 'OPENAI_API_KEY')) process.exit(24);
   console.log(JSON.stringify({ type: 'thread.started', thread_id: 'thread-test-123' }));
   console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'Hello from isolated Codex chat.' } }));
   process.exit(0);
