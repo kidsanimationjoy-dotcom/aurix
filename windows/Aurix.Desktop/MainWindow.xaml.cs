@@ -9,13 +9,133 @@ public partial class MainWindow : Window
 {
     public bool AllowClose { get; set; }
 
-    private SpeechInputService? _speechInput;
+    private HandsFreeVoiceService? _handsFreeVoice;
     private CancellationTokenSource? _taskCancellation;
+
+    public event Action<bool>? UpdateTrayWakeState;
 
     public MainWindow()
     {
         InitializeComponent();
         Loaded += async (_, _) => await RefreshDefenderStatusAsync();
+    }
+
+    public void InitializeVoiceFromSavedPreference()
+    {
+        if (WakeWordSettings.IsEnabled)
+            StartHandsFreeListening(savePreference: false);
+        else
+            UpdateHandsFreeUi(false, "Hands-free is off. The microphone is not in use.");
+    }
+
+    public void ToggleHandsFreeFromTray()
+    {
+        if (_handsFreeVoice?.IsRunning == true)
+            StopHandsFreeListening(savePreference: true);
+        else
+            StartHandsFreeListening(savePreference: true);
+    }
+
+    private void HandsFreeButton_Click(object sender, RoutedEventArgs e)
+        => ToggleHandsFreeFromTray();
+
+    private void StartHandsFreeListening(bool savePreference)
+    {
+        if (_handsFreeVoice?.IsRunning == true)
+            return;
+
+        var voice = new HandsFreeVoiceService();
+        voice.StatusChanged += HandsFreeVoice_StatusChanged;
+        voice.CommandRecognized += HandsFreeVoice_CommandRecognized;
+        _handsFreeVoice = voice;
+
+        try
+        {
+            voice.Start();
+
+            if (savePreference && !WakeWordSettings.SetEnabled(true))
+            {
+                voice.Dispose();
+                _handsFreeVoice = null;
+                UpdateHandsFreeUi(false, "AURIX could not save your hands-free preference. Try again.");
+                return;
+            }
+
+            UpdateHandsFreeUi(
+                true,
+                "HANDS-FREE ACTIVE — say “AURIX”, pause briefly, then speak your instruction.");
+        }
+        catch (Exception ex)
+        {
+            voice.Dispose();
+            _handsFreeVoice = null;
+
+            if (savePreference)
+                WakeWordSettings.SetEnabled(false);
+
+            UpdateHandsFreeUi(
+                false,
+                $"Hands-free could not start: {ex.Message}");
+        }
+    }
+
+    private void StopHandsFreeListening(bool savePreference)
+    {
+        var voice = _handsFreeVoice;
+        _handsFreeVoice = null;
+        voice?.Dispose();
+
+        if (savePreference && !WakeWordSettings.SetEnabled(false))
+        {
+            UpdateHandsFreeUi(false,
+                "Wake-word listening stopped for this session, but Windows could not save the paused setting.");
+            return;
+        }
+
+        UpdateHandsFreeUi(false,
+            "Hands-free is off. The microphone is no longer in use.");
+    }
+
+    private void UpdateHandsFreeUi(bool active, string message)
+    {
+        HandsFreeButton.Content = active ? "Pause hands-free" : "Enable hands-free";
+        ListeningStatusText.Text = message;
+        ListeningStatusText.Foreground = active
+            ? System.Windows.Media.Brushes.LightGreen
+            : System.Windows.Media.Brushes.LightGray;
+        UpdateTrayWakeState?.Invoke(active);
+    }
+
+    private void HandsFreeVoice_StatusChanged(string message)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var active = _handsFreeVoice?.IsRunning == true;
+            ListeningStatusText.Text = message;
+            ListeningStatusText.Foreground = active
+                ? System.Windows.Media.Brushes.LightGreen
+                : System.Windows.Media.Brushes.Orange;
+            UpdateTrayWakeState?.Invoke(active);
+        }));
+    }
+
+    private void HandsFreeVoice_CommandRecognized(string command)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            CommandInput.Text = command;
+            CommandInput.CaretIndex = CommandInput.Text.Length;
+            ListeningStatusText.Text = $"AURIX heard your instruction: “{command}”. Working on it…";
+            _ = RunCommandAsync(command);
+        }));
+    }
+
+    public void ShutdownHandsFree()
+    {
+        var voice = _handsFreeVoice;
+        _handsFreeVoice = null;
+        voice?.Dispose();
+        UpdateTrayWakeState?.Invoke(false);
     }
 
     private async Task RefreshDefenderStatusAsync()
@@ -77,53 +197,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ListenButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_speechInput is not null)
-        {
-            StopVoiceListening();
-            return;
-        }
-
-        try
-        {
-            _speechInput = new SpeechInputService();
-            _speechInput.PhraseRecognized += SpeechInput_PhraseRecognized;
-            _speechInput.StartListening();
-
-            ListenButton.Content = "Stop voice listening";
-            ListeningStatusText.Text = "MICROPHONE ACTIVE — listening locally. Press Stop voice listening to turn it off.";
-            ListeningStatusText.Foreground = System.Windows.Media.Brushes.LightGreen;
-        }
-        catch (Exception ex)
-        {
-            _speechInput?.Dispose();
-            _speechInput = null;
-            ListenButton.Content = "Start voice listening";
-            ListeningStatusText.Text = $"Voice input unavailable: {ex.Message}";
-            ListeningStatusText.Foreground = System.Windows.Media.Brushes.Orange;
-        }
-    }
-
-    private void SpeechInput_PhraseRecognized(object? sender, string phrase)
-    {
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            CommandInput.Text = phrase;
-            CommandInput.CaretIndex = CommandInput.Text.Length;
-            ListeningStatusText.Text = $"Heard: “{phrase}” — review it, then press Run task.";
-        }));
-    }
-
-    private void StopVoiceListening()
-    {
-        _speechInput?.Dispose();
-        _speechInput = null;
-        ListenButton.Content = "Start voice listening";
-        ListeningStatusText.Text = "Microphone off.";
-        ListeningStatusText.Foreground = System.Windows.Media.Brushes.LightGray;
-    }
-
     private async void RunTaskButton_Click(object sender, RoutedEventArgs e)
         => await RunCommandAsync(CommandInput.Text);
 
@@ -172,7 +245,7 @@ public partial class MainWindow : Window
             TaskOutputText.Text = result.Output;
             ListeningStatusText.Text = result.Cancelled
                 ? "Task stopped. Already completed actions are not undone."
-                : result.Success ? "Task completed." : "Task finished with an issue.";
+                : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
         }
         catch (OperationCanceledException)
         {
@@ -211,14 +284,13 @@ public partial class MainWindow : Window
     {
         if (!AllowClose)
         {
-            StopVoiceListening();
             _taskCancellation?.Cancel();
             e.Cancel = true;
             Hide();
             return;
         }
 
-        StopVoiceListening();
+        ShutdownHandsFree();
         _taskCancellation?.Cancel();
         _taskCancellation?.Dispose();
         _taskCancellation = null;
