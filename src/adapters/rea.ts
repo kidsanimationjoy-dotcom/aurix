@@ -61,7 +61,7 @@ export class ReaAdapter implements InvestigationAdapter {
   }
 
   async createInvestigation(target: string, auth: InvestigationAuthorization) {
-    if (!auth.statement.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
+    if (!auth || !auth.statement?.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
       return { ok: false as const, error: { code: 'AUTHORIZATION_REQUIRED' as const, message: 'Confirm that you are authorised to inspect this local application.' } };
     }
     try {
