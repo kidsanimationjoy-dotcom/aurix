@@ -156,3 +156,56 @@ export async function startCodexLogin(config: LocalCompanionConfig, fetchImpl: t
   if (!response.ok) throw new Error(body.message ?? 'Could not start Codex sign-in (HTTP ' + response.status + ').');
   return body.message ?? 'The official Codex sign-in has started in the companion terminal.';
 }
+
+
+export async function executeCodexChatTask(
+  config: LocalCompanionConfig,
+  taskId: string,
+  prompt: string,
+  signal: AbortSignal,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before running Codex.');
+  if (signal.aborted) {
+    const error = new Error('Codex task was cancelled before it started.');
+    error.name = 'AbortError';
+    throw error;
+  }
+
+  const headers = {
+    Authorization: 'Bearer ' + config.token.trim(),
+    'Content-Type': 'application/json',
+  };
+  const cancel = () => {
+    // Do not abort the execution request itself: the companion must terminate
+    // and confirm the local process tree before that request is settled.
+    void fetchImpl(base + '/v1/codex/cancel', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ taskId }),
+    }).catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancel, { once: true });
+  // Close the race between the initial aborted check and registering the listener.
+  if (signal.aborted) cancel();
+
+  try {
+    const response = await fetchImpl(base + '/v1/codex/exec', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ taskId, prompt }),
+    });
+    const value = await response.json().catch(() => ({})) as { output?: string; message?: string };
+    if (signal.aborted) {
+      const error = new Error('Codex task was cancelled.');
+      error.name = 'AbortError';
+      throw error;
+    }
+    if (!response.ok) throw new Error(value.message ?? 'The local Codex task failed (HTTP ' + response.status + ').');
+    if (typeof value.output !== 'string') throw new Error('The companion returned an invalid Codex result.');
+    return value.output;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+  }
+}
