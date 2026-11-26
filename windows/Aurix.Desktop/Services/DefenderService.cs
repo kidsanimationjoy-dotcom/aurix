@@ -45,9 +45,15 @@ public static class DefenderService
         string fixedScript,
         CancellationToken cancellationToken)
     {
+        var systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var powershellPath = Path.Combine(
+            systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        if (!File.Exists(powershellPath))
+            throw new FileNotFoundException("Windows PowerShell was not found in the Windows system directory.");
+
         var start = new ProcessStartInfo
         {
-            FileName = "powershell.exe",
+            FileName = powershellPath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -61,9 +67,39 @@ public static class DefenderService
 
         using var process = new Process { StartInfo = start };
         process.Start();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+
+        // Always drain both pipes so the child cannot block on a full output buffer.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception) { }
+        });
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception) { }
+
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
+
         return (process.ExitCode, await stdoutTask, await stderrTask);
     }
 }
