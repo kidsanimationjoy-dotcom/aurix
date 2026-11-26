@@ -4,7 +4,7 @@ This matrix is a design constraint. It prevents AURIX from confusing account sig
 
 | Provider/system | Best AURIX role | Supported route to investigate | API key? | Important boundary |
 |---|---|---|---|---|
-| OpenAI Codex | Local coding agent; optional reviewer | Official Codex CLI, ChatGPT sign-in, documented open-source Sign in with ChatGPT | Not necessarily for eligible supported local/plan flows | ChatGPT plan usage is eligibility-gated, account-limited and does not expose private chat history |
+| OpenAI Codex | Local coding agent; optional reviewer | Official Codex CLI with user-completed ChatGPT sign-in; optional API-key mode | No API key needed for supported ChatGPT sign-in | Current OpenAI help docs say Codex is included across ChatGPT plans, including Free and Go, with plan-dependent limits. Codex Cloud has separate eligibility rules. |
 | OpenAI model API | Optional hosted model adapter | Official API / Responses API | Normally yes | API billing is separate from ChatGPT plan billing |
 | Claude Code | Local coding-agent companion and compatibility reference | Official locally installed Claude Code; user completes its sign-in | Not necessarily for official app itself | Do not relay subscription OAuth tokens or impersonate Claude Code |
 | Claude Agent SDK | SDK reference/provider integration | Official SDK | Requires authorised Anthropic account/provider setup | SDK does not make Claude model weights open source; check current terms |
@@ -17,21 +17,19 @@ This matrix is a design constraint. It prevents AURIX from confusing account sig
 
 ## OpenAI / ChatGPT plan usage
 
-OpenAI documents a Sign in with ChatGPT flow for open-source and local applications. It separates:
-- identity: sign in to an AURIX account;
-- optional plan usage: permission for eligible AI requests to use the user's ChatGPT plan/credits.
+The official Codex CLI supports ChatGPT OAuth sign-in for local work and also supports API-key sign-in. Current OpenAI help documentation says Codex is included across ChatGPT plans, including Free and Go, with usage limits varying by plan. Codex Cloud is separately restricted to eligible paid and workspace accounts; do not confuse local CLI access with cloud-agent access.
 
 Requirements:
-- Use the documented OAuth flow and security model.
-- The user chooses whether to grant plan-usage permission.
-- The integration does not grant access to ChatGPT conversations or memory.
-- Eligible plan availability is limited; current documentation describes Plus/Pro plan usage for the open-source/local flow.
-- Plus usage can share a rolling usage window across participating apps.
-- Paid/remote-hosted products require separate provider approval.
-- The current AURIX owner account is on Free, so do not promise plan-backed model use for that account until its eligibility changes.
-- Tokens stay in protected local/self-hosted storage. Never expose them to browser JavaScript, logs, analytics, source control or URLs.
+- Install and invoke the official Codex CLI; let the user complete its own browser-based ChatGPT sign-in.
+- Use `codex login status` to check whether the CLI has a login configured. Do not read or copy its cached credentials.
+- Codex stores login information in `~/.codex/auth.json` or an OS credential store. Treat the file as a password; AURIX must not read, copy, upload, expose, or log it.
+- Use the CLI's documented sandbox and approval controls. Prefer workspace-scoped sandboxing; never use the dangerous approvals-and-sandbox bypass.
+- Keep CLI execution local to an explicitly selected project folder. No arbitrary root-directory access.
+- Keep API-key sign-in optional. ChatGPT sign-in follows the user's plan limits and workspace controls.
+- The local CLI integration does not grant AURIX access to ChatGPT conversations or memory.
+- Hosted or remote AURIX products require separate provider review and must not inherit local credentials.
 
-Codex CLI is a separate practical option: the official CLI repository documents ChatGPT sign-in for supported ChatGPT plans, alongside API-key authentication. AURIX should integrate it as a user-authorised local companion rather than scrape its session.
+The official Codex CLI is the first preferred OpenAI integration route for AURIX. Integrate it as a user-authorised local companion rather than scraping browser state or relaying private credentials.
 
 ## Claude
 
@@ -92,10 +90,11 @@ AURIX must distinguish Grok Build interactive sign-in from xAI API credentials. 
 
 ## Reference documentation
 
-- OpenAI Sign in with ChatGPT: https://developers.openai.com/siwc/
-- OpenAI local open-source sign-in quickstart: https://developers.openai.com/siwc/quickstart
-- OpenAI profiles, sessions and token security: https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions
-- OpenAI Codex: https://github.com/openai/codex
+- OpenAI Codex with ChatGPT plan: https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
+- Codex CLI installation and source: https://github.com/openai/codex
+- Codex CLI authentication and credential storage: https://learn.chatgpt.com/docs/auth?surface=cli
+- Codex CLI command reference: https://learn.chatgpt.com/docs/cli/reference
+- Codex non-interactive runs: https://learn.chatgpt.com/docs/non-interactive-mode
 - Claude Code: https://code.claude.com/docs/
 - Claude plugins: https://github.com/anthropics/claude-plugins-official
 - Claude Agent SDK: https://github.com/anthropics/claude-agent-sdk-typescript
