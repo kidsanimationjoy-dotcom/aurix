@@ -158,6 +158,41 @@ export async function startCodexLogin(config: LocalCompanionConfig, fetchImpl: t
 }
 
 
+
+export async function sendCodexMessage(
+  config: LocalCompanionConfig,
+  messages: { role: 'user' | 'assistant' | 'system'; content: string }[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ sessionId: string; content: string }> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Enter the local companion pairing token first.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 130_000);
+  try {
+    const response = await fetchImpl(base + '/v1/codex/chat', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + config.token.trim(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages: messages.slice(-12) }),
+      signal: controller.signal,
+    });
+    const body = await response.json() as {
+      ok?: boolean; sessionId?: string; content?: string; message?: string;
+    };
+    if (!response.ok || body.ok !== true || typeof body.content !== 'string' || typeof body.sessionId !== 'string') {
+      throw new Error(body.message ?? 'The local Codex chat request failed (HTTP ' + response.status + ').');
+    }
+    return { sessionId: body.sessionId, content: body.content };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('Codex chat timed out. Check the local companion and try again.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface ReaStatus {
   available: boolean;
   version: string | null;
