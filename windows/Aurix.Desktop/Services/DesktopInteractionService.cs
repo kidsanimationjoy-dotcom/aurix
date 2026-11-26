@@ -146,6 +146,11 @@ public static class DesktopInteractionService
                 return new(false, $"More than one button named “{buttonName}” exists in {targetResult.Window.Title}. AURIX will not guess which one to click.");
 
             var button = matches[0];
+            if (DestructiveButton.IsMatch(button.Current.Name))
+            {
+                return new(false, $"AURIX blocked the “{button.Current.Name}” control because it appears destructive. This build does not activate delete, remove, erase, format, uninstall or reset controls.");
+            }
+
             var isExternalImpact = ExternalImpactButton.IsMatch(button.Current.Name);
             var warning = isExternalImpact
                 ? "\n\nThis button name suggests an external action (such as sending, sharing, purchasing or publishing). Check the target and consequences carefully."
