@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ReaAdapter } from '../adapters/rea';
 import type { ClaimStatus } from '../domain/types';
 import { researchToMarkdown } from '../lib/researchExport';
 import { useActiveProject, useApp, useAudit, useCollection, useSettings } from '../state/AppState';
@@ -11,7 +12,8 @@ function validUrl(u: string): boolean {
 }
 
 export function Research() {
-  const { db } = useApp();
+  const { db, adapters } = useApp();
+  const rea = adapters.find((adapter) => adapter.meta.id === 'rea') as ReaAdapter | undefined;
   const audit = useAudit();
   const project = useActiveProject();
   const settings = useSettings();
@@ -19,6 +21,11 @@ export function Research() {
   const items = useCollection('research').filter((r) => r.projectId === scope);
   const [form, setForm] = useState(EMPTY);
   const [filter, setFilter] = useState<ClaimStatus | 'all'>('all');
+  const [reaTarget, setReaTarget] = useState('');
+  const [reaAuthorized, setReaAuthorized] = useState(false);
+  const [reaBusy, setReaBusy] = useState(false);
+  const [reaError, setReaError] = useState('');
+  const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[] } | null>(null);
 
   const needsSource = form.status === 'verified' && !validUrl(form.sourceUrl);
   const urlBad = form.sourceUrl !== '' && !validUrl(form.sourceUrl);
@@ -33,6 +40,39 @@ export function Research() {
         actions={<button className="btn" disabled={!items.length} onClick={() => { download('research.md', 'text/markdown', researchToMarkdown(project ? `${project.name}: research` : 'Research', [...items])); void audit({ action: 'research.export', detail: `${items.length} items` }); }}>Export Markdown</button>}
       />
       <Notice>Web search is not connected, so sources are added by hand. A claim can only be marked <b>verified</b> when it has a valid source link; everything else stays unverified or an assumption in exports.</Notice>
+      <Panel title="Inspect an application with REA">
+        <p className="muted">Run the real REA engine on a local JavaScript/Electron application folder approved in the AURIX companion. No API key is used.</p>
+        <Field label="Local application folder path" hint="The folder must be inside one of the paths configured in AURIX_REA_ROOTS on the computer running the companion.">
+          <input value={reaTarget} onChange={(e) => setReaTarget(e.target.value)} placeholder="D:\\AppsToInspect\\ExampleApp" />
+        </Field>
+        <label className="check"><input type="checkbox" checked={reaAuthorized} onChange={(e) => setReaAuthorized(e.target.checked)} /> I own this application or have permission to inspect it.</label>
+        {reaError ? <Notice>{reaError}</Notice> : null}
+        <div><button className="btn primary" disabled={!rea || !reaTarget.trim() || !reaAuthorized || reaBusy} onClick={async () => {
+          if (!rea) return;
+          setReaBusy(true); setReaError(''); setReaReport(null);
+          try {
+            const created = await rea.createInvestigation(reaTarget.trim(), {
+              statement: 'I own this application or have permission to inspect it.',
+              confirmedAt: Date.now(),
+            });
+            if (!created.ok) throw new Error(created.error.message);
+            const report = await rea.getReport(created.value.id);
+            if (!report.ok) throw new Error(report.error.message);
+            setReaReport(report.value);
+            await audit({ action: 'rea.investigation.completed', detail: reaTarget.trim() });
+          } catch (error) {
+            setReaError(error instanceof Error ? error.message : 'REA investigation failed.');
+          } finally { setReaBusy(false); }
+        }}>{reaBusy ? 'Inspecting application…' : 'Run REA investigation'}</button></div>
+        {reaReport ? <div className="stack">
+          <h3>REA findings ({reaReport.findings.length})</h3>
+          {reaReport.findings.map((finding, index) => <div className="item" key={index}>
+            <div><b>{finding.claim}</b><ul>{finding.evidence.map((evidence) => <li key={evidence.id}><code>{evidence.id}</code> — {evidence.description}</li>)}</ul></div>
+          </div>)}
+          <h3>Unknowns ({reaReport.unknowns.length})</h3>
+          {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
+        </div> : null}
+      </Panel>
       <Panel title="Add a claim">
         <div className="grid g2">
           <Field label="Title"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
