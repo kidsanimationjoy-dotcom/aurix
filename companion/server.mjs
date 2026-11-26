@@ -1,10 +1,11 @@
 // AURIX local companion — authenticated, loopback-only API.
-// Implemented: health, safe Codex CLI status check, and official local login handoff.
-// Not implemented: filesystem access, terminal execution, or Codex task execution.
+// Implemented: health, safe Codex status/login, verified sandbox setup, and read-only Codex chat.
+// Not implemented: project-folder access, file writes, general terminal access, or coding-agent execution.
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { createCodexExecManager, CODEX_CHAT_MAX_PROMPT_CHARS } from './codex-exec.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -14,7 +15,7 @@ import {
   validateCodexHome,
 } from './codex-profile.mjs';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
@@ -187,6 +188,8 @@ async function readJson(req, limit = 4096) {
 
 export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null }) {
   let loginChild = null;
+  let sandboxVerification = { verified: false, version: null };
+  const codexExec = createCodexExecManager({ platform: process.platform });
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
 
   return http.createServer(async (req, res) => {
@@ -228,15 +231,23 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat.readonly'],
         grantedRoots: [],
       });
     }
 
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/prepare') {
-      await readJson(req);
-      return send(200, await prepareAndVerifyCodex({ command: codexCommand, paths }));
+      try {
+        await readJson(req);
+      } catch (error) {
+        return send(error?.statusCode ?? 400, { error: 'INVALID_REQUEST', message: 'The Codex profile request was invalid.' });
+      }
+      const result = await prepareAndVerifyCodex({ command: codexCommand, paths });
+      sandboxVerification = result.sandboxVerified
+        ? { verified: true, version: result.version }
+        : { verified: false, version: null };
+      return send(200, result);
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/codex/status') {
@@ -250,7 +261,14 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         });
       }
       const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
-      return send(200, { ...status, profilePrepared: true, profileName: paths.profileName });
+      const sandboxVerified = sandboxVerification.verified && status.version === sandboxVerification.version;
+      if (!sandboxVerified) sandboxVerification = { verified: false, version: null };
+      return send(200, {
+        ...status,
+        profilePrepared: true,
+        profileName: paths.profileName,
+        sandboxVerified,
+      });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/login') {
@@ -286,6 +304,121 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       }
     }
 
+    if (req.method === 'POST' && url.pathname === '/v1/codex/exec') {
+      let body;
+      try {
+        body = await readJson(req, CODEX_CHAT_MAX_PROMPT_CHARS + 2048);
+      } catch (error) {
+        return send(error?.statusCode ?? 400, { error: 'INVALID_REQUEST', message: 'The Codex chat request was invalid.' });
+      }
+      const taskId = body?.taskId;
+      const userPrompt = body?.prompt;
+      if (!/^[A-Za-z0-9_-]{1,96}$/.test(String(taskId ?? '')) ||
+          typeof userPrompt !== 'string' || !userPrompt.trim() || userPrompt.length > 9_000) {
+        return send(400, { error: 'INVALID_REQUEST', message: 'A valid task ID and a prompt of 1 to 9,000 characters are required.' });
+      }
+
+      // A disconnected browser must not leave a local Codex process running.
+      res.once('close', () => {
+        if (!res.writableEnded) void codexExec.cancel(taskId);
+      });
+
+      const prepared = await prepareAndVerifyCodex({ command: codexCommand, paths });
+      sandboxVerification = prepared.sandboxVerified
+        ? { verified: true, version: prepared.version }
+        : { verified: false, version: null };
+      if (!prepared.sandboxVerified) {
+        return send(409, {
+          error: prepared.code || 'CODEX_SANDBOX_UNVERIFIED',
+          message: 'The read-only OS sandbox could not be verified for this task. No prompt was sent to Codex.',
+        });
+      }
+
+      const status = await inspectCodex({
+        command: codexCommand,
+        prefixArgs: codexPrefixArgs,
+        codexHome: paths.codexHome,
+      });
+      if (!status.installed || !status.signedIn || status.authMode !== 'chatgpt') {
+        return send(409, {
+          error: 'CODEX_CHATGPT_SIGN_IN_REQUIRED',
+          message: 'Sign in to the separate AURIX Codex profile with ChatGPT before using read-only chat.',
+        });
+      }
+      if (status.version !== prepared.version) {
+        sandboxVerification = { verified: false, version: null };
+        return send(409, {
+          error: 'CODEX_VERSION_CHANGED',
+          message: 'The Codex CLI version changed during sandbox verification. Run the profile check again.',
+        });
+      }
+
+      const env = safeEnvironment(paths.codexHome);
+      let executable;
+      try {
+        executable = await resolveNativeCodexCommand(codexCommand, env, process.platform);
+      } catch {
+        return send(409, {
+          error: 'CODEX_NATIVE_EXECUTABLE_REQUIRED',
+          message: 'A supported native Codex executable could not be resolved. No task was started.',
+        });
+      }
+
+      const prompt = [
+        'AURIX read-only chat mode: answer the user in text only.',
+        'You have no access to their local projects, browser data, or files outside the isolated empty AURIX workspace.',
+        'Do not claim to have inspected any project. Do not attempt file changes, terminal commands, network access, or deployments.',
+        '',
+        'User request:',
+        userPrompt.trim(),
+      ].join('\\n');
+
+      if (prompt.length > CODEX_CHAT_MAX_PROMPT_CHARS) {
+        return send(400, { error: 'PROMPT_TOO_LONG', message: 'This Codex chat prompt is too long for the read-only local chat mode.' });
+      }
+
+      try {
+        const result = await codexExec.run({
+          taskId,
+          command: executable,
+          workspaceRoot: paths.workspaceRoot,
+          profileName: paths.profileName,
+          prompt,
+          env,
+        });
+        return send(200, { output: result.output, mode: 'read_only_chat' });
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'CODEX_EXECUTION_FAILED';
+        const statusCode = code === 'CODEX_TASK_TIMEOUT' ? 504
+          : code === 'CODEX_BUSY' ? 429
+          : code === 'CODEX_TASK_CANCELLED' ? 409
+          : 502;
+        const message = code === 'CODEX_TASK_CANCELLED' ? 'The Codex task was cancelled.'
+          : code === 'CODEX_TASK_TIMEOUT' ? 'The Codex task timed out and its local process was stopped.'
+          : code === 'CODEX_BUSY' ? 'The local Codex executor is already handling another task.'
+          : 'The read-only Codex task failed. The companion did not return raw process output.';
+        return send(statusCode, { error: code, message });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/cancel') {
+      let body;
+      try {
+        body = await readJson(req);
+      } catch (error) {
+        return send(error?.statusCode ?? 400, { error: 'INVALID_REQUEST', message: 'The cancellation request was invalid.' });
+      }
+      const taskId = body?.taskId;
+      if (!/^[A-Za-z0-9_-]{1,96}$/.test(String(taskId ?? ''))) {
+        return send(400, { error: 'INVALID_TASK_ID', message: 'A valid task ID is required.' });
+      }
+      const cancelled = await codexExec.cancel(taskId);
+      return send(cancelled ? 200 : 504, {
+        cancelled,
+        message: cancelled ? 'The local Codex process was stopped.' : 'The companion could not confirm that the Codex process tree stopped.',
+      });
+    }
+
     if (req.method === 'GET' && url.pathname === '/v1/codex/exec') {
       return send(405, { error: 'METHOD_NOT_ALLOWED' });
     }
@@ -302,6 +435,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`AURIX companion ${VERSION} listening on http://127.0.0.1:${port}`);
     console.log(`Allowed origin: ${origin}`);
     console.log(`Pairing token:  ${token}`);
-    console.log('Capabilities: health and official Codex CLI status/login only; no filesystem/task execution access.');
+    console.log('Capabilities: official Codex status/login and sandbox-gated read-only text chat; no project file access, file writes, or general terminal endpoint.');
   });
 }
