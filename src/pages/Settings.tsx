@@ -26,7 +26,7 @@ function Providers() {
   const { adapters, statuses } = useApp();
   return (
     <>
-      <Notice>Codex now has local CLI installation and sign-in detection. Its AI task execution is still disabled pending a verified, narrowly scoped sandbox. The other provider adapters remain disconnected.</Notice>
+      <Notice>Codex offers text-only read-only chat through Task Center after its separate ChatGPT sign-in and local sandbox check pass. Home chat, coding, project files, terminal access and deployment remain unavailable. The other provider adapters remain disconnected.</Notice>
       <div className="stack">
         {adapters.map((a) => {
           const s = statuses[a.meta.id];
@@ -73,7 +73,7 @@ function Companion() {
   };
   return (
     <>
-      <Notice>The companion runs locally on your own computer. AURIX uses a separate Codex profile and checks its OS sandbox before any future task-execution work. It never reads or changes your normal Codex profile. Task execution is still disabled. See <code>companion/README.md</code>.</Notice>
+      <Notice>The companion runs locally on your own computer. AURIX uses a separate Codex profile and rechecks its OS sandbox before each read-only chat task. It never reads or changes your normal Codex profile. Only Task Center can dispatch Codex chat, after you approve the task; coding and project access remain disabled. See <code>companion/README.md</code>.</Notice>
       <Panel title="Connection" aside={<StatusPill state={companion.state === 'connected' ? 'connected' : companion.state === 'unauthorized' ? 'awaiting_authentication' : companion.state === 'unreachable' || companion.state === 'incompatible' ? 'error' : 'not_configured'} />}>
         <div className="grid g2">
           <Field label="Companion URL" hint="Loopback address printed by the companion, e.g. http://127.0.0.1:4317"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:4317" /></Field>
