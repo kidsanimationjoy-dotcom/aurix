@@ -7,47 +7,94 @@ namespace Aurix.Desktop;
 public partial class App : System.Windows.Application
 {
     private Forms.NotifyIcon? _trayIcon;
+    private Forms.ToolStripMenuItem? _wakeToggleItem;
+    private MainWindow? _aurixWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        _aurixWindow = new MainWindow();
+        MainWindow = _aurixWindow;
+
+        var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("Open AURIX", null, (_, _) => ShowMainWindow());
+        menu.Items.Add(new Forms.ToolStripSeparator());
+
+        _wakeToggleItem = new Forms.ToolStripMenuItem();
+        _wakeToggleItem.Click += (_, _) =>
+        {
+            var window = _aurixWindow;
+            if (window is not null)
+                window.Dispatcher.BeginInvoke(new Action(window.ToggleHandsFreeFromTray));
+        };
+        menu.Items.Add(_wakeToggleItem);
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Exit AURIX", null, (_, _) => ExitApplication());
+
         _trayIcon = new Forms.NotifyIcon
         {
             Icon = SystemIcons.Application,
-            Text = "AURIX Desktop",
+            Text = "AURIX — hands-free off",
             Visible = true,
-            ContextMenuStrip = new Forms.ContextMenuStrip()
+            ContextMenuStrip = menu
         };
 
-        _trayIcon.ContextMenuStrip.Items.Add("Open AURIX", null, (_, _) => ShowMainWindow());
-        _trayIcon.ContextMenuStrip.Items.Add("Exit AURIX", null, (_, _) => ExitApplication());
         _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
+
+        _aurixWindow.InitializeVoiceFromSavedPreference();
+        _aurixWindow.UpdateTrayWakeState += UpdateTrayWakeState;
+
+        var launchInBackground = e.Args.Any(argument =>
+            argument.Equals("--background", StringComparison.OrdinalIgnoreCase));
+
+        if (!launchInBackground)
+        {
+            _aurixWindow.Show();
+            _aurixWindow.Activate();
+        }
     }
 
     private void ShowMainWindow()
     {
-        if (MainWindow is null) return;
-        MainWindow.Show();
-        MainWindow.WindowState = WindowState.Normal;
-        MainWindow.Activate();
+        if (_aurixWindow is null) return;
+        _aurixWindow.Show();
+        if (_aurixWindow.WindowState == WindowState.Minimized)
+            _aurixWindow.WindowState = WindowState.Normal;
+        _aurixWindow.Activate();
+    }
+
+    private void UpdateTrayWakeState(bool active)
+    {
+        if (_wakeToggleItem is not null)
+            _wakeToggleItem.Text = active ? "Pause AURIX wake-word listening" : "Enable AURIX wake-word listening";
+
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Text = active
+                ? "AURIX — listening for its wake word"
+                : "AURIX — hands-free paused";
+        }
     }
 
     private void ExitApplication()
     {
-        if (MainWindow is MainWindow window)
-            window.AllowClose = true;
+        if (_aurixWindow is not null)
+            _aurixWindow.AllowClose = true;
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _aurixWindow?.ShutdownHandsFree();
+
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+
         base.OnExit(e);
     }
 }
