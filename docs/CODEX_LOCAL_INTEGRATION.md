@@ -24,6 +24,8 @@ Locations:
 
 AURIX writes a dedicated `config.toml` exclusively. Before status checks or sign-in, it validates the complete directory path and confirms the profile file still exactly matches the expected AURIX-managed content. Symlinks/junctions, changed profile content, or redirected directories cause a fail-closed result.
 
+Before sandbox launch, AURIX also checks the current local Codex policy paths: `/etc/codex/config.toml`, `/etc/codex/managed_config.toml`, and `/etc/codex/requirements.toml` on Unix; `%ProgramData%\\OpenAI\\Codex\\config.toml` and `%ProgramData%\\OpenAI\\Codex\\requirements.toml` on Windows; plus `managed_config.toml` inside AURIX's dedicated `CODEX_HOME`. If these files contain legacy `sandbox_mode` or `sandbox_workspace_write` entries, preparation fails closed. Modern managed requirements remain active: the sandbox invocation explicitly includes managed configuration, and the canary must prove the effective read/write boundaries rather than assuming that the local profile overrides administrator policy.
+
 After profile preparation, **Sign in to AURIX Codex with ChatGPT** runs the official `codex login` process with AURIX's separate `CODEX_HOME`. The user may need to sign in again. AURIX never reads the resulting credential store.
 
 ## 3. Permission profile and OS canary
@@ -45,9 +47,10 @@ When the user selects **Prepare AURIX profile & verify sandbox**, the companion:
 5. Requires the canary to read the exact in-workspace file.
 6. Requires the canary to be denied read access to a file outside the workspace.
 7. Requires write attempts to be denied both outside the workspace and inside the read-only workspace.
-8. Cleans up its uniquely named canary files and returns a structured result without exposing the file contents, paths, random values, or raw CLI output.
+8. Attempts to connect to a temporary `127.0.0.1` listener owned by the companion. The listener records any accepted connection; one successful connection fails the canary. No external network host is contacted.
+9. Cleans up its uniquely named canary files, closes the local listener, and returns a structured result without exposing the file contents, paths, random values, or raw CLI output.
 
-The canary accepts only explicit access-denial errors (permission denied / access denied). A missing file, a failed workspace read, an unexpected error, a timeout, an unsupported platform, an invalid profile, a managed-policy conflict, or an unavailable sandbox helper is not treated as a pass.
+The filesystem canary accepts only explicit access-denial errors (permission denied / access denied). The network probe accepts only a denied/unreachable result or timeout, and independently confirms the host listener did not accept a connection. A missing file, a failed workspace read, an unexpected error, a timeout of the full sandbox command, an unsupported platform, an invalid profile, a managed-policy conflict, or an unavailable sandbox helper is not treated as a pass.
 
 On Windows, status, sign-in and sandbox verification require a native Codex `.exe`. The companion does not build a dynamic command string or route Codex status, login or sandbox invocation through `cmd.exe`, `.cmd`, or `.bat` shims. If a native executable cannot be resolved, the corresponding operation is unavailable and AURIX fails closed.
 

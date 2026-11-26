@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { createCompanionServer } from '../companion/server.mjs';
 import { getCodexStatus, isLoopbackCompanionUrl, probeCompanion, startCodexLogin } from '../src/companion/client';
 import { OpenAiAdapter } from '../src/adapters/openai';
-import { prepareCodexHome, renderCodexProfileConfig, resolveCodexPaths, validateCodexHome, buildCodexSandboxArgs } from '../companion/codex-profile.mjs';
+import { checkLegacySystemConfig, hasLegacySandboxSetting, prepareCodexHome, renderCodexProfileConfig, resolveCodexPaths, validateCodexHome, buildCodexSandboxArgs, systemCodexConfigPaths } from '../companion/codex-profile.mjs';
 
 async function withServer<T>(
   fn: (url: string) => Promise<T>,
@@ -121,6 +121,50 @@ test('AURIX upgrades only its exact v2 config to the platform-aware v3 profile',
   }
 });
 
+test('Codex system policy paths include requirements.toml for Windows and Unix', () => {
+  assert.deepEqual(systemCodexConfigPaths({ ProgramData: 'D:\\ProgramData' }, 'win32'), [
+    'D:\\ProgramData\\OpenAI\\Codex\\config.toml',
+    'D:\\ProgramData\\OpenAI\\Codex\\requirements.toml',
+  ]);
+  assert.deepEqual(systemCodexConfigPaths({}, 'linux'), [
+    '/etc/codex/config.toml',
+    '/etc/codex/managed_config.toml',
+    '/etc/codex/requirements.toml',
+  ]);
+});
+
+test('legacy sandbox settings are detected in requirements and managed files', async () => {
+  assert.equal(hasLegacySandboxSetting('sandbox_mode = "workspace-write"'), true);
+  assert.equal(hasLegacySandboxSetting('[sandbox_workspace_write]\nnetwork_access = false'), true);
+  assert.equal(hasLegacySandboxSetting('windows.require_mxc = true'), false);
+
+  const profile = await makeCodexProfile();
+  try {
+    await prepareCodexHome(profile.paths);
+    const managedPath = path.join(profile.paths.codexHome, 'managed_config.toml');
+    await writeFile(managedPath, 'sandbox_mode = "workspace-write"\n');
+    const result = await checkLegacySystemConfig(profile.paths, {}, process.platform, []);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'LEGACY_SYSTEM_SANDBOX_CONFIG');
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('modern managed requirements remain eligible for the effective local sandbox canary', async () => {
+  const profile = await makeCodexProfile();
+  const requirements = path.join(profile.root, 'requirements.toml');
+  try {
+    await prepareCodexHome(profile.paths);
+    await writeFile(requirements, 'windows.require_mxc = true\n');
+    const result = await checkLegacySystemConfig(profile.paths, {}, process.platform, [requirements]);
+    assert.equal(result.ok, true);
+    assert.match(result.message, /included in the real Codex sandbox canary/);
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
 test('Codex sandbox arguments require the explicit profile and managed config', () => {
   const args = buildCodexSandboxArgs({
     platform: 'linux',
@@ -185,6 +229,7 @@ process.exit(2);
       assert.ok(args.includes('--include-managed-config'));
       assert.ok(args.includes(profile.paths.workspaceRoot));
       assert.ok(args.includes('--'));
+      assert.match(args.at(-1) ?? '', /^\d+$/); // local loopback probe port is passed to the sandboxed canary
       const status = await getCodexStatus({ url, token: 'secret-token' });
       assert.equal(status.profilePrepared, true);
       assert.equal(status.state, 'needs_login');

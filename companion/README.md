@@ -11,6 +11,7 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
 - The canary checks that the sandbox can read its own workspace file, cannot read an existing file outside that workspace, and cannot write either outside the workspace or into the read-only workspace.
+- It also attempts a connection to a temporary loopback-only listener on the companion host. Any accepted connection fails verification, so the canary checks that sandboxed commands cannot reach that local service without contacting an external host.
 - Returns only a structured verification result. Canary contents, random tokens, file contents, raw CLI output, and credentials are not returned to the browser.
 - Uses the dedicated `CODEX_HOME` for AURIX Codex status and sign-in. It removes `OPENAI_API_KEY` from the subprocess environment.
 - On Windows, Codex status, sign-in and sandbox verification require a native `.exe`; AURIX never launches a `.cmd` / `.bat` shell shim through a command shell.
@@ -42,7 +43,7 @@ For a hosted AURIX origin, set `AURIX_ORIGIN=https://your-site.example` and `AUR
 - macOS: `~/Library/Application Support/AURIX/Codex`
 - Linux: `$XDG_DATA_HOME/aurix/codex` or `~/.local/share/aurix/codex`
 
-The sandbox canary directory is a sibling of the Codex home, not a child of it. The managed config is created exclusively and later checked byte-for-byte. A changed config, redirected/symlinked directory, conflicting managed setting, or unverifiable sandbox causes a fail-closed result.
+The sandbox canary directory is a sibling of the Codex home, not a child of it. The managed config is created exclusively and later checked byte-for-byte. A changed config, redirected/symlinked directory, conflicting managed setting, or unverifiable sandbox causes a fail-closed result. The companion also checks the current system policy file locations before launching: `/etc/codex/config.toml`, `/etc/codex/managed_config.toml`, and `/etc/codex/requirements.toml` on Unix; `%ProgramData%\\OpenAI\\Codex\\config.toml` and `%ProgramData%\\OpenAI\\Codex\\requirements.toml` on Windows; and `managed_config.toml` inside AURIX's own `CODEX_HOME`. Legacy `sandbox_mode` or `sandbox_workspace_write` settings in those files are rejected. Modern managed requirements are passed to the real sandbox through `--include-managed-config` and must pass the OS canary.
 
 ## Security boundaries
 
