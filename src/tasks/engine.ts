@@ -15,6 +15,7 @@ import type {
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MIN_TIMEOUT_MS = 1_000;
 const MAX_TIMEOUT_MS = 10 * 60_000;
+const MAX_OUTPUT_CHARS = 200_000;
 
 interface RunningTask {
   controller: AbortController;
@@ -271,6 +272,16 @@ export class TaskEngine {
         await this.db.update('tasks', taskId, { progress: value });
         await this.event(taskId, 'task.progress', message.slice(0, 500), providerId);
       },
+      emitOutput: async (delta) => {
+        if (controller.signal.aborted || !delta) return;
+        const latest = this.db.get('tasks', taskId);
+        if (!latest || isTerminal(latest.status)) return;
+        const remaining = MAX_OUTPUT_CHARS - latest.output.length;
+        if (remaining <= 0) return;
+        const safeDelta = delta.slice(0, remaining);
+        await this.db.update('tasks', taskId, { output: latest.output + safeDelta });
+        await this.event(taskId, 'task.output.delta', `Received ${safeDelta.length} output characters.`, providerId);
+      },
     };
 
     const promise = (async () => {
@@ -284,7 +295,7 @@ export class TaskEngine {
         await this.db.update('tasks', taskId, {
           status: 'succeeded',
           progress: 100,
-          output: result.output,
+          output: result.output || latest?.output || '',
           errorCode: '',
           errorMessage: '',
           finishedAt: Date.now(),
