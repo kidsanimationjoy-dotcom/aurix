@@ -284,7 +284,7 @@ test('REA companion analyses only a directory inside an explicitly approved root
   await import('node:fs/promises').then(({ mkdir }) => mkdir(target));
   const fake = await makeFakeCodex(`
 const args = process.argv.slice(2);
-if (args[0] === '--version') { console.log('rea-agents 1.2.3'); process.exit(0); }
+if (args[0] === '--help') { console.log('rea-agents help'); process.exit(0); }
 if (args[0] === 'analyze-javascript-application' && args[2] === '--json') {
   console.log(JSON.stringify({ findings: [{ claim: 'Sample application has a module entry point', evidence: [{ id: 'src/main.js', description: 'Entry module' }] }], unknowns: [] }));
   process.exit(0);
