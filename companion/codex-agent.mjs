@@ -178,7 +178,7 @@ class CodexAppServerSession {
     });
     this.child.once('close', (code) => {
       if (this.closed) return;
-      this.status = this.status === 'completed' ? 'completed' : 'stopped';
+      if (!['completed', 'interrupted', 'failed'].includes(this.status)) this.status = 'stopped';
       if (!this.error && code !== 0 && code !== null) this.error = 'Codex App Server exited with code ' + code + '.';
       this.emit('agent.process.closed', { code, message: this.error });
       this.rejectWaiters(new Error(this.error || 'Codex App Server closed.'));
@@ -220,10 +220,7 @@ class CodexAppServerSession {
             request_permissions: true,
           },
         },
-        sandboxPolicy: {
-          type: 'readOnly',
-          access: { type: 'restricted', readableRoots: [this.projectRoot] },
-        },
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
       });
       this.turnId = typeof turn?.turn?.id === 'string' ? turn.turn.id : null;
       if (this.status === 'starting') this.status = 'running';
@@ -254,7 +251,10 @@ class CodexAppServerSession {
     }
 
     if (Object.hasOwn(message, 'id') && typeof message.method === 'string') {
-      void this.handleServerRequest(message);
+      void this.handleServerRequest(message).catch(() => {
+        this.emit('agent.approval.error', { message: 'AURIX could not safely process a Codex approval request; the request was not approved.' });
+        try { this.write({ id: message.id, error: { code: -32603, message: 'AURIX refused to process this approval request.' } }); } catch {}
+      });
       return;
     }
     if (Object.hasOwn(message, 'id')) {
@@ -290,8 +290,8 @@ class CodexAppServerSession {
               diff: truncateText(change.diff, 6000),
             }))
           : undefined,
-        command: item.type === 'commandExecution' && Array.isArray(item.command)
-          ? item.command.slice(0, 40).map((part) => truncateText(String(part), 500))
+        command: item.type === 'commandExecution' && typeof item.command === 'string'
+          ? [truncateText(item.command, 4000)]
           : undefined,
       });
     }
@@ -361,8 +361,9 @@ class CodexAppServerSession {
         ? (params.networkApprovalContext ? 'network' : 'command')
         : method === 'item/fileChange/requestApproval' ? 'file_change' : 'filesystem',
       reason: truncateText(params.reason, 1000),
-      command: Array.isArray(params.command) ? params.command.slice(0, 40).map((part) => truncateText(String(part), 500))
-        : Array.isArray(item.command) ? item.command.slice(0, 40).map((part) => truncateText(String(part), 500)) : [],
+      command: typeof params.command === 'string' && params.command.trim()
+        ? [truncateText(params.command, 4000)]
+        : typeof item.command === 'string' && item.command.trim() ? [truncateText(item.command, 4000)] : [],
       cwd: truncateText(params.cwd ?? item.cwd, 2048),
       network: params.networkApprovalContext ? {
         host: truncateText(params.networkApprovalContext.host, 255),
@@ -457,7 +458,7 @@ class CodexAppServerSession {
     if (this.child && this.child.exitCode === null && !this.child.killed) {
       this.child.kill();
     }
-    this.status = this.status === 'completed' ? 'completed' : 'stopped';
+    if (!['completed', 'interrupted', 'failed'].includes(this.status)) this.status = 'stopped';
   }
 }
 
