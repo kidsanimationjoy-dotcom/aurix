@@ -56,9 +56,9 @@ async function resolveApprovedProject(target, roots) {
   return projectRoot;
 }
 
-async function safeProjectRelativePath(root, input) {
-  if (typeof input !== 'string' || !input || path.isAbsolute(input) || input.includes('\0')) return false;
-  const candidate = path.resolve(root, input);
+async function safeProjectPath(root, input) {
+  if (typeof input !== 'string' || !input || input.includes('\0')) return false;
+  const candidate = path.isAbsolute(input) ? path.resolve(input) : path.resolve(root, input);
   if (!within(root, candidate)) return false;
   let ancestor = candidate;
   while (true) {
@@ -226,7 +226,7 @@ class CodexAppServerSession {
         },
       });
       this.turnId = typeof turn?.turn?.id === 'string' ? turn.turn.id : null;
-      this.status = 'running';
+      if (this.status === 'starting') this.status = 'running';
       this.emit('agent.started', { threadId: this.threadId, turnId: this.turnId });
       return this.snapshot();
     } catch (error) {
@@ -390,7 +390,8 @@ class CodexAppServerSession {
     let result;
     if (record.method === 'item/commandExecution/requestApproval') {
       if (decision === 'accept') {
-        const cwd = typeof record.params.cwd === 'string' ? await canonicalDirectory(record.params.cwd) : null;
+        const cwdValue = record.params.cwd ?? record.item.cwd;
+        const cwd = typeof cwdValue === 'string' ? await canonicalDirectory(cwdValue) : null;
         if (record.params.networkApprovalContext || !cwd || !within(this.projectRoot, cwd)) {
           throw new Error('AURIX refused this command because it requests network access or runs outside the approved project.');
         }
@@ -401,7 +402,7 @@ class CodexAppServerSession {
         const changes = Array.isArray(record.item.changes) ? record.item.changes : [];
         if (!changes.length || changes.length > 30) throw new Error('The proposed file change list is empty or too large.');
         for (const change of changes) {
-          if (!(await safeProjectRelativePath(this.projectRoot, change.path))) {
+          if (!(await safeProjectPath(this.projectRoot, change.path))) {
             throw new Error('AURIX refused this file change because its path is outside the approved project or crosses a symbolic link.');
           }
         }
@@ -417,7 +418,7 @@ class CodexAppServerSession {
         const safeEntries = [];
         for (const entry of entries) {
           const target = entry?.path?.type === 'path' ? entry.path.path : null;
-          if (!target || !['read', 'write'].includes(entry.access) || !(await safeProjectRelativePath(this.projectRoot, path.relative(this.projectRoot, target)))) {
+          if (!target || !['read', 'write'].includes(entry.access) || !(await safeProjectPath(this.projectRoot, target))) {
             throw new Error('AURIX refused a permission request outside the approved project or with an unsupported path pattern.');
           }
           safeEntries.push({ access: entry.access, path: { type: 'path', path: path.resolve(target) } });
