@@ -16,7 +16,7 @@ test('all six providers are registered and correctly report their current connec
   for (const a of adapters) {
     const s = await a.getStatus();
     assert.equal(s.state, 'not_configured');
-    assert.equal(s.implementation, a.meta.id === 'openai' ? 'implemented_untested' : 'interface_only');
+    assert.equal(s.implementation, ['openai', 'rea'].includes(a.meta.id) ? 'implemented_untested' : 'interface_only');
   }
 });
 
@@ -28,11 +28,11 @@ test('adapter operations never return ok:true while disconnected', async () => {
     new HiggsfieldAdapter().submitJob(),
     new HiggsfieldAdapter().getJob(),
     new TwentyFirstAdapter().searchComponents(),
-    new ReaAdapter().createInvestigation(),
+    new ReaAdapter().createInvestigation('', { statement: '', confirmedAt: 0 }),
   ]);
   for (const r of results) {
     assert.equal(r.ok, false);
-    if (!r.ok) assert.equal(r.error.code, 'NOT_CONNECTED');
+    if (!r.ok) assert.ok(['NOT_CONNECTED', 'AUTHORIZATION_REQUIRED'].includes(r.error.code));
   }
 });
 
