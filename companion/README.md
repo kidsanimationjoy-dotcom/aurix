@@ -84,4 +84,4 @@ See [docs/CODEX_LOCAL_INTEGRATION.md](../docs/CODEX_LOCAL_INTEGRATION.md) for th
 
 ### REA workflows
 
-The paired companion supports two fixed REA operations on approved local directories: `analyze-javascript-application` for JavaScript/Electron graph evidence and `inspect-desktop-application` for bounded installation/runtime-candidate discovery. AURIX selects between these fixed commands; it does not accept arbitrary shell commands or REA flags. Desktop discovery does not launch the inspected application. It is a static inventory, not a runtime trace.
+The paired companion supports two fixed REA operations inside folders explicitly approved through `AURIX_REA_ROOTS`: `analyze-javascript-application` accepts an application directory or `.asar` archive for JavaScript/Electron graph evidence, while `inspect-desktop-application` accepts an installation directory for bounded runtime-candidate discovery. AURIX selects between these fixed commands; it does not accept arbitrary shell commands or REA flags. Desktop discovery does not launch the inspected application. It is a static inventory, not a runtime trace.
