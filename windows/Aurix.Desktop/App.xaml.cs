@@ -42,8 +42,8 @@ public partial class App : System.Windows.Application
 
         _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
 
-        _aurixWindow.InitializeVoiceFromSavedPreference();
         _aurixWindow.UpdateTrayWakeState += UpdateTrayWakeState;
+        _aurixWindow.InitializeVoiceFromSavedPreference();
 
         var launchInBackground = e.Args.Any(argument =>
             argument.Equals("--background", StringComparison.OrdinalIgnoreCase));
