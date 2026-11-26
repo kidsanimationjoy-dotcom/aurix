@@ -8,6 +8,7 @@ import { createCompanionServer } from '../companion/server.mjs';
 import { getCodexStatus, isLoopbackCompanionUrl, probeCompanion, startCodexLogin } from '../src/companion/client';
 import type { TaskExecutionContext, TaskExecutionRequest } from '../src/tasks/types';
 import { OpenAiAdapter } from '../src/adapters/openai';
+import { routeTask } from '../src/router/providerRouter';
 import { checkLegacySystemConfig, hasLegacySandboxSetting, prepareCodexHome, renderCodexProfileConfig, resolveCodexPaths, validateCodexHome, buildCodexSandboxArgs, systemCodexConfigPaths } from '../companion/codex-profile.mjs';
 
 async function withServer<T>(
@@ -443,7 +444,10 @@ process.exit(2);
       adapter.setCompanionConfigProvider(() => ({ url, token: 'secret-token' }));
       const status = await getCodexStatus({ url, token: 'secret-token' });
       assert.equal(status.sandboxVerified, true);
-      assert.deepEqual(await adapter.getCapabilities(), ['chat']);
+      assert.deepEqual(await adapter.getCapabilities(), []);
+      assert.deepEqual(await adapter.getTaskCapabilities(), ['chat']);
+      assert.equal((await routeTask([adapter], { kind: 'chat', preferred: 'openai' })).ok, false);
+      assert.equal((await routeTask([adapter], { kind: 'chat', preferred: 'openai', execution: true })).ok, true);
 
       const emitted: string[] = [];
       const request: TaskExecutionRequest = {
