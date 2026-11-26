@@ -259,20 +259,29 @@ test('Codex status truthfully reports a missing CLI in the dedicated profile', a
 });
 
 test('official sign-in handoff starts only inside the prepared AURIX profile', async () => {
+  const profile = await makeCodexProfile();
+  const loginDone = path.join(profile.root, 'login-done');
   const fake = await makeFakeCodex(`
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('codex-cli 0.42.1'); process.exit(0); }
 if (args[0] === 'login' && args[1] === 'status') { console.log('Not logged in'); process.exit(1); }
-if (args[0] === 'login') { if (!process.env.CODEX_HOME) process.exit(90); console.log('Starting official sign-in'); process.exit(0); }
+if (args[0] === 'login') {
+  if (!process.env.CODEX_HOME) process.exit(90);
+  require('node:fs').writeFileSync(${JSON.stringify(loginDone)}, 'done');
+  console.log('Starting official sign-in'); process.exit(0);
+}
 process.exit(2);
 `);
-  const profile = await makeCodexProfile();
   await prepareCodexHome(profile.paths);
   try {
     await withServer(async (url) => {
       const message = await startCodexLogin({ url, token: 'secret-token' });
-      assert.match(message, /separate AURIX profile/);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.match(message, /separate profile/);
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        try { await readFile(loginDone, 'utf8'); break; }
+        catch { await new Promise((resolve) => setTimeout(resolve, 25)); }
+      }
+      assert.equal(await readFile(loginDone, 'utf8'), 'done');
     }, { codexCommand: fake.command, codexPaths: profile.paths });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
