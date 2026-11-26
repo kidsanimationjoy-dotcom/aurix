@@ -21,7 +21,8 @@ export type CompanionCapability =
   | 'cli.grok-build'
   | 'cli.rea'
   | 'rea.status'
-  | 'rea.javascript.analyze';
+  | 'rea.javascript.analyze'
+  | 'rea.desktop.inspect';
 
 export interface HealthResponse {
   service: 'aurix-companion';
