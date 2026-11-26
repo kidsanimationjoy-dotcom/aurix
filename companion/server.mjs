@@ -230,7 +230,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect'],
         grantedRoots: [],
       });
     }
@@ -315,7 +315,8 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         });
       }
       try {
-        const result = await analyzeReaTarget({ target: body.target, roots: reaRoots, command: reaCommand });
+        const kind = body.kind === 'desktop' ? 'desktop' : 'javascript';
+        const result = await analyzeReaTarget({ target: body.target, roots: reaRoots, command: reaCommand, kind });
         return send(200, { ok: true, result });
       } catch (error) {
         return send(400, { ok: false, error: 'REA_ANALYSIS_FAILED', message: error instanceof Error ? error.message.slice(0, 1200) : 'REA analysis failed.' });
