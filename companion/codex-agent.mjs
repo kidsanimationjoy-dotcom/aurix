@@ -375,6 +375,8 @@ class CodexAppServerSession {
         diff: truncateText(change.diff, 6000),
       })) : [],
       requestedPermissions: params.permissions ?? null,
+      grantRoot: typeof params.grantRoot === 'string' ? truncateText(params.grantRoot, 2048) : null,
+      commandActions: Array.isArray(params.commandActions) ? params.commandActions.slice(0, 20) : [],
     });
 
     const timer = setTimeout(() => {
@@ -470,6 +472,8 @@ export function createCodexAgentManager({ command = 'codex', codexHome, roots = 
 
   return {
     async start({ target, prompt }) {
+      const active = [...sessions.values()].filter((session) => ['starting', 'running'].includes(session.status)).length;
+      if (active >= 2) throw new Error('AURIX allows at most two active local Codex sessions at once. Close or stop an existing task first.');
       if (!codexHome) throw new Error('The AURIX Codex profile has not been configured.');
       const projectRoot = await resolveApprovedProject(target, roots);
       const id = randomUUID();
