@@ -148,10 +148,19 @@ export function hasLegacySandboxSetting(configText) {
 
 export function systemCodexConfigPaths(env = process.env, platform = process.platform) {
   if (platform === 'win32') {
+    const winPath = path.win32;
     const programData = env.ProgramData || 'C:\\ProgramData';
-    return [path.join(programData, 'OpenAI', 'Codex', 'config.toml')];
+    const root = winPath.join(programData, 'OpenAI', 'Codex');
+    return [
+      winPath.join(root, 'config.toml'),
+      winPath.join(root, 'requirements.toml'),
+    ];
   }
-  return ['/etc/codex/config.toml', '/etc/codex/managed_config.toml'];
+  return [
+    '/etc/codex/config.toml',
+    '/etc/codex/managed_config.toml',
+    '/etc/codex/requirements.toml',
+  ];
 }
 
 async function ensureSafeDirectory(target, mode = 0o700) {
@@ -279,20 +288,40 @@ export async function validateCodexHome(paths) {
   return { ok: true, profileName: paths.profileName, codexHome: paths.codexHome, workspaceRoot: paths.workspaceRoot };
 }
 
-export async function checkLegacySystemConfig(paths, env = process.env, platform = process.platform) {
-  for (const file of systemCodexConfigPaths(env, platform)) {
+export async function checkLegacySystemConfig(
+  paths,
+  env = process.env,
+  platform = process.platform,
+  systemPaths = systemCodexConfigPaths(env, platform),
+) {
+  const pathApi = platform === 'win32' ? path.win32 : path;
+  const aurixManagedConfig = pathApi.join(paths.codexHome, 'managed_config.toml');
+  const files = [...new Set([...systemPaths, aurixManagedConfig])];
+
+  for (const file of files) {
     try {
       const text = await readFile(file, 'utf8');
       if (hasLegacySandboxSetting(text)) {
-        return { ok: false, code: 'LEGACY_SYSTEM_SANDBOX_CONFIG', message: 'A machine-wide Codex config contains legacy sandbox settings. AURIX will not run until the effective profile can be verified.' };
+        return {
+          ok: false,
+          code: 'LEGACY_SYSTEM_SANDBOX_CONFIG',
+          message: 'A system or managed Codex config contains legacy sandbox settings. AURIX will not proceed until the effective permission profile can be verified.',
+        };
       }
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code !== 'ENOENT') {
-        return { ok: false, code: 'SYSTEM_CONFIG_UNREADABLE', message: 'A machine-wide Codex config exists but could not be checked. AURIX will fail closed.' };
+        return {
+          ok: false,
+          code: 'SYSTEM_CONFIG_UNREADABLE',
+          message: 'A system or managed Codex config exists but could not be checked. AURIX will fail closed.',
+        };
       }
     }
   }
-  return { ok: true, message: 'No conflicting legacy system sandbox setting was found.' };
+  return {
+    ok: true,
+    message: 'No conflicting legacy sandbox setting was found. Current managed requirements are still included in the real Codex sandbox canary.',
+  };
 }
 
 export async function resolveNativeCodexCommand(command = 'codex', env = process.env, platform = process.platform) {
