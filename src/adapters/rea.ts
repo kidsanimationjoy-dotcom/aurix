@@ -11,7 +11,7 @@ export const reaMeta: ProviderMeta = {
   authentication: 'Runs the official REA CLI locally through the paired AURIX companion; no API key.',
   references: [{ label: 'REA engine', url: 'https://github.com/morluto/rea' }],
   constraints: [
-    'Only inspects directories explicitly allowlisted by the user on their own computer.',
+    'Only inspects application directories or JavaScript .asar archives inside folders explicitly allowlisted by the user on their own computer.',
     'Supports REA JavaScript/Electron graph analysis and bounded desktop installation discovery.',
     'Every report is returned by the local REA engine; unknowns and missing evidence must remain visible.',
   ],
