@@ -1,23 +1,87 @@
-import { interfaceOnlyStatus, notImplemented } from './base';
-import type { InvestigationAdapter, ProviderMeta } from './types';
+import type { InvestigationAdapter, InvestigationAuthorization, InvestigationReport, ProviderMeta } from './types';
+import type { LocalCompanionConfig } from '../companion/protocol';
+import { analyzeReaTarget, getReaStatus } from '../companion/client';
 
 export const reaMeta: ProviderMeta = {
   id: 'rea',
   name: 'REA',
   vendor: 'morluto',
-  role: 'Authorised software investigation with evidence-based reports',
+  role: 'Local, evidence-based inspection of authorised applications',
   plannedCapabilities: ['investigation', 'mcp'],
-  authentication: 'Runs locally via its CLI/MCP; requires the local companion.',
+  authentication: 'Runs the official REA CLI locally through the paired AURIX companion; no API key.',
   references: [{ label: 'REA engine', url: 'https://github.com/morluto/rea' }],
   constraints: [
-    'Only for software the user is authorised to examine.',
-    'Every finding needs evidence; unknowns must be reported. Never claim hidden source or model internals were found without evidence.',
+    'Only inspects directories explicitly allowlisted by the user on their own computer.',
+    'This first implementation supports REA JavaScript/Electron application analysis.',
+    'Every report is returned by the local REA engine; unknowns and missing evidence must remain visible.',
   ],
 };
 
 export class ReaAdapter implements InvestigationAdapter {
   readonly meta = reaMeta;
-  async getStatus() { return interfaceOnlyStatus(this.meta); }
-  createInvestigation() { return notImplemented<never>(this.meta, 'investigations'); }
-  getReport() { return notImplemented<never>(this.meta, 'reports'); }
+  private getConfig: () => LocalCompanionConfig = () => ({ url: '', token: '' });
+  private reports = new Map<string, InvestigationReport>();
+
+  setCompanionConfigProvider(provider: () => LocalCompanionConfig): void {
+    this.getConfig = provider;
+  }
+
+  async getStatus() {
+    const config = this.getConfig();
+    if (!config.url || !config.token) {
+      return {
+        state: 'not_configured' as const,
+        implementation: 'implemented_untested' as const,
+        summary: 'REA companion not paired',
+        detail: 'Pair the local companion and install the official REA CLI to inspect approved application folders.',
+        checkedAt: Date.now(),
+      };
+    }
+    try {
+      const status = await getReaStatus(config);
+      const ready = status.available && status.approvedRootCount > 0;
+      return {
+        state: ready ? 'connected' as const : 'not_configured' as const,
+        implementation: 'implemented_untested' as const,
+        summary: ready ? 'Local REA engine available' : status.available ? 'No approved REA folders' : 'REA CLI unavailable',
+        detail: status.message ?? (ready
+          ? status.version + ' · ' + status.approvedRootCount + ' approved folder(s)'
+          : 'Install REA locally and configure AURIX_REA_ROOTS with folders you explicitly approve.'),
+        checkedAt: Date.now(),
+      };
+    } catch (error) {
+      return {
+        state: 'error' as const,
+        implementation: 'implemented_untested' as const,
+        summary: 'REA status check failed',
+        detail: error instanceof Error ? error.message : 'Could not check REA.',
+        checkedAt: Date.now(),
+      };
+    }
+  }
+
+  async createInvestigation(target: string, auth: InvestigationAuthorization) {
+    if (!auth.statement.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
+      return { ok: false as const, error: { code: 'AUTHORIZATION_REQUIRED' as const, message: 'Confirm that you are authorised to inspect this local application.' } };
+    }
+    try {
+      const value = await analyzeReaTarget(this.getConfig(), target);
+      const result = value as { report?: InvestigationReport };
+      if (!result.report || !Array.isArray(result.report.findings) || !Array.isArray(result.report.unknowns)) {
+        return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: 'REA returned an unexpected report format.' } };
+      }
+      const id = globalThis.crypto.randomUUID();
+      this.reports.set(id, result.report);
+      return { ok: true as const, value: { id } };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'REA investigation failed.' } };
+    }
+  }
+
+  async getReport(id: string) {
+    const report = this.reports.get(id);
+    return report
+      ? { ok: true as const, value: report }
+      : { ok: false as const, error: { code: 'UNSUPPORTED' as const, message: 'This REA report is not available in the current AURIX session.' } };
+  }
 }
