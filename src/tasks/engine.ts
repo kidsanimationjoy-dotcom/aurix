@@ -47,6 +47,7 @@ function isTerminal(status: TaskStatus): boolean {
 
 export class TaskEngine {
   private readonly running = new Map<string, RunningTask>();
+  private readonly approving = new Set<string>();
   private recoveryPromise: Promise<number> | null = null;
 
   constructor(private readonly db: Db, private readonly adapters: ProviderAdapter[]) {}
@@ -64,6 +65,8 @@ export class TaskEngine {
       preferredProvider: input.preferredProvider,
       selectedProviderId: null,
       status: 'queued',
+      approvalStatus: 'not_required',
+      approvedAt: null,
       plan: [],
       progress: 0,
       output: '',
@@ -88,6 +91,8 @@ export class TaskEngine {
       intent: 'unknown',
       intentReason: '',
       selectedProviderId: null,
+      approvalStatus: 'not_required',
+      approvedAt: null,
       plan: [],
       progress: 0,
       output: '',
@@ -167,21 +172,121 @@ export class TaskEngine {
       return this.db.get('tasks', taskId)!;
     }
 
-    const startedAt = Date.now();
-    const planInProgress = plan.map((step, index) => ({ ...step, status: index === 0 ? 'running' as const : 'pending' as const }));
+    // A real adapter may be available, but AURIX must show the selected provider
+    // and the complete plan before it dispatches any task to that adapter.
     await this.db.update('tasks', taskId, {
-      status: 'running',
-      startedAt,
-      plan: planInProgress,
+      status: 'awaiting_approval',
+      approvalStatus: 'pending',
+      approvedAt: null,
+      startedAt: null,
+      progress: 0,
+      plan: plan.map((step) => ({ ...step, status: 'pending' as const })),
+      errorCode: '',
+      errorMessage: '',
     });
-    await this.event(taskId, 'task.started', 'Provider execution started.', decision.providerId);
-    void this.execute(taskId, adapter, decision.providerId);
+    await this.event(
+      taskId,
+      'task.approval.requested',
+      'Review the selected provider and plan. No provider task has been started.',
+      decision.providerId,
+    );
     return this.db.get('tasks', taskId)!;
+  }
+
+  /** Re-check the same selected provider, then execute only after a fresh user approval. */
+  async approve(taskId: string): Promise<TaskRecord | null> {
+    const task = this.db.get('tasks', taskId);
+    if (!task || task.status !== 'awaiting_approval' || task.approvalStatus !== 'pending') return null;
+    if (this.approving.has(taskId)) return this.db.get('tasks', taskId) ?? null;
+
+    this.approving.add(taskId);
+    try {
+      const providerId = task.selectedProviderId;
+      const kind = routeKind(task.intent, task.prompt);
+      if (!providerId || !kind) return null;
+
+      let decision;
+      try {
+        // A specific provider choice is binding. Never route approval to a replacement.
+        decision = await routeTask(this.adapters, { kind, preferred: providerId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Provider status check failed during approval.';
+        await this.finishWithoutExecution(
+          taskId, 'waiting_for_provider', 'PROVIDER_CHECK_FAILED_AT_APPROVAL',
+          message, 'task.waiting_for_provider', providerId,
+        );
+        return this.db.get('tasks', taskId) ?? null;
+      }
+
+      if (!decision.ok || decision.providerId !== providerId) {
+        await this.finishWithoutExecution(
+          taskId, 'waiting_for_provider', 'PROVIDER_NOT_READY_AT_APPROVAL',
+          decision.ok ? 'The selected provider changed. Review the task again before running it.' : decision.reason,
+          'task.waiting_for_provider', providerId,
+        );
+        return this.db.get('tasks', taskId) ?? null;
+      }
+
+      const adapter = this.adapters.find((candidate) => candidate.meta.id === providerId);
+      if (!adapter || !isExecutionAdapter(adapter)) {
+        await this.finishWithoutExecution(
+          taskId, 'waiting_for_provider', 'EXECUTOR_NOT_IMPLEMENTED',
+          'The selected provider no longer exposes a real AURIX task executor. No work was sent.',
+          'task.waiting_for_provider', providerId,
+        );
+        return this.db.get('tasks', taskId) ?? null;
+      }
+
+      // A decline/cancel may have happened while the provider was being re-checked.
+      const stillPending = this.db.get('tasks', taskId);
+      if (!stillPending || stillPending.status !== 'awaiting_approval' || stillPending.approvalStatus !== 'pending') {
+        return stillPending ?? null;
+      }
+
+      const startedAt = Date.now();
+      const planInProgress = stillPending.plan.map((step, index) => ({
+        ...step,
+        status: index === 0 ? 'running' as const : 'pending' as const,
+      }));
+      await this.db.update('tasks', taskId, {
+        status: 'running',
+        approvalStatus: 'approved',
+        approvedAt: startedAt,
+        startedAt,
+        plan: planInProgress,
+        errorCode: '',
+        errorMessage: '',
+      });
+      await this.event(taskId, 'task.approval.granted', 'You approved this task for the selected provider.', providerId);
+      await this.event(taskId, 'task.started', 'Provider execution started after your approval.', providerId);
+      void this.execute(taskId, adapter, providerId);
+      return this.db.get('tasks', taskId) ?? null;
+    } finally {
+      this.approving.delete(taskId);
+    }
+  }
+
+  /** Decline a pending task plan without sending the prompt to the provider. */
+  async decline(taskId: string): Promise<boolean> {
+    const task = this.db.get('tasks', taskId);
+    if (!task || task.status !== 'awaiting_approval' || task.approvalStatus !== 'pending') return false;
+    await this.db.update('tasks', taskId, {
+      status: 'cancelled',
+      approvalStatus: 'declined',
+      approvedAt: null,
+      errorCode: 'APPROVAL_DECLINED',
+      errorMessage: 'You declined this task. No work was sent to the provider.',
+      finishedAt: Date.now(),
+    });
+    await this.event(taskId, 'task.approval.denied', 'You declined the task plan. No work was sent to the provider.', task.selectedProviderId);
+    await this.event(taskId, 'task.cancelled', 'Task declined before provider execution.', task.selectedProviderId);
+    return true;
   }
 
   async cancel(taskId: string): Promise<boolean> {
     const task = this.db.get('tasks', taskId);
     if (!task || isTerminal(task.status)) return false;
+    if (task.status === 'awaiting_approval') return this.decline(taskId);
 
     const running = this.running.get(taskId);
     if (!running) {
