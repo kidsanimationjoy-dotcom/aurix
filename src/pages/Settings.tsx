@@ -26,7 +26,7 @@ function Providers() {
   const { adapters, statuses } = useApp();
   return (
     <>
-      <Notice>Codex now has local CLI installation and sign-in detection. Its AI task execution is still disabled pending a verified, narrowly scoped sandbox. The other provider adapters remain disconnected.</Notice>
+      <Notice>Codex now supports local read-only chat and project coding sessions through the official App Server. Project work requires AURIX_CODEX_ROOTS, starts read-only, and asks before each added permission. Generic terminal/filesystem access remains disabled. Claude, Grok and Higgsfield are still disconnected.</Notice>
       <div className="stack">
         {adapters.map((a) => {
           const s = statuses[a.meta.id];
@@ -73,7 +73,7 @@ function Companion() {
   };
   return (
     <>
-      <Notice>The companion runs locally on your own computer. AURIX uses a separate Codex profile and checks its OS sandbox before any future task-execution work. It never reads or changes your normal Codex profile. Task execution is still disabled. See <code>companion/README.md</code>.</Notice>
+      <Notice>The companion runs locally on your computer. AURIX uses its own Codex profile. Read-only chat and project-scoped App Server sessions require a fresh local sandbox verification. Coding projects must also be inside AURIX_CODEX_ROOTS; approval prompts are one-time and network access is not granted. See <code>companion/README.md</code>.</Notice>
       <Panel title="Connection" aside={<StatusPill state={companion.state === 'connected' ? 'connected' : companion.state === 'unauthorized' ? 'awaiting_authentication' : companion.state === 'unreachable' || companion.state === 'incompatible' ? 'error' : 'not_configured'} />}>
         <div className="grid g2">
           <Field label="Companion URL" hint="Loopback address printed by the companion, e.g. http://127.0.0.1:4317"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:4317" /></Field>
@@ -100,7 +100,7 @@ function Companion() {
           }}>Save and test</button>
           <small>{companion.message}</small>
         </div>
-        {companion.health && <small>Companion v{companion.health.version} · capabilities: {companion.health.capabilities.join(', ')} · granted folders: {companion.health.grantedRoots.length || 'none'}</small>}
+        {companion.health && <small>Companion v{companion.health.version} · capabilities: {companion.health.capabilities.join(', ')} · granted folders: {companion.health.grantedRoots.length || 'none'} · Codex project roots: {companion.health.codexApprovedRootCount ?? 0}</small>}
       </Panel>
 
       <Panel title="OpenAI Codex CLI" aside={codexStatus && <span className="pill">{codexStatus.state.replace('_', ' ')}</span>}>
@@ -159,7 +159,7 @@ function Companion() {
             }
           }}>Sign in to AURIX Codex with ChatGPT</button>
         </div>
-        <small>The sandbox verification is a local check on this computer, not a GitHub test. Even after a successful check, AURIX task execution remains disabled until the execution engine is implemented and separately tested.</small>
+        <small>The sandbox check is local to this computer, not a GitHub test. Coding sessions are limited to projects in AURIX_CODEX_ROOTS; every extra permission must be reviewed in Coding Studio.</small>
       </Panel>
     </>
   );
