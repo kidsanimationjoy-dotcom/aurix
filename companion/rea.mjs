@@ -1,5 +1,5 @@
 // Local REA bridge for AURIX. Runs only the documented JavaScript/Electron
-// application analyzer against directories explicitly allowlisted by the user.
+// application analyzer against targets inside directories explicitly allowlisted by the user.
 import { spawn } from 'node:child_process';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -65,16 +65,30 @@ export async function reaStatus({ command = 'rea' } = {}) {
   }
 }
 
-async function resolveApprovedTarget(target, roots) {
+async function resolveApprovedTarget(target, roots, kind) {
   if (typeof target !== 'string' || !target.trim() || target.length > 2048) {
-    throw new Error('Provide a valid local application directory.');
+    throw new Error('Provide a valid local application path.');
   }
   if (!Array.isArray(roots) || roots.length === 0) {
     throw new Error('No REA target folders have been approved. Configure AURIX_REA_ROOTS first.');
   }
+  if (kind !== 'javascript' && kind !== 'desktop') {
+    throw new Error('Unsupported REA analysis workflow.');
+  }
+
   const canonicalTarget = await realpath(target);
   const targetStat = await stat(canonicalTarget);
-  if (!targetStat.isDirectory()) throw new Error('The REA target must be a directory.');
+  const isDirectory = targetStat.isDirectory();
+  const isJavaScriptAsar = kind === 'javascript' &&
+    targetStat.isFile() &&
+    path.extname(canonicalTarget).toLowerCase() === '.asar';
+
+  if (!isDirectory && !isJavaScriptAsar) {
+    throw new Error(kind === 'javascript'
+      ? 'The JavaScript analysis target must be a directory or an .asar archive.'
+      : 'The desktop discovery target must be an installation directory.');
+  }
+
   const canonicalRoots = await Promise.all(roots.map(root => realpath(root)));
   if (!canonicalRoots.some(root => within(root, canonicalTarget))) {
     throw new Error('This target is outside the folders explicitly approved for REA inspection.');
@@ -92,7 +106,7 @@ async function runJsonAnalysis(command, args, canonicalTarget) {
 }
 
 export async function analyzeReaTarget({ target, roots = [], command = 'rea', kind = 'javascript' }) {
-  const canonicalTarget = await resolveApprovedTarget(target, roots);
+  const canonicalTarget = await resolveApprovedTarget(target, roots, kind);
   if (kind === 'javascript') return runJsonAnalysis(command, ['analyze-javascript-application', canonicalTarget, '--json'], canonicalTarget);
   if (kind === 'desktop') return runJsonAnalysis(command, ['inspect-desktop-application', canonicalTarget, '--json'], canonicalTarget);
   throw new Error('Unsupported REA analysis workflow.');
