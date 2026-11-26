@@ -181,7 +181,7 @@ test('Codex refuses network approval even when the caller tries to accept it', a
     assert.equal(approval.kind, 'network');
     await assert.rejects(
       () => manager.approve(session.id, String(approval.id), 'accept'),
-      /never grants network access/,
+      /requests network access/,
     );
     await manager.approve(session.id, String(approval.id), 'decline');
     await waitForStatus(manager, session.id, 'completed');
