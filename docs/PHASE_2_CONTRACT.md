@@ -1,6 +1,6 @@
 # AURIX Phase 2 — Orchestration Contract
 
-Status: design contract; implementation is not yet claimed.
+Status: partially implemented. The local Task Center, deterministic classifier, capability-aware routing, event persistence, timeout/cancellation lifecycle, and explicit pre-execution approval gate are implemented. No real provider task executor is enabled yet; the remaining execution and permission-broker work is still pending.
 
 This document defines the smallest real orchestration layer to build on top of the Phase 0–1 workspace. It is intentionally provider-neutral. It must not report a provider as connected unless a real adapter has passed its health check.
 
@@ -168,26 +168,28 @@ A disconnected provider must be visibly disconnected. Never use a green connecte
 4. Declining a pending task produces no provider execution.
 5. Approval re-checks the same selected provider and never silently routes to a replacement.
 6. A pending approval survives app reload without being marked as interrupted.
-3. Specific disconnected provider does not silently fall back.
-4. Auto routing selects only a healthy compatible adapter.
-5. No compatible provider produces a truthful waiting state.
-6. Adapter output is streamed and attributed to the adapter that produced it.
-7. Adapter failure produces a typed error and failed terminal state.
-8. Timeout aborts the adapter and produces timed_out.
-9. Cancellation is idempotent and produces cancelled only after adapter settlement.
-10. Terminal tasks cannot be restarted by late events.
-11. Task events and results survive app reload.
-12. Tests verify that secrets are not included in persisted event payloads.
-13. A clean checkout can install, typecheck, test, and build without extracting the ZIP archive.
+7. Specific disconnected provider does not silently fall back.
+8. Auto routing selects only a healthy compatible adapter.
+9. No compatible provider produces a truthful waiting state.
+10. Adapter output is streamed and attributed to the adapter that produced it.
+11. Adapter failure produces a typed error and failed terminal state.
+12. Timeout aborts the adapter and produces timed_out.
+13. Cancellation is idempotent and produces cancelled only after adapter settlement.
+14. Terminal tasks cannot be restarted by late events.
+15. Task events and results survive app reload.
+16. Tests verify that secrets are not included in persisted event payloads.
+17. A clean checkout can install, typecheck, test, and build without extracting the ZIP archive.
 
 ## 10. Implementation order
 
-1. Inspect and promote the existing Phase 0–1 source from the repository ZIP into tracked source files. Preserve the existing UI and tests.
-2. Add domain types, lifecycle state machine, and deterministic classifier.
-3. Add adapter registry and capability-aware router with fake adapters only in tests.
-4. Add event persistence and task progress UI.
-5. Add timeout/cancellation orchestration and race-condition tests.
-6. Connect one real provider only after its official local integration path is confirmed.
-7. Update provider matrix and roadmap with verified results.
+1. [Complete] Inspect and promote the existing Phase 0–1 source from the repository ZIP into tracked source files. Preserve the existing UI and tests.
+2. [Complete] Add domain types, lifecycle state machine, and deterministic classifier.
+3. [Complete] Add capability-aware routing with fake adapters only in tests.
+4. [Complete] Add event persistence and task progress UI.
+5. [Complete] Add timeout/cancellation orchestration and race-condition tests.
+6. [Complete] Require explicit task-level approval before any real adapter is dispatched.
+7. [Pending] Implement a scoped permission broker for project folders, file changes, commands, network, and deployment actions.
+8. [Pending] Connect one real provider only after the local OS sandbox and permission broker have passed platform-specific tests.
+9. [Pending] Update provider matrix and roadmap with verified results.
 
 Do not mark the milestone complete until the acceptance tests pass against the real repository source. Test doubles are for tests only; they are not a connected provider.
