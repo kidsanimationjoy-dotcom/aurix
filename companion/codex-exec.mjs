@@ -195,6 +195,7 @@ export function createCodexExecManager({
       closeWaiters: [],
       child,
       detached,
+      env,
     };
 
     const notifyClose = (result) => {
@@ -225,6 +226,7 @@ export function createCodexExecManager({
       }
     };
 
+    child.stdin.on('error', () => { state.protocolError = true; });
     child.stdout.on('data', (chunk) => {
       state.totalBytes += chunk.length;
       if (state.totalBytes > CODEX_CHAT_MAX_JSONL_BYTES) {
