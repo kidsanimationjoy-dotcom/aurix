@@ -49,13 +49,13 @@ public partial class MainWindow : Window
 
     private async void ScanButton_Click(object sender, RoutedEventArgs e)
     {
-        var confirm = MessageBox.Show(
+        var confirm = System.Windows.MessageBox.Show(
             "Start a Microsoft Defender quick scan now? The scan may use system resources while it runs.",
             "Confirm security scan",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
 
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != System.Windows.MessageBoxResult.Yes) return;
 
         ScanButton.IsEnabled = false;
         DefenderDetailsText.Text = "Requesting a Microsoft Defender quick scan…";
@@ -198,8 +198,8 @@ public partial class MainWindow : Window
         MessageBox.Show(
             result.Message,
             result.Success ? "AURIX startup" : "Startup not enabled",
-            MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            System.Windows.MessageBoxButton.OK,
+            result.Success ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
