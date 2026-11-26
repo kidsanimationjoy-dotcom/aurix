@@ -157,14 +157,20 @@ export function Tasks() {
                     </details>
                   )}
 
-                  {!isTerminal(task.status) && (
-                    <div className="row">
+                  <div className="row">
+                    {task.status === 'waiting_for_provider' && (
+                      <button className="btn sm" onClick={async () => {
+                        const retried = await engine.retry(task.id);
+                        if (retried) await audit({ action: 'task.retry', target: task.id, outcome: 'info' });
+                      }}>Check provider again</button>
+                    )}
+                    {!isTerminal(task.status) && (
                       <button className="btn sm" onClick={async () => {
                         const ok = await engine.cancel(task.id);
                         if (ok) await audit({ action: 'task.cancel', target: task.id, outcome: 'info' });
                       }}>Cancel task</button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </section>
               );
             })}
