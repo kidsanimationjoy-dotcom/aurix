@@ -1,11 +1,10 @@
 /**
  * AURIX local companion — protocol foundation (API v1).
  *
- * Purpose: give AURIX *authorised* access to the user's own machine (files, terminal,
- * local CLIs such as Codex, Grok Build, REA). A browser tab on Netlify cannot do this safely.
- *
- * Implemented today:   GET /v1/health  (authenticated, read-only, reveals nothing sensitive)
- * Designed, NOT built: filesystem.*, terminal.*, approvals — see CompanionCapability below.
+ * Implemented: authenticated loopback health, separate Codex profile/sign-in,
+ * sandbox verification, and bounded read-only Codex chat through Task Center approval.
+ * Not implemented: general filesystem, project-folder access, general terminal,
+ * coding-agent sessions, browser automation, or deployment operations.
  */
 export const COMPANION_API_VERSION = 1;
 
