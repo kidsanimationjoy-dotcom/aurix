@@ -1,4 +1,5 @@
 export interface CodexProfilePaths {
+  platform: NodeJS.Platform;
   appRoot: string;
   codexHome: string;
   configPath: string;
@@ -14,7 +15,7 @@ export interface CodexSandboxResult {
 export const AURIX_CODEX_PROFILE: string;
 export const AURIX_PROFILE_VERSION: number;
 export function resolveCodexPaths(env?: NodeJS.ProcessEnv, platform?: NodeJS.Platform, home?: string): CodexProfilePaths;
-export function renderCodexProfileConfig(workspaceRoot: string): string;
+export function renderCodexProfileConfig(workspaceRoot: string, platform?: NodeJS.Platform): string;
 export function hasLegacySandboxSetting(configText: string): boolean;
 export function systemCodexConfigPaths(env?: NodeJS.ProcessEnv, platform?: NodeJS.Platform): string[];
 export function prepareCodexHome(paths: CodexProfilePaths, options?: { mode?: number }): Promise<{ ok: true; profileName: string; codexHome: string; workspaceRoot: string; canaryRoot: string }>;

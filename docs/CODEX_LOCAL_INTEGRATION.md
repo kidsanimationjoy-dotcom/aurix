@@ -51,6 +51,8 @@ The canary accepts only explicit access-denial errors (permission denied / acces
 
 On Windows, status, sign-in and sandbox verification require a native Codex `.exe`. The companion does not build a dynamic command string or route Codex status, login or sandbox invocation through `cmd.exe`, `.cmd`, or `.bat` shims. If a native executable cannot be resolved, the corresponding operation is unavailable and AURIX fails closed.
 
+For the Windows sandbox backend, AURIX's managed profile opts into MXC (`features.prefer_mxc = true`) and selects `elevated` as the only legacy fallback. AURIX deliberately does not choose `unelevated`, because the current Codex Windows guide says that implementation cannot enforce denied-read paths. The elevated fallback may require an administrator-approved one-time setup. If MXC is unavailable and elevated setup is not usable or is blocked by managed policy, the canary must fail; AURIX does not downgrade the filesystem policy.
+
 The Codex CLI permission-profile feature is beta and may change between versions. A successful result applies only to the tested CLI and operating-system environment on that computer at that time.
 
 ## 4. What a successful result does—and does not—mean
