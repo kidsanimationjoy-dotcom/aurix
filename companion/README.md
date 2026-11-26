@@ -10,7 +10,7 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Runs the official local REA CLI's documented JavaScript/Electron application analyzer through authenticated `/v1/rea/*` endpoints, without API keys.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
-- Runs `codex exec --sandbox read-only --ephemeral --json` for AURIX chat only after the local OS sandbox canary passes during the current companion session.
+- Runs AURIX chat through the documented `codex sandbox` wrapper with the named `aurix-chat-readonly` profile and managed configuration; the profile, not a generic `--sandbox` override, supplies the read-only workspace and denied-root/network policy.
 - Runs project coding sessions through the documented Codex App Server JSONL protocol. Each selected project must be inside `AURIX_CODEX_ROOTS`; initial access is read-only and all additional command, file-change and filesystem permission requests are shown in Coding Studio for a one-time user decision.
 - Filesystem grants are reduced to explicit paths under the selected project and the current turn only. Command approvals show the exact command and working directory. Network permission requests are always refused. Timeouts automatically decline pending approval prompts.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
