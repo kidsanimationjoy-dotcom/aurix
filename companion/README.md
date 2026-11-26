@@ -10,6 +10,8 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
 - Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
+- Exposes a text-only, read-only chat task endpoint using the official `codex exec --json` CLI after a fresh successful canary and ChatGPT sign-in check. It accepts only a task ID and a bounded prompt; command arguments, project paths, files and tools are never supplied by the request.
+- Re-runs the OS sandbox canary before every chat dispatch, and accepts only Task Center-approved tasks. The same Codex CLI version must match the last successful verification.
 - The canary checks that the sandbox can read its own workspace file, cannot read an existing file outside that workspace, and cannot write either outside the workspace or into the read-only workspace.
 - It also attempts a connection to a temporary loopback-only listener on the companion host. Any accepted connection fails verification, so the canary checks that sandboxed commands cannot reach that local service without contacting an external host.
 - Returns only a structured verification result. Canary contents, random tokens, file contents, raw CLI output, and credentials are not returned to the browser.
@@ -17,15 +19,23 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - On Windows, Codex status, sign-in and sandbox verification require a native `.exe`; AURIX never launches a `.cmd` / `.bat` shell shim through a command shell.
 - The generated Windows profile explicitly prefers MXC and selects `elevated` as its legacy fallback. It does not select `unelevated`, because that mode cannot enforce the denied-read boundary this profile requires. The elevated fallback may require a one-time administrator-approved setup; when neither supported backend is available, verification fails closed.
 
+## Read-only chat only
+
+- Codex chat is available only through Task Center, after an explicit **Approve & run** action.
+- The provider is advertised for task routing only when its separate AURIX profile is signed in with ChatGPT and the latest sandbox canary passed for the same CLI version.
+- The companion repeats the OS canary before every actual chat dispatch.
+- Chat runs in an empty AURIX-owned workspace, uses a fixed read-only permission profile, disables command network, does not attach user project folders, and returns only the final assistant text.
+- Process output, prompt size, duration and concurrency are bounded. Cancellation attempts to stop the local process tree before the task settles.
+
 ## Still disabled
 
-- No AURIX chat/task execution endpoint.
-- No terminal or general filesystem endpoint.
-- No user project folder grants.
-- No task approval UI or execution/cancellation bridge.
-- Codex does not receive a project folder or broad write permission.
+- No Home chat dispatch to Codex.
+- No coding-agent or project-file access.
+- No user project folder grants or local file read/write endpoints.
+- No general terminal, browser, network or deployment endpoint.
+- No persistent Codex session/rollout history from AURIX chat.
 
-**Even when the sandbox canary passes, AURIX task execution stays disabled.** The canary is a security prerequisite, not the task executor. A later implementation must add narrow project approvals, visible task plans, cancellation, bounded output, and audit events before it may advertise a task capability.
+**The successful canary permits only this bounded read-only chat mode.** It does not authorize coding, project inspection, file changes, general command execution or deployment. A real sandbox canary must pass on the actual user's computer; fake-CLI tests in CI verify the API contract only and are not proof of OS isolation.
 
 ## Set up the companion
 
