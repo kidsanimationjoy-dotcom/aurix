@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { getCodexStatus, startCodexLogin } from '../companion/client';
-import type { CodexStatus } from '../companion/protocol';
+import { getCodexStatus, prepareCodexProfile, startCodexLogin } from '../companion/client';
+import type { CodexPrepareResult, CodexStatus } from '../companion/protocol';
 import { companionToken, useApp, useAudit, useSettings } from '../state/AppState';
 import { ConfirmButton, Field, ImplPill, Notice, PageHeader, Panel, StatusPill, download } from '../ui/kit';
 
@@ -57,6 +57,7 @@ function Companion() {
   const [busy, setBusy] = useState(false);
   const [codexBusy, setCodexBusy] = useState(false);
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [profileResult, setProfileResult] = useState<CodexPrepareResult | null>(null);
   const [codexMessage, setCodexMessage] = useState('');
   const localConfig = { url, token };
   const checkCodex = async () => {
@@ -72,7 +73,7 @@ function Companion() {
   };
   return (
     <>
-      <Notice>The companion runs on your own computer. It provides health checks and official Codex CLI status/sign-in only. It has no filesystem access and cannot run AURIX tasks yet. See <code>companion/README.md</code>.</Notice>
+      <Notice>The companion runs locally on your own computer. AURIX uses a separate Codex profile and checks its OS sandbox before any future task-execution work. It never reads or changes your normal Codex profile. Task execution is still disabled. See <code>companion/README.md</code>.</Notice>
       <Panel title="Connection" aside={<StatusPill state={companion.state === 'connected' ? 'connected' : companion.state === 'unauthorized' ? 'awaiting_authentication' : companion.state === 'unreachable' || companion.state === 'incompatible' ? 'error' : 'not_configured'} />}>
         <div className="grid g2">
           <Field label="Companion URL" hint="Loopback address printed by the companion, e.g. http://127.0.0.1:4317"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:4317" /></Field>
@@ -103,7 +104,34 @@ function Companion() {
       </Panel>
 
       <Panel title="OpenAI Codex CLI" aside={codexStatus && <span className="pill">{codexStatus.state.replace('_', ' ')}</span>}>
-        <p className="muted">AURIX checks the official CLI on this computer. Sign-in happens through Codex itself in the companion terminal; AURIX never reads the local credential store.</p>
+        <p className="muted">AURIX creates its own CODEX_HOME, separate from your normal Codex installation settings and sign-in. You may need to sign in again using the AURIX profile. AURIX never reads the credential store.</p>
+        {profileResult && (
+          <Notice tone={profileResult.sandboxVerified ? 'info' : 'warn'}>
+            {profileResult.message}
+            {' · Profile: ' + profileResult.profileName}
+            {' · Platform: ' + profileResult.platform}
+            {profileResult.version ? ' · Codex ' + profileResult.version : ''}
+            {profileResult.sandboxVerified ? ' · OS restrictions verified on this computer' : ' · Sandbox not verified; execution remains disabled'}
+          </Notice>
+        )}
+        <div className="row">
+          <button className="btn primary" disabled={codexBusy} onClick={async () => {
+            setCodexBusy(true);
+            setCodexMessage('');
+            try {
+              const result = await prepareCodexProfile(localConfig);
+              setProfileResult(result);
+              const status = await getCodexStatus(localConfig);
+              setCodexStatus(status);
+              await refreshStatuses();
+              await audit({ action: 'codex.profile.prepare', target: 'AURIX isolated profile', outcome: result.sandboxVerified ? 'success' : 'info', detail: result.code });
+            } catch (error) {
+              setCodexMessage(error instanceof Error ? error.message : 'Could not prepare the AURIX Codex profile.');
+            } finally {
+              setCodexBusy(false);
+            }
+          }}>{codexBusy ? 'Preparing and testing…' : 'Prepare AURIX profile & verify sandbox'}</button>
+        </div>
         {codexStatus && (
           <Notice tone={codexStatus.state === 'ready' ? 'info' : codexStatus.state === 'error' ? 'bad' : 'warn'}>
             {codexStatus.message}
@@ -114,9 +142,9 @@ function Companion() {
         {codexMessage && <Notice tone="info">{codexMessage}</Notice>}
         <div className="row">
           <button className="btn" disabled={codexBusy} onClick={() => void checkCodex()}>
-            {codexBusy ? 'Checking…' : 'Check Codex status'}
+            {codexBusy ? 'Checking…' : 'Check AURIX Codex status'}
           </button>
-          <button className="btn primary" disabled={codexBusy || !companionToken.get() || codexStatus?.installed === false || codexStatus?.signedIn === true} onClick={async () => {
+          <button className="btn primary" disabled={codexBusy || !companionToken.get() || codexStatus?.profilePrepared !== true || codexStatus?.installed === false || codexStatus?.signedIn === true} onClick={async () => {
             setCodexBusy(true);
             setCodexMessage('');
             try {
@@ -128,9 +156,9 @@ function Companion() {
             } finally {
               setCodexBusy(false);
             }
-          }}>Sign in with ChatGPT</button>
+          }}>Sign in to AURIX Codex with ChatGPT</button>
         </div>
-        <small>Sign-in is only a connection check. AURIX task execution remains disabled until restricted filesystem access is verified.</small>
+        <small>The sandbox verification is a local check on this computer, not a GitHub test. Even after a successful check, AURIX task execution remains disabled until the execution engine is implemented and separately tested.</small>
       </Panel>
     </>
   );

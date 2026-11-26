@@ -5,8 +5,16 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import {
+  checkLegacySystemConfig,
+  prepareCodexHome,
+  resolveCodexPaths,
+  runCodexSandboxCanary,
+  resolveNativeCodexCommand,
+  validateCodexHome,
+} from './codex-profile.mjs';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
@@ -25,44 +33,36 @@ function isLoopbackHost(value) {
   }
 }
 
-function safeEnvironment() {
+function safeEnvironment(codexHome) {
   const allowed = [
     'PATH', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
     'TMP', 'TEMP', 'TMPDIR', 'SystemRoot', 'WINDIR',
-    'APPDATA', 'LOCALAPPDATA', 'CODEX_HOME', 'PATHEXT', 'LANG', 'LC_ALL',
+    'APPDATA', 'LOCALAPPDATA', 'PATHEXT', 'LANG', 'LC_ALL',
   ];
   const env = {};
   for (const key of allowed) {
     if (typeof process.env[key] === 'string') env[key] = process.env[key];
   }
+  if (codexHome) env.CODEX_HOME = codexHome;
+  else delete env.CODEX_HOME;
+  delete env.OPENAI_API_KEY;
   return env;
 }
 
 function spawnCodex(command, args, options = {}) {
   const fixedArgs = args.every((arg) => ['--version', 'login', 'status'].includes(arg));
   if (!fixedArgs) throw new Error('Only fixed Codex status and login arguments are allowed by this companion stage.');
-
-  if (process.platform === 'win32') {
-    // Windows npm installations expose .cmd shims. Node documents that these
-    // require cmd.exe; only the fixed arguments above can reach this path.
-    const executable = String(command).includes(' ')
-      ? '"' + String(command).replace(/"/g, '') + '"'
-      : String(command);
-    const commandLine = [executable, ...args].join(' ');
-    return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', commandLine], options);
-  }
-
-  return spawn(command, args, options);
+  return spawn(command, args, { ...options, shell: false });
 }
 
-function runCaptured(command, args, { timeoutMs = 4000, prefixArgs = [] } = {}) {
+function runCaptured(command, args, { timeoutMs = 4000, prefixArgs = [], env = safeEnvironment() } = {}) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let settled = false;
     let timedOut = false;
     const child = spawnCodex(command, [...prefixArgs, ...args], {
-      env: safeEnvironment(),
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -87,8 +87,16 @@ function runCaptured(command, args, { timeoutMs = 4000, prefixArgs = [] } = {}) 
   });
 }
 
-export async function inspectCodex({ command = 'codex', prefixArgs = [] } = {}) {
-  const versionCheck = await runCaptured(command, ['--version'], { timeoutMs: 4000, prefixArgs });
+export async function inspectCodex({ command = 'codex', prefixArgs = [], codexHome } = {}) {
+  const env = safeEnvironment(codexHome);
+  let executable = command;
+  if (process.platform === 'win32') {
+    try { executable = await resolveNativeCodexCommand(command, env, process.platform); }
+    catch {
+      return { state: 'error', installed: false, signedIn: false, version: null, authMode: 'unknown', message: 'A native Codex .exe is required. AURIX will not launch a .cmd or .bat shim through a shell.' };
+    }
+  }
+  const versionCheck = await runCaptured(executable, ['--version'], { timeoutMs: 4000, prefixArgs, env });
   if (versionCheck.errorCode === 'ENOENT') {
     return { state: 'missing', installed: false, signedIn: false, version: null, authMode: 'unknown', message: 'Codex CLI was not found on PATH.' };
   }
@@ -98,7 +106,7 @@ export async function inspectCodex({ command = 'codex', prefixArgs = [] } = {}) 
 
   const versionText = `${versionCheck.stdout} ${versionCheck.stderr}`;
   const version = versionText.match(/\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?\b/)?.[0] ?? 'installed';
-  const loginCheck = await runCaptured(command, ['login', 'status'], { timeoutMs: 4000, prefixArgs });
+  const loginCheck = await runCaptured(executable, ['login', 'status'], { timeoutMs: 4000, prefixArgs, env });
   if (loginCheck.errorCode || loginCheck.timedOut) {
     return { state: 'error', installed: true, signedIn: false, version, authMode: 'unknown', message: 'Codex is installed, but its sign-in status could not be checked.' };
   }
@@ -112,8 +120,53 @@ export async function inspectCodex({ command = 'codex', prefixArgs = [] } = {}) 
     signedIn,
     version,
     authMode,
-    message: signedIn ? 'Codex CLI is signed in.' : 'Codex CLI is installed but not signed in.',
+    message: signedIn ? 'AURIX Codex profile is signed in.' : 'AURIX Codex profile is installed but not signed in.',
   };
+}
+
+
+async function prepareAndVerifyCodex({ command, paths }) {
+  try {
+    const prepared = await prepareCodexHome(paths);
+    const env = safeEnvironment(paths.codexHome);
+    const executable = process.platform === 'win32'
+      ? await resolveNativeCodexCommand(command, env, process.platform)
+      : command;
+    const version = await runCaptured(executable, ['--version'], { timeoutMs: 5000, env });
+    if (version.errorCode || version.timedOut || version.code !== 0) {
+      return {
+        profilePrepared: true, sandboxVerified: false, profileName: paths.profileName,
+        platform: process.platform, cliInstalled: false, version: null,
+        code: version.errorCode || (version.timedOut ? 'CODEX_VERSION_TIMEOUT' : 'CODEX_NOT_READY'),
+        message: 'The separate AURIX Codex profile was created, but Codex CLI could not be verified. Task execution remains disabled.',
+      };
+    }
+    const versionText = `${version.stdout} ${version.stderr}`;
+    const cliVersion = versionText.match(/\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?\b/)?.[0] ?? 'installed';
+    const managed = await checkLegacySystemConfig(paths, process.env, process.platform);
+    if (!managed.ok) {
+      return {
+        profilePrepared: true, sandboxVerified: false, profileName: paths.profileName,
+        platform: process.platform, cliInstalled: true, version: cliVersion,
+        code: managed.code, message: managed.message,
+      };
+    }
+    const sandbox = await runCodexSandboxCanary({
+      paths, command, env, platform: process.platform, timeoutMs: 20000,
+    });
+    return {
+      profilePrepared: true, sandboxVerified: sandbox.ok, profileName: paths.profileName,
+      platform: process.platform, cliInstalled: true, version: cliVersion,
+      code: sandbox.code, message: sandbox.message,
+    };
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'CODEX_PROFILE_PREPARE_FAILED';
+    return {
+      profilePrepared: false, sandboxVerified: false, profileName: paths.profileName,
+      platform: process.platform, cliInstalled: false, version: null,
+      code, message: 'AURIX could not safely create or validate its separate Codex profile. No Codex execution is enabled.',
+    };
+  }
 }
 
 async function readJson(req, limit = 4096) {
@@ -132,8 +185,9 @@ async function readJson(req, limit = 4096) {
   }
 }
 
-export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [] }) {
+export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null }) {
   let loginChild = null;
+  const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
 
   return http.createServer(async (req, res) => {
     const reqOrigin = req.headers.origin;
@@ -174,17 +228,38 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify'],
         grantedRoots: [],
       });
     }
 
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/prepare') {
+      await readJson(req);
+      return send(200, await prepareAndVerifyCodex({ command: codexCommand, paths }));
+    }
+
     if (req.method === 'GET' && url.pathname === '/v1/codex/status') {
-      return send(200, await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs }));
+      try {
+        await validateCodexHome(paths);
+      } catch {
+        return send(200, {
+          state: 'error', installed: false, signedIn: false, version: null, authMode: 'unknown',
+          profilePrepared: false, profileName: paths.profileName,
+          message: 'Prepare the separate AURIX Codex profile before checking its sign-in status.',
+        });
+      }
+      const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
+      return send(200, { ...status, profilePrepared: true, profileName: paths.profileName });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/login') {
-      const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs });
+      try {
+        await validateCodexHome(paths);
+      } catch {
+        return send(409, { error: 'CODEX_PROFILE_NOT_PREPARED', message: 'Prepare the separate AURIX Codex profile before signing in.' });
+      }
+      const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
       if (!status.installed) return send(409, { error: 'CODEX_NOT_INSTALLED', message: status.message });
       if (status.signedIn) return send(409, { error: 'ALREADY_SIGNED_IN', message: 'Codex CLI is already signed in.' });
       if (loginChild && loginChild.exitCode === null && !loginChild.killed) {
@@ -193,15 +268,18 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       try {
         // Deliberately inherit the companion terminal: official Codex handles browser OAuth itself.
         // AURIX does not capture the login output or read the CLI credential store.
-        const child = spawnCodex(codexCommand, [...codexPrefixArgs, 'login'], {
-          env: safeEnvironment(),
+        const loginExecutable = process.platform === 'win32'
+          ? await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform)
+          : codexCommand;
+        const child = spawnCodex(loginExecutable, [...codexPrefixArgs, 'login'], {
+          env: safeEnvironment(paths.codexHome),
           stdio: 'inherit',
           windowsHide: false,
         });
         loginChild = child;
         child.once('error', () => { if (loginChild === child) loginChild = null; });
         child.once('close', () => { if (loginChild === child) loginChild = null; });
-        return send(202, { started: true, message: 'Codex sign-in opened in the companion terminal. Complete the official browser sign-in there, then check status again.' });
+        return send(202, { started: true, message: 'AURIX Codex sign-in opened in the companion terminal using its separate profile. Complete the official browser sign-in there, then check status again.' });
       } catch {
         loginChild = null;
         return send(500, { error: 'CODEX_LOGIN_START_FAILED', message: 'Could not start the official Codex sign-in process.' });

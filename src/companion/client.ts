@@ -2,6 +2,7 @@ import {
   COMPANION_API_VERSION,
   type CompanionStatus,
   type CodexStatus,
+  type CodexPrepareResult,
   type HealthResponse,
   type LocalCompanionConfig,
 } from './protocol';
@@ -59,6 +60,37 @@ export async function probeCompanion(opts: ProbeOptions): Promise<CompanionStatu
   } catch (err) {
     const aborted = err instanceof Error && err.name === 'AbortError';
     return { state: 'unreachable', message: aborted ? 'Companion did not respond in time.' : 'Could not reach the companion. Is it running?' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function prepareCodexProfile(
+  config: LocalCompanionConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CodexPrepareResult> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Enter the local companion pairing token first.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetchImpl(base + '/v1/codex/prepare', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + config.token.trim(),
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+      signal: controller.signal,
+    });
+    const value = await response.json() as Partial<CodexPrepareResult>;
+    if (!response.ok || typeof value.profilePrepared !== 'boolean' || typeof value.sandboxVerified !== 'boolean') {
+      throw new Error(typeof value.message === 'string' ? value.message : 'Could not prepare the AURIX Codex profile.');
+    }
+    return value as CodexPrepareResult;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('The Codex sandbox verification timed out.');
+    throw error;
   } finally {
     clearTimeout(timer);
   }

@@ -1,47 +1,56 @@
 # AURIX local companion
 
-A browser tab cannot directly inspect the user's computer. The companion is a small program **the user runs locally** that AURIX contacts over loopback with a pairing token.
+A browser cannot directly run or safely inspect software on the user's computer. The AURIX companion is a small program the user runs locally. The browser contacts it through loopback using a per-run pairing token.
 
-## Implemented today
+## Current implementation
 
 - Binds to `127.0.0.1` only.
-- Uses a per-run bearer pairing token and validates both Origin and Host to reduce DNS-rebinding / cross-site request risks.
-- Implements authenticated `GET /v1/health`.
-- Implements authenticated `GET /v1/codex/status`, which checks `codex --version` and `codex login status`.
-- Implements authenticated `POST /v1/codex/login`, which starts the official `codex login` command in the companion terminal so the user completes Codex's own browser sign-in.
-- Does not read, copy, or export `~/.codex/auth.json`, environment credentials, cookies, or browser storage.
-- Uses an allowlisted environment for Codex subprocesses and does not pass `OPENAI_API_KEY` from the companion environment.
-- Supports Windows Codex command shims by invoking `cmd.exe` only for the fixed status/login argument set; no prompt or user-supplied command is sent through a shell.
+- Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
+- Implements authenticated health, Codex status, and official Codex sign-in handoff.
+- Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
+- Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
+- Runs a local Codex sandbox canary using Codex's documented `codex sandbox` command and includes managed configuration.
+- The canary checks that the sandbox can read its own workspace file, cannot read an existing file outside that workspace, and cannot write either outside the workspace or into the read-only workspace.
+- Returns only a structured verification result. Canary contents, random tokens, file contents, raw CLI output, and credentials are not returned to the browser.
+- Uses the dedicated `CODEX_HOME` for AURIX Codex status and sign-in. It removes `OPENAI_API_KEY` from the subprocess environment.
+- On Windows, Codex status, sign-in and sandbox verification require a native `.exe`; AURIX never launches a `.cmd` / `.bat` shell shim through a command shell.
 
-## Not implemented
+## Still disabled
 
-- No filesystem read/write endpoint.
-- No terminal endpoint.
-- No AURIX Codex task execution endpoint.
-- No project folder has been granted.
-- No Codex logout action (it could affect the user's other Codex clients).
+- No AURIX chat/task execution endpoint.
+- No terminal or general filesystem endpoint.
+- No user project folder grants.
+- No task approval UI or execution/cancellation bridge.
+- Codex does not receive a project folder or broad write permission.
 
-Codex being installed and signed in means only that the official CLI status check succeeded. It does **not** mean AURIX can run chat or coding tasks yet. Execution remains disabled until AURIX can guarantee and verify the narrowly scoped permission profile. Ordinary Codex read-only mode can still read broadly from the machine, so AURIX must not treat it as an isolated chat sandbox.
+**Even when the sandbox canary passes, AURIX task execution stays disabled.** The canary is a security prerequisite, not the task executor. A later implementation must add narrow project approvals, visible task plans, cancellation, bounded output, and audit events before it may advertise a task capability.
 
-## Run the companion
+## Set up the companion
 
-```bash
-npm run companion
-# On a hosted AURIX origin:
-# AURIX_ORIGIN=https://your-site.example AURIX_COMPANION_PORT=4317 npm run companion
-```
+1. Run `npm install` and then `npm run companion` on the computer that has the Codex CLI installed.
+2. Copy the local URL and pairing token printed in the companion terminal into **Settings → Local companion**.
+3. Select **Prepare AURIX profile & verify sandbox**. This creates the separate profile and invokes the real local Codex sandbox. AURIX reports failure when the CLI, platform helper, permission profile, or managed settings cannot be verified.
+4. After profile creation, select **Sign in to AURIX Codex with ChatGPT**. This sign-in is separate from the user's normal Codex profile.
+5. Check status again.
 
-Copy the printed local URL and pairing token into **Settings → Local companion**. The token is kept in browser `sessionStorage` only. Use the companion terminal to complete the official Codex sign-in after pressing **Sign in with ChatGPT** in AURIX.
+For a hosted AURIX origin, set `AURIX_ORIGIN=https://your-site.example` and `AURIX_COMPANION_PORT=4317` before running the companion. The companion still binds to loopback.
+
+## Profile locations
+
+- Windows: `%LOCALAPPDATA%\\AURIX\\Codex`
+- macOS: `~/Library/Application Support/AURIX/Codex`
+- Linux: `$XDG_DATA_HOME/aurix/codex` or `~/.local/share/aurix/codex`
+
+The sandbox canary directory is a sibling of the Codex home, not a child of it. The managed config is created exclusively and later checked byte-for-byte. A changed config, redirected/symlinked directory, conflicting managed setting, or unverifiable sandbox causes a fail-closed result.
 
 ## Security boundaries
 
-- The web client only accepts HTTP loopback companion addresses (localhost, 127.0.0.1, or ::1).
-- The server rejects non-loopback Host headers and foreign Origins.
-- Pairing-token comparison is timing-safe.
-- Codex login output is inherited by the local terminal; it is not captured by the HTTP API.
-- The CLI handles its own credentials. AURIX never inspects its credential cache.
-- Codex task execution is explicitly disabled until a restricted filesystem permission profile is enforced and verified on each supported platform.
+- The companion does not read `~/.codex/auth.json`, browser cookies, browser storage, API keys, or local credential caches.
+- The official Codex CLI handles the separate AURIX sign-in.
+- The sandbox canary uses an argument array and `shell: false`. On Windows, it requires a native Codex executable for this step.
+- The sandbox command includes managed configuration and does not use any sandbox-bypass flag.
+- Codex custom permission profiles are a changing/beta feature. The local verification must be rerun on the computer where AURIX will be used.
+- CI fake-CLI tests verify the API contract and fail-closed behaviour; they are not evidence that a real OS sandbox worked.
+- A successful local canary does not enable AURIX task execution, nor does it prove the isolation of future code paths.
 
-Windows command-launch behaviour follows the Node.js child-process guidance for `.cmd` / `.bat` files: https://nodejs.org/api/child_process.html
-
-See `src/companion/protocol.ts` and `docs/CODEX_LOCAL_INTEGRATION.md` for the current API and roadmap.
+See [docs/CODEX_LOCAL_INTEGRATION.md](../docs/CODEX_LOCAL_INTEGRATION.md) for the integration contract.
