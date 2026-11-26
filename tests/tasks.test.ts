@@ -115,3 +115,45 @@ test('interrupted tasks are marked failed after a reload rather than shown as st
   assert.equal(db.get('tasks', record.id)?.status, 'failed');
   assert.equal(db.get('tasks', record.id)?.errorCode, 'INTERRUPTED_AFTER_RELOAD');
 });
+
+
+test('retry re-checks provider availability for the same saved task', async () => {
+  const db = await freshDb();
+  let connected = false;
+  const dynamic: ProviderAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => ({
+      state: connected ? 'connected' : 'not_configured',
+      implementation: connected ? 'implemented_tested' : 'interface_only',
+      summary: connected ? 'Connected in test' : 'Not connected',
+      checkedAt: Date.now(),
+    }),
+  };
+  const engine = new TaskEngine(db, [dynamic]);
+  const first = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(first.status, 'waiting_for_provider');
+  assert.equal(first.selectedProviderId, null);
+
+  connected = true;
+  const retried = await engine.retry(first.id);
+  assert.ok(retried);
+  assert.equal(retried.id, first.id);
+  assert.equal(retried.selectedProviderId, 'claude');
+  assert.equal(retried.status, 'waiting_for_provider');
+  assert.equal(retried.errorCode, 'EXECUTOR_NOT_IMPLEMENTED');
+  assert.ok(db.snapshot('taskEvents').some((event) => event.type === 'task.retried'));
+  assert.ok(db.snapshot('taskEvents').some((event) => event.type === 'provider.checked'));
+});
+
+test('retry does not restart a task that is already running or completed', async () => {
+  const db = await freshDb();
+  const task = await db.create('tasks', {
+    projectId: null, prompt: 'done', intent: 'chat', intentReason: 'test',
+    preferredProvider: 'auto', selectedProviderId: null, status: 'succeeded',
+    plan: [], progress: 100, output: 'done', errorCode: '', errorMessage: '',
+    timeoutMs: 10_000, startedAt: Date.now(), finishedAt: Date.now(),
+  });
+  const engine = new TaskEngine(db, []);
+  assert.equal(await engine.retry(task.id), null);
+  assert.equal(db.get('tasks', task.id)?.status, 'succeeded');
+});
