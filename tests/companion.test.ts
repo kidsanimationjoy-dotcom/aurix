@@ -42,11 +42,20 @@ async function makeFakeCodex(script: string): Promise<{ directory: string; comma
 
 test('AURIX Codex paths keep the canary outside CODEX_HOME and the workspace inside it', () => {
   const paths = resolveCodexPaths({ HOME: '/home/tester', XDG_DATA_HOME: '/home/tester/.local/share' }, 'linux', '/home/tester');
+  assert.equal(paths.platform, 'linux');
   assert.equal(paths.codexHome, '/home/tester/.local/share/aurix/Codex');
   assert.equal(paths.workspaceRoot, path.join(paths.codexHome, 'workspaces', 'chat'));
   assert.equal(paths.canaryRoot, '/home/tester/.local/share/aurix/SandboxCanary');
   assert.equal(paths.canaryRoot.startsWith(paths.codexHome + path.sep), false);
-  assert.match(renderCodexProfileConfig(paths.workspaceRoot), /default_permissions = "aurix-chat-readonly"/);
+  assert.match(renderCodexProfileConfig(paths.workspaceRoot, 'linux'), /default_permissions = "aurix-chat-readonly"/);
+});
+
+test('Windows profile prefers MXC and uses elevated rather than the weaker unelevated fallback', () => {
+  const config = renderCodexProfileConfig('/tmp/aurix-windows-workspace', 'win32');
+  assert.match(config, /\\[features\\]\\nprefer_mxc = true/);
+  assert.match(config, /\\[windows\\]\\nsandbox = "elevated"/);
+  assert.doesNotMatch(config, /sandbox = "unelevated"/);
+  assert.match(config, /enabled = false/);
 });
 
 test('AURIX creates and validates an immutable dedicated Codex profile', async () => {
@@ -70,6 +79,45 @@ test('AURIX refuses a modified profile config and never overwrites it', async ()
     await assert.rejects(() => prepareCodexHome(profile.paths), /changed outside AURIX/);
   } finally {
     await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('AURIX upgrades only its exact v2 config to the platform-aware v3 profile', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-codex-v2-upgrade-'));
+  const paths = resolveCodexPaths({ HOME: root, XDG_DATA_HOME: path.join(root, 'data') }, 'win32', root);
+  const legacy = [
+    'default_permissions = "aurix-chat-readonly"',
+    '',
+    '[permissions.aurix-chat-readonly]',
+    'description = "AURIX isolated read-only chat profile"',
+    'extends = ":read-only"',
+    '',
+    '[permissions.aurix-chat-readonly.workspace_roots]',
+    JSON.stringify(paths.workspaceRoot) + ' = true',
+    '',
+    '[permissions.aurix-chat-readonly.filesystem]',
+    '":root" = "deny"',
+    '":minimal" = "read"',
+    '":tmpdir" = "deny"',
+    '":slash_tmp" = "deny"',
+    '',
+    '[permissions.aurix-chat-readonly.filesystem.":workspace_roots"]',
+    '"." = "read"',
+    '',
+    '[permissions.aurix-chat-readonly.network]',
+    'enabled = false',
+    '',
+  ].join('\\n');
+  try {
+    await prepareCodexHome(paths);
+    await writeFile(paths.configPath, legacy);
+    await prepareCodexHome(paths);
+    await validateCodexHome(paths);
+    const upgraded = await readFile(paths.configPath, 'utf8');
+    assert.match(upgraded, /prefer_mxc = true/);
+    assert.match(upgraded, /sandbox = "elevated"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 
