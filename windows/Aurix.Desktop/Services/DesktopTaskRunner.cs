@@ -9,9 +9,11 @@ public static class DesktopTaskRunner
     public static DesktopTaskResult Execute(
         DesktopTaskPlan plan,
         CancellationToken cancellationToken,
-        Action<string>? progress = null)
+        Action<string>? progress = null,
+        Func<string, bool>? requestApproval = null)
     {
         var output = new List<string>();
+        var hasFailure = false;
 
         foreach (var step in plan.Steps)
         {
@@ -20,39 +22,79 @@ public static class DesktopTaskRunner
 
             try
             {
-                if (step.Kind == DesktopTaskStepKind.InspectWindows)
+                switch (step.Kind)
                 {
-                    progress?.Invoke("Inspecting visible windows…");
-                    var windows = DesktopWindowInspector.GetVisibleWindows();
+                    case DesktopTaskStepKind.InspectWindows:
+                        progress?.Invoke("Inspecting visible windows…");
+                        var windows = DesktopWindowInspector.GetVisibleWindows();
+                        if (windows.Count == 0)
+                            output.Add("No visible application windows were found.");
+                        else
+                        {
+                            output.Add("Visible open windows:");
+                            output.AddRange(windows.Select((window, index) =>
+                                $"{index + 1}. {window.Title} — {window.ProcessName}"));
+                        }
+                        break;
 
-                    if (windows.Count == 0)
-                        output.Add("No visible application windows were found.");
-                    else
-                    {
-                        output.Add("Visible open windows:");
-                        output.AddRange(windows.Select((window, index) =>
-                            $"{index + 1}. {window.Title}  —  {window.ProcessName}"));
-                    }
-                }
-                else if (step.Kind == DesktopTaskStepKind.LaunchApplication)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (string.IsNullOrWhiteSpace(step.Executable))
-                    {
-                        output.Add($"Skipped {step.Description}: no executable was configured.");
-                        continue;
-                    }
+                    case DesktopTaskStepKind.InspectControls:
+                        progress?.Invoke(step.Description + "…");
+                        var inspection = DesktopInteractionService.InspectControls(
+                            step.TargetApp ?? string.Empty, cancellationToken);
+                        output.Add(inspection.Message);
+                        hasFailure |= !inspection.Success;
+                        break;
 
-                    progress?.Invoke(step.Description + "…");
-                    var process = Process.Start(new ProcessStartInfo
-                    {
-                        FileName = step.Executable,
-                        UseShellExecute = true
-                    });
+                    case DesktopTaskStepKind.ClickButton:
+                        progress?.Invoke("Locating the requested button…");
+                        var click = DesktopInteractionService.ClickButton(
+                            step.TargetApp ?? string.Empty,
+                            step.TargetName ?? string.Empty,
+                            requestApproval,
+                            cancellationToken);
+                        output.Add(click.Message);
+                        hasFailure |= !click.Success;
+                        break;
 
-                    output.Add(process is null
-                        ? $"{step.Description}: Windows did not return a process handle."
-                        : $"{step.Description}: launch request sent to Windows.");
+                    case DesktopTaskStepKind.TypeText:
+                        progress?.Invoke("Locating the requested text field…");
+                        var type = DesktopInteractionService.TypeText(
+                            step.TargetApp ?? string.Empty,
+                            step.TargetName ?? string.Empty,
+                            step.InputText ?? string.Empty,
+                            requestApproval,
+                            cancellationToken);
+                        output.Add(type.Message);
+                        hasFailure |= !type.Success;
+                        break;
+
+                    case DesktopTaskStepKind.LaunchApplication:
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (string.IsNullOrWhiteSpace(step.Executable))
+                        {
+                            output.Add($"Skipped {step.Description}: no executable was configured.");
+                            hasFailure = true;
+                            continue;
+                        }
+
+                        progress?.Invoke(step.Description + "…");
+                        var process = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = step.Executable,
+                            UseShellExecute = true
+                        });
+
+                        if (process is null)
+                        {
+                            output.Add($"{step.Description}: Windows did not return a process handle.");
+                            hasFailure = true;
+                        }
+                        else
+                        {
+                            output.Add($"{step.Description}: launch request sent to Windows.");
+                            process.Dispose();
+                        }
+                        break;
                 }
             }
             catch (OperationCanceledException)
@@ -62,13 +104,11 @@ public static class DesktopTaskRunner
             catch (Exception ex)
             {
                 output.Add($"{step.Description}: failed — {ex.Message}");
+                hasFailure = true;
             }
         }
 
-        return new DesktopTaskResult(
-            output.Count > 0 && output.All(line => !line.Contains("failed", StringComparison.OrdinalIgnoreCase)),
-            false,
-            Join(output, "Task finished."));
+        return new DesktopTaskResult(!hasFailure, false, Join(output, "Task finished."));
     }
 
     private static string Join(IEnumerable<string> lines, string fallback)
