@@ -18,7 +18,7 @@ export interface Considered {
   why: string;
 }
 export type RouteDecision =
-  | { ok: true; providerId: ProviderId; mode: 'selected' | 'auto'; reason: string }
+  | { ok: true; providerId: ProviderId; mode: 'selected' | 'auto'; reason: string; considered: Considered[] }
   | { ok: false; reason: string; considered: Considered[] };
 
 /**
@@ -53,7 +53,7 @@ export async function routeTask(
   const preferred = task.preferred ?? 'auto';
   if (preferred !== 'auto') {
     const hit = usable.find((a) => a.meta.id === preferred);
-    if (hit) return { ok: true, providerId: hit.meta.id, mode: 'selected', reason: `${hit.meta.name} selected by you` };
+    if (hit) return { ok: true, providerId: hit.meta.id, mode: 'selected', reason: `${hit.meta.name} selected by you`, considered };
     const c = considered.find((x) => x.providerId === preferred);
     return {
       ok: false,
@@ -62,6 +62,6 @@ export async function routeTask(
     };
   }
   const first = usable[0];
-  if (first) return { ok: true, providerId: first.meta.id, mode: 'auto', reason: `${first.meta.name} is the first connected provider with ${need}` };
+  if (first) return { ok: true, providerId: first.meta.id, mode: 'auto', reason: `${first.meta.name} is the first connected provider with ${need}`, considered };
   return { ok: false, reason: 'No connected provider can take this task.', considered };
 }
