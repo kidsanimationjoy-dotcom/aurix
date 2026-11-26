@@ -120,7 +120,7 @@ jobs:
           {
             echo "## Source promotion branch created"
             echo
-            echo "Branch: `$BRANCH`"
+            echo "Branch: $BRANCH"
             echo
             echo "The uploaded archive was extracted with path, symlink, and credential-file checks. Existing repository files were preserved. Review this branch before merging."
           } >> "$GITHUB_STEP_SUMMARY"
