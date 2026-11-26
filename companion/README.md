@@ -17,6 +17,10 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - On Windows, Codex status, sign-in and sandbox verification require a native `.exe`; AURIX never launches a `.cmd` / `.bat` shell shim through a command shell.
 - The generated Windows profile explicitly prefers MXC and selects `elevated` as its legacy fallback. It does not select `unelevated`, because that mode cannot enforce the denied-read boundary this profile requires. The elevated fallback may require a one-time administrator-approved setup; when neither supported backend is available, verification fails closed.
 
+## Request validation
+
+The profile-preparation endpoint accepts only a small JSON request body. Malformed JSON receives a `400` response and oversized bodies receive `413`; both responses are sanitized and do not terminate the companion process. Regression tests verify that the health endpoint remains available after either rejected request.
+
 ## Still disabled
 
 - No AURIX chat/task execution endpoint.
