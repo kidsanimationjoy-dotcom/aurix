@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'aurix-phase-0-1-reviewed.zip'
+      - 'aurix-phase-0-1.zip'
       - 'src/**'
       - 'tests/**'
       - 'companion/**'
@@ -53,18 +54,21 @@ jobs:
         id: source
         shell: bash
         run: |
-          if [ ! -f package.json ] && [ -f aurix-phase-0-1-reviewed.zip ]; then
-            echo "Found reviewed ZIP; extracting application source."
-            unzip -q aurix-phase-0-1-reviewed.zip
-            if [ -f aurix/package.json ]; then
-              cp -a aurix/. .
+          if [ ! -f package.json ]; then
+            ARCHIVE=""
+            if [ -f aurix-phase-0-1-reviewed.zip ]; then ARCHIVE="aurix-phase-0-1-reviewed.zip"; fi
+            if [ -z "$ARCHIVE" ] && [ -f aurix-phase-0-1.zip ]; then ARCHIVE="aurix-phase-0-1.zip"; fi
+            if [ -n "$ARCHIVE" ]; then
+              echo "Found $ARCHIVE; extracting application source."
+              unzip -q "$ARCHIVE"
+              if [ -f aurix/package.json ]; then cp -a aurix/. .; fi
             fi
           fi
           if [ -f package.json ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CI is configured. Upload aurix-phase-0-1-reviewed.zip to the repository root to enable the full build and test suite."
+            echo "::notice::CI is configured. Upload aurix-phase-0-1-reviewed.zip or aurix-phase-0-1.zip to the repository root to enable the full build and test suite."
           fi
 
       - name: Install dependencies
