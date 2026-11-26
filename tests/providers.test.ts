@@ -83,3 +83,28 @@ test('router surfaces provider health-check errors without crashing or silently 
     assert.ok(d.considered.some((item) => item.providerId === 'claude' && item.state === 'error'));
   }
 });
+
+
+test('runtime capability discovery can keep a connected provider out of unsupported routes', async () => {
+  const limited: ProviderAdapter = {
+    meta: { ...claudeMeta, plannedCapabilities: ['chat', 'coding_agent'] },
+    getStatus: async () => ({ state: 'connected', implementation: 'implemented_untested', summary: 'CLI sign-in confirmed', checkedAt: Date.now() }),
+    getCapabilities: async () => ['chat'],
+  };
+  const chat = await routeTask([limited], { kind: 'chat', preferred: 'auto' });
+  assert.equal(chat.ok, true);
+  const coding = await routeTask([limited], { kind: 'coding', preferred: 'auto' });
+  assert.equal(coding.ok, false);
+  assert.ok(coding.considered.some((item) => item.state === 'incapable' && /not enabled/.test(item.why)));
+});
+
+test('runtime capability discovery errors fail closed', async () => {
+  const limited: ProviderAdapter = {
+    meta: { ...claudeMeta, plannedCapabilities: ['chat'] },
+    getStatus: async () => ({ state: 'connected', implementation: 'implemented_untested', summary: 'Connected', checkedAt: Date.now() }),
+    getCapabilities: async () => { throw new Error('capabilities unavailable'); },
+  };
+  const decision = await routeTask([limited], { kind: 'chat', preferred: 'auto' });
+  assert.equal(decision.ok, false);
+  assert.ok(decision.considered.some((item) => item.state === 'error'));
+});
