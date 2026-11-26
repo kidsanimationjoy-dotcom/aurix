@@ -7,6 +7,7 @@ on:
     paths:
       - 'package.json'
       - 'package-lock.json'
+      - 'aurix-phase-0-1-reviewed.zip'
       - 'src/**'
       - 'tests/**'
       - 'companion/**'
@@ -52,11 +53,18 @@ jobs:
         id: source
         shell: bash
         run: |
+          if [ ! -f package.json ] && [ -f aurix-phase-0-1-reviewed.zip ]; then
+            echo "Found reviewed ZIP; extracting application source."
+            unzip -q aurix-phase-0-1-reviewed.zip
+            if [ -f aurix/package.json ]; then
+              cp -a aurix/. .
+            fi
+          fi
           if [ -f package.json ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CI is configured, but this repository currently contains the AURIX blueprint only. The reviewed application ZIP has not yet been added to the repository, so build and test steps are being skipped."
+            echo "::notice::CI is configured. Upload aurix-phase-0-1-reviewed.zip to the repository root to enable the full build and test suite."
           fi
 
       - name: Install dependencies
