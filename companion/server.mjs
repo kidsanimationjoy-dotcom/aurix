@@ -5,6 +5,8 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { analyzeReaTarget, reaStatus } from './rea.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -14,7 +16,7 @@ import {
   validateCodexHome,
 } from './codex-profile.mjs';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
@@ -185,7 +187,7 @@ async function readJson(req, limit = 4096) {
   }
 }
 
-export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null }) {
+export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [] }) {
   let loginChild = null;
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
 
@@ -228,7 +230,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'rea.status', 'rea.javascript.analyze'],
         grantedRoots: [],
       });
     }
@@ -297,6 +299,28 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       }
     }
 
+    if (req.method === 'GET' && url.pathname === '/v1/rea/status') {
+      const status = await reaStatus({ command: reaCommand });
+      return send(200, { ...status, approvedRootCount: reaRoots.length });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/rea/analyze') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, {
+          error: 'INVALID_REQUEST',
+          message: status === 413 ? 'REA request is too large.' : 'REA request must contain valid JSON.',
+        });
+      }
+      try {
+        const result = await analyzeReaTarget({ target: body.target, roots: reaRoots, command: reaCommand });
+        return send(200, { ok: true, result });
+      } catch (error) {
+        return send(400, { ok: false, error: 'REA_ANALYSIS_FAILED', message: error instanceof Error ? error.message.slice(0, 1200) : 'REA analysis failed.' });
+      }
+    }
     if (req.method === 'GET' && url.pathname === '/v1/codex/exec') {
       return send(405, { error: 'METHOD_NOT_ALLOWED' });
     }
@@ -309,10 +333,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const token = process.env.AURIX_COMPANION_TOKEN || randomBytes(24).toString('base64url');
   const origin = process.env.AURIX_ORIGIN || 'http://localhost:5173';
   const port = Number(process.env.AURIX_COMPANION_PORT || 4317);
-  createCompanionServer({ token, origin }).listen(port, '127.0.0.1', () => {
+  const reaRoots = (process.env.AURIX_REA_ROOTS || '').split(path.delimiter).filter(Boolean);
+  createCompanionServer({ token, origin, reaRoots }).listen(port, '127.0.0.1', () => {
     console.log(`AURIX companion ${VERSION} listening on http://127.0.0.1:${port}`);
     console.log(`Allowed origin: ${origin}`);
     console.log(`Pairing token:  ${token}`);
-    console.log('Capabilities: health and official Codex CLI status/login only; no filesystem/task execution access.');
+    console.log('Capabilities: health, Codex sign-in/status, and REA analysis of explicitly approved target folders.');
+    console.log('REA approved roots: ' + reaRoots.length);
   });
 }
