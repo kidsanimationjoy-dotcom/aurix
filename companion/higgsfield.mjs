@@ -291,7 +291,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       if (!catalog.models.some((model) => model.id === normalized.modelId && (model.kinds.length === 0 || model.kinds.some((kind) => new RegExp(normalized.kind, 'iu').test(String(kind)))))) {
         throw new Error('The requested model is not present in the live Higgsfield ' + normalized.kind + '-model catalog.');
       }
-      const args = makeArgs('cost', normalized);
+      const args = makeArgs('cost', { modelId: normalized.modelId, prompt: normalized.prompt, ...normalized.settings });
       const raw = parseJson(await cli(args, 60_000), 'generation cost estimate');
       const pricing = stablePricing(raw);
       if (!Object.keys(pricing).length) throw new Error('Higgsfield returned no recognised numeric credit estimate. AURIX will not submit a generation without a verifiable cost field.');
