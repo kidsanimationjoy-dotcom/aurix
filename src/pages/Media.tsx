@@ -36,6 +36,7 @@ export function Media() {
   const [loginMessage, setLoginMessage] = useState('');
   const [modelId, setModelId] = useState('seedance_2_0');
   const [duration, setDuration] = useState(5);
+  const [mode, setMode] = useState<'std' | 'fast'>('std');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p' | '4k'>('720p');
   const [aspectRatio, setAspectRatio] = useState<'auto' | '16:9' | '9:16' | '4:3' | '3:4' | '1:1' | '21:9'>('16:9');
   const [quote, setQuote] = useState<HiggsfieldQuote | null>(null);
@@ -121,7 +122,7 @@ export function Media() {
       modelId,
       kind: 'video',
       prompt: prompt.trim(),
-      settings: { duration, resolution, aspectRatio },
+      settings: { duration, resolution, aspectRatio, mode },
     });
     if (result.ok) {
       setQuote(result.value);
@@ -199,7 +200,8 @@ export function Media() {
               <Field label="Describe the video"><textarea value={prompt} onChange={(e) => { setPrompt(e.target.value); setQuote(null); setConfirmed(false); }} placeholder="Describe subject, movement, camera and visual style." rows={6} /></Field>
               <div className="grid g2">
                 <Field label="Duration"><select value={duration} onChange={(e) => { setDuration(Number(e.target.value)); setQuote(null); setConfirmed(false); }}><option value={5}>5 seconds</option><option value={10}>10 seconds</option></select></Field>
-                <Field label="Resolution"><select value={resolution} onChange={(e) => { setResolution(e.target.value as '480p' | '720p' | '1080p' | '4k'); setQuote(null); setConfirmed(false); }}><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4k">4K</option></select></Field>
+                <Field label="Resolution"><select value={resolution} onChange={(e) => { const next = e.target.value as '480p' | '720p' | '1080p' | '4k'; setResolution(next); if (mode === 'fast' && !['480p', '720p'].includes(next)) setMode('std'); setQuote(null); setConfirmed(false); }}><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4k">4K</option></select></Field>
+                <Field label="Mode"><select value={mode} onChange={(e) => { setMode(e.target.value as 'std' | 'fast'); setQuote(null); setConfirmed(false); }}><option value="std">Standard</option><option value="fast" disabled={!['480p', '720p'].includes(resolution)}>Fast (480p / 720p)</option></select></Field>
                 <Field label="Aspect ratio"><select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value as 'auto' | '16:9' | '9:16' | '4:3' | '3:4' | '1:1' | '21:9'); setQuote(null); setConfirmed(false); }}><option value="auto">Auto</option><option value="16:9">16:9 landscape</option><option value="9:16">9:16 vertical</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="1:1">1:1 square</option><option value="21:9">21:9 ultrawide</option></select></Field>
               </div>
               <div className="row">
@@ -216,7 +218,7 @@ export function Media() {
                 <div className="stack">
                   <Notice tone="warn">Review this estimate before generating. It expires in approximately {quoteExpiry} seconds. The companion checks the price again when you confirm.</Notice>
                   <p><b>Model:</b> {quote.modelId}</p>
-                  <p><b>Settings:</b> {quote.settings.duration}s · {quote.settings.resolution} · {quote.settings.aspectRatio}</p>
+                  <p><b>Settings:</b> {quote.settings.duration}s · {quote.settings.resolution} · {quote.settings.aspectRatio} · {quote.settings.mode}</p>
                   <h3>Credit estimate returned by Higgsfield</h3>
                   {Object.entries(quote.pricing).map(([key, value]) => <p key={key}><b>{key}:</b> {String(value)}</p>)}
                   <pre className="code-block">{JSON.stringify(quote.raw, null, 2)}</pre>
