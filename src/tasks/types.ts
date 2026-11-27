@@ -9,6 +9,7 @@ export type TaskStatus =
   | 'needs_clarification'
   | 'waiting_for_provider'
   | 'awaiting_approval'
+  | 'awaiting_action_approval'
   | 'running'
   | 'cancelling'
   | 'succeeded'
@@ -25,6 +26,21 @@ export interface TaskPlanStep {
 
 export type TaskApprovalStatus = 'not_required' | 'pending' | 'approved' | 'declined';
 
+
+export type TaskActionApprovalKind = 'command' | 'file_change' | 'filesystem' | 'network';
+export type TaskActionApprovalDecision = 'accept' | 'decline' | 'cancel';
+export interface TaskActionApproval {
+  id: string;
+  kind: TaskActionApprovalKind;
+  reason: string;
+  command: string[];
+  cwd: string;
+  changes: { path: string; kind: string; diff: string }[];
+  requestedPermissions?: unknown;
+  grantRoot?: string;
+  commandActions?: unknown[];
+}
+
 export interface TaskRecord {
   id: string;
   createdAt: number;
@@ -39,6 +55,8 @@ export interface TaskRecord {
   /** Optional for records created by earlier AURIX versions. */
   approvalStatus?: TaskApprovalStatus;
   approvedAt?: number | null;
+  /** A pending, one-time local Codex action approval; never restored after a reload. */
+  pendingActionApproval?: TaskActionApproval | null;
   plan: TaskPlanStep[];
   progress: number;
   output: string;
@@ -61,6 +79,9 @@ export type TaskEventType =
   | 'task.approval.requested'
   | 'task.approval.granted'
   | 'task.approval.denied'
+  | 'task.action_approval.requested'
+  | 'task.action_approval.granted'
+  | 'task.action_approval.denied'
   | 'task.started'
   | 'task.progress'
   | 'task.output.delta'
@@ -101,6 +122,7 @@ export interface TaskExecutionContext {
   signal: AbortSignal;
   emitProgress: (message: string, progress?: number) => Promise<void>;
   emitOutput: (delta: string) => Promise<void>;
+  requestApproval: (request: Omit<TaskActionApproval, 'id'>) => Promise<TaskActionApprovalDecision>;
 }
 
 export interface TaskExecutionResult {
