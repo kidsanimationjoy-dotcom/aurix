@@ -77,6 +77,7 @@ export interface CodexStatus {
   profilePrepared?: boolean;
   sandboxVerified?: boolean;
   profileName?: string;
+  codexApprovedRootCount?: number;
 }
 
 export interface CodexPrepareResult {
