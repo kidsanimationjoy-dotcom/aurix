@@ -107,6 +107,8 @@ export class HiggsfieldAdapter implements MediaAdapter {
   }
 
   async listModels(): Promise<Result<MediaModel[]>> {
+    const config = this.getConfig();
+    if (!config.url || !config.token) return { ok: false, error: { code: 'NOT_CONNECTED', message: 'Pair the local AURIX companion first.' } };
     try {
       const status = await getHiggsfieldStatus(this.getConfig());
       if (!status.signedIn) return { ok: false, error: { code: 'NOT_CONNECTED', message: status.message } };
