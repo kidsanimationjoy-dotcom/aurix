@@ -86,10 +86,7 @@ public static class AiDesktopCommandParser
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
-        var label = Regex.Escape(button.Trim());
-        var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}\b" + label + @"\b";
-        return Regex.IsMatch(userPrompt, pattern,
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return ContainsExactTargetLabel(button, userPrompt, @"(?:button|in|on|within|at)");
     }
 
 
