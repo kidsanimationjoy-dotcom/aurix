@@ -86,8 +86,11 @@ Coordinate-based input is a fallback only. Do not bypass Windows secure desktop,
 
 ## Hybrid reasoning
 
-- Local layer: deterministic command parsing, device state, simple tasks and policy checks.
-- Cloud layer: complex reasoning, planning and review through providers the user has connected.
+- Local layer: deterministic command parsing, device state, bounded desktop actions and policy checks.
+- Optional reasoning layer: the paired local Codex CLI can answer voice questions or return a structured proposal for the bounded desktop action schema.
+- AURIX rejects unknown action types, fields, applications and malformed proposals. Only the existing allowlisted desktop runner receives a validated plan.
+- Every AI-proposed plan is displayed for user approval; button activation and text entry retain their own per-action approvals.
+- Network access, shell commands, scripts, arbitrary file access and general-purpose keyboard/mouse control are not exposed by this bridge.
 - Route according to user preference, data sensitivity, provider availability and usage limits.
 - No hidden browser-session scraping, credential extraction or subscription-token reuse.
 - A connected model may propose a plan, but it cannot authorize or directly execute an action that the permission layer requires the user to approve.
