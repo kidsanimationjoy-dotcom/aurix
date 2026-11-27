@@ -375,6 +375,73 @@ process.exit(2);
   }
 });
 
+
+test('REA browser inspection is loopback-only, requires authorisation, and uses fixed passive commands', async () => {
+  if (process.platform === 'win32') return;
+  const endpoint = 'http://127.0.0.1:9222';
+  const targetId = 'page-target-01';
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--help') { console.log('rea-agents help'); process.exit(0); }
+if (args[0] === 'list-browser-targets' && args[1] === 'http://127.0.0.1:9222' && args[2] === '--json') {
+  console.log(JSON.stringify({ normalized_result: { browser: { product: 'Chrome', version: 'test' }, targets: [{ target_id: 'page-target-01', type: 'page', title: 'Local test app', url: 'http://localhost:5173/', origin: 'http://localhost:5173' }], excluded: { disallowed_origin: 0, unsupported_url: 0, non_page: 0 }, limitations: [] } }));
+  process.exit(0);
+}
+if (args[0] === 'inspect-web-page' && args[1] === 'http://127.0.0.1:9222' && args[2] === 'page-target-01' && args.includes('--observation-ms') && args.includes('500') && args.includes('--json')) {
+  console.log(JSON.stringify({ normalized_result: { target: { title: 'Local test app', url: 'http://localhost:5173/' }, completeness: { status: 'complete' }, dom: { node_count: 12 }, accessibility: { total_nodes: 8 }, limitations: [] } }));
+  process.exit(0);
+}
+if (args[0] === 'analyze-web-bundle' && args[1] === 'http://127.0.0.1:9222' && args[2] === 'page-target-01' && args.includes('--json')) {
+  console.log(JSON.stringify({ normalized_result: { capture: { target_url: 'http://localhost:5173/', scripts_observed: 3, scripts_analyzed: 3 }, observations: { chunks: { nodes: [], edges: [] }, routes: [], endpoints: [], webmcp_declarations: [], source_maps: {} }, unknowns: [], completeness: { status: 'complete' }, limitations: [] } }));
+  process.exit(0);
+}
+process.exit(2);
+`);
+  const authorization = { statement: 'I own or have permission to inspect this local browser session.', confirmedAt: Date.now() };
+  try {
+    await withServer(async (url) => {
+      const headers = { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' };
+      const denied = await fetch(url + '/v1/rea/browser/targets', {
+        method: 'POST', headers, body: JSON.stringify({ endpoint }),
+      });
+      assert.equal(denied.status, 403);
+      assert.equal((await denied.json()).error, 'AUTHORIZATION_REQUIRED');
+
+      const discovered = await fetch(url + '/v1/rea/browser/targets', {
+        method: 'POST', headers, body: JSON.stringify({ endpoint, authorization }),
+      });
+      assert.equal(discovered.status, 200);
+      const targetBody = await discovered.json();
+      assert.equal(targetBody.ok, true);
+      assert.equal(targetBody.result.report.normalized_result.targets[0].target_id, targetId);
+
+      const inspected = await fetch(url + '/v1/rea/browser/inspect', {
+        method: 'POST', headers, body: JSON.stringify({ endpoint, targetId, kind: 'page', authorization }),
+      });
+      assert.equal(inspected.status, 200);
+      const pageBody = await inspected.json();
+      assert.equal(pageBody.ok, true);
+      assert.equal(pageBody.result.report.normalized_result.dom.node_count, 12);
+
+      const bundle = await fetch(url + '/v1/rea/browser/inspect', {
+        method: 'POST', headers, body: JSON.stringify({ endpoint, targetId, kind: 'bundle', authorization }),
+      });
+      assert.equal(bundle.status, 200);
+      const bundleBody = await bundle.json();
+      assert.equal(bundleBody.ok, true);
+      assert.equal(bundleBody.result.report.normalized_result.capture.scripts_analyzed, 3);
+
+      const remote = await fetch(url + '/v1/rea/browser/targets', {
+        method: 'POST', headers, body: JSON.stringify({ endpoint: 'http://example.com:9222', authorization }),
+      });
+      assert.equal(remote.status, 400);
+      assert.match((await remote.json()).message, /loopback/);
+    }, { reaCommand: fake.command });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+  }
+});
+
 test('REA desktop inspection uses its fixed command and the same approved-root boundary', async () => {
   if (process.platform === 'win32') return;
   const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-rea-desktop-root-'));
