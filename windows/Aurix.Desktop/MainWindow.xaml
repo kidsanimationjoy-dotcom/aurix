@@ -1,0 +1,159 @@
+<Window x:Class="Aurix.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AURIX Desktop" Height="780" Width="1080"
+        MinHeight="650" MinWidth="820"
+        Background="#08111F" Foreground="#E8F0FF"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#1B3858"/>
+      <Setter Property="Foreground" Value="#EAF4FF"/>
+      <Setter Property="BorderBrush" Value="#315474"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="14,9"/>
+      <Setter Property="Margin" Value="0,0,9,0"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#0A1728"/>
+      <Setter Property="Foreground" Value="#F1F7FF"/>
+      <Setter Property="BorderBrush" Value="#34516F"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,10"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="CaretBrush" Value="#70C7FF"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="26">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0" Margin="0,0,0,20">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock Text="AURIX" FontSize="36" FontWeight="Bold" Foreground="#70C7FF"/>
+        <TextBlock Text="YOUR WINDOWS DESKTOP AGENT" FontSize="11" FontWeight="SemiBold"
+                   Foreground="#8EA6C7" Margin="2,3,0,0" />
+      </StackPanel>
+      <Border Grid.Column="1" Background="#102A27" BorderBrush="#27665A" BorderThickness="1"
+              CornerRadius="16" Padding="12,7" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal">
+          <Ellipse Width="8" Height="8" Fill="#49D6A4" Margin="0,0,8,0"/>
+          <TextBlock Text="LOCAL COMPANION" Foreground="#9DE8D1" FontSize="11" FontWeight="SemiBold"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="1" Background="#12233A" BorderBrush="#263F5D" BorderThickness="1"
+            CornerRadius="14" Padding="16" Margin="0,0,0,18">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Text="MICROSOFT DEFENDER" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
+          <TextBlock x:Name="DefenderStatusText" Text="Checking protection…" FontSize="17"
+                     FontWeight="SemiBold" Margin="0,5,0,0"/>
+          <TextBlock x:Name="DefenderDetailsText"
+                     Text="AURIX checks Windows Security; Microsoft Defender remains responsible for antivirus protection."
+                     Foreground="#A9B9D2" TextWrapping="Wrap" Margin="0,5,16,0"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="RefreshButton" Content="Refresh" Click="RefreshButton_Click"/>
+          <Button x:Name="ScanButton" Content="Quick scan" Click="ScanButton_Click" Margin="0"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <StackPanel Grid.Row="0">
+        <TextBlock Text="Hands-free AURIX" FontSize="21" FontWeight="SemiBold"/>
+        <TextBlock Text="Enable this once. AURIX stays in the system tray and listens locally for its name. Say “AURIX”, pause briefly, then give your instruction."
+                   Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap" Margin="0,5,0,12"/>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="HandsFreeButton" Content="Enable hands-free" Click="HandsFreeButton_Click"
+                  Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold" Padding="18,11"/>
+          <TextBlock x:Name="ListeningStatusText" Text="Hands-free is off. The microphone is not in use."
+                     Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap"
+                     VerticalAlignment="Center" Margin="8,0,0,0"/>
+        </StackPanel>
+        <TextBlock Text="While waiting, AURIX uses a local wake-word-only grammar. It switches to speech dictation only after it recognises “AURIX” or “Hey AURIX”. After one instruction it returns to wake-word mode."
+                   Foreground="#839BB9" FontSize="11" TextWrapping="Wrap" Margin="0,12,0,14"/>
+        <TextBlock Text="Manual task entry" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <TextBox x:Name="CommandInput" Height="48" VerticalContentAlignment="Center"
+                 ToolTip="Try: Open Notepad, Inspect controls in Notepad, Click button &quot;Save&quot; in Notepad"
+                 KeyDown="CommandInput_KeyDown"/>
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
+          <Button x:Name="RunTaskButton" Content="Run task" Click="RunTaskButton_Click"
+                  Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
+          <Button x:Name="InspectWindowsButton" Content="Inspect open windows" Click="InspectWindowsButton_Click"/>
+          <Button x:Name="EmergencyStopButton" Content="Emergency stop" Click="EmergencyStopButton_Click"
+                  Background="#48232D" BorderBrush="#87404D" IsEnabled="False" Margin="0"/>
+        </StackPanel>
+      </StackPanel>
+
+      <Grid Grid.Row="1" Margin="0,18,0,14">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="1.1*"/>
+          <ColumnDefinition Width="1.4*"/>
+        </Grid.ColumnDefinitions>
+        <Border Background="#101F33" BorderBrush="#253E5D" BorderThickness="1"
+                CornerRadius="12" Padding="16" Margin="0,0,9,0">
+          <StackPanel>
+            <TextBlock Text="TASK PLAN" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
+            <TextBlock x:Name="PlanText" Text="Your task plan will appear here before AURIX runs it."
+                       TextWrapping="Wrap" FontSize="14" Margin="0,9,0,0"/>
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Background="#101F33" BorderBrush="#253E5D" BorderThickness="1"
+                CornerRadius="12" Padding="16" Margin="9,0,0,0">
+          <StackPanel>
+            <TextBlock Text="TASK RESULT" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
+            <TextBlock x:Name="TaskOutputText" Text="AURIX is ready. It can launch apps, inspect visible controls, and perform approved UI actions."
+                       TextWrapping="Wrap" FontSize="14" Margin="0,9,0,0"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="2" Background="#0E1A2B" BorderBrush="#223954" BorderThickness="1"
+              CornerRadius="12" Padding="17">
+        <StackPanel>
+          <TextBlock Text="WHAT THIS BUILD CAN DO" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
+          <TextBlock Text="• Wait for “AURIX” or “Hey AURIX” locally while the app is in the system tray&#10;• Listen for one spoken instruction after the wake phrase, then return to wake mode&#10;• Launch supported Windows applications and open several as one task&#10;• Inspect visible window titles and accessible controls in supported apps&#10;• Click exact named buttons or enter text only after your approval&#10;• Block destructive button names and refuse password or secret fields&#10;• Stop the remaining steps of a running task&#10;• Keep a local task action history that omits spoken and typed content&#10;• Check Microsoft Defender status and request a confirmed quick scan"
+                     TextWrapping="Wrap" LineHeight="24" FontSize="13" Margin="0,10,0,0"/>
+          <TextBlock Text="Hands-free requires a locally installed English Windows speech recognizer and microphone permission. Wake-word detection is local; it does not save room audio or upload it. The current task engine still supports only the commands and applications listed in the project guide."
+                     TextWrapping="Wrap" Foreground="#F0C58C" FontSize="12" Margin="0,14,0,0"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="True">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Button Content="Open task log folder" Click="OpenAuditLogButton_Click"
+                Margin="8,0,0,0" Padding="12,7"/>
+        <Button x:Name="StartupButton" Content="Enable start with Windows"
+                Click="StartupButton_Click" Margin="8,0,0,0" Padding="12,7"/>
+      </StackPanel>
+      <TextBlock Text="Closing this window keeps AURIX running in the system tray. Use the tray menu to pause or exit."
+                 Foreground="#8197B5" VerticalAlignment="Center" FontSize="11" TextWrapping="Wrap"/>
+    </DockPanel>
+  </Grid>
+</Window>
