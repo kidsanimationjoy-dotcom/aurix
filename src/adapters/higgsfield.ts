@@ -136,9 +136,23 @@ export class HiggsfieldAdapter implements MediaAdapter {
       const config = this.getConfig();
       if (!config.url || !config.token) throw new Error('Pair the local AURIX companion before requesting a Higgsfield quote.');
       if (request.kind === 'video') {
-        if (request.modelId !== 'seedance_2_0') throw new Error('AURIX currently supports Seedance 2.0 for paid video generation.');
+        if (request.modelId === 'seedance_2_5') {
+          const quote = await quoteHiggsfieldJob(config, {
+            kind: 'video',
+            modelId: request.modelId,
+            prompt: request.prompt,
+            duration: 5,
+            resolution: '1080p',
+            aspectRatio: '16:9',
+            mode: 't2v',
+            bitrateMode: 'high',
+          });
+          this.quoteKinds.set(quote.quoteId, 'video');
+          return { ok: true as const, value: quote };
+        }
+        if (request.modelId !== 'seedance_2_0') throw new Error('AURIX currently supports Seedance 2.5 and 2.0 for paid video generation.');
         const requestedMode = request.settings.mode;
-        if (requestedMode !== undefined && requestedMode !== 'std' && requestedMode !== 'fast') throw new Error('Choose a supported Seedance generation mode.');
+        if (requestedMode !== undefined && requestedMode !== 'std' && requestedMode !== 'fast') throw new Error('Choose a supported Seedance 2.0 generation mode.');
         const quote = await quoteHiggsfieldJob(config, {
           kind: 'video',
           modelId: request.modelId,
