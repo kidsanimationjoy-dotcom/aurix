@@ -36,7 +36,7 @@
 - Windows x64 compile, self-contained publish and artifact upload: [run 45922086971](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086971) — passed.
 - Application TypeScript, unit tests, production build and browser smoke tests: [run 45922086918](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086918) — passed.
 - Windows artifact: `AURIX-Windows-x64`, artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`; retained until 2026-12-11.
-- The voice bridge uses the authenticated loopback companion and separately signed-in Codex CLI. Recognised speech is sent as text; microphone audio remains local. AI chat is read-only and cannot control desktop apps.
+- The voice bridge uses the authenticated loopback companion and separately signed-in Codex CLI. Recognised speech is sent as text; microphone audio remains local. Codex can return normal answers or structured proposals for the bounded desktop action schema. AURIX validates the proposal, requires whole-plan approval, and retains separate approval for button clicks and text entry. AI-proposed UI mutations are restricted to Notepad; browsers and messaging clients are excluded.
 - Pairing tokens are protected with Windows DPAPI. Up to 12 bounded conversation turns remain in process memory only and can be cleared.
 
 ## Remaining launch blockers
@@ -67,7 +67,7 @@
 - **REA:** local application and browser investigation are implemented through the companion for explicitly approved target scopes. Analysis is evidence-limited and does not reveal private server source or inaccessible model internals.
 - **Higgsfield:** the official CLI media workflow supports account status, model discovery, quote-first image/video job creation and job polling. It requires a real signed-in account, available credits and explicit confirmation; live generation against a user's account was not part of CI.
 - **Claude, Grok and 21st.dev:** their current adapters are interface-only and do not provide live chat, coding-agent or component-search execution.
-- **Windows companion:** the local desktop task planner remains a bounded allowlist of app-launch and named UI Automation commands. It is not a general-purpose autonomous AI desktop agent. The richer Codex task engine runs from AURIX Task Center through the local companion.
+- **Windows companion:** the local desktop task planner remains a bounded allowlist of app-launch and named UI Automation commands. Local Codex may propose up to five supported steps, but AURIX validates and displays the full plan for approval; each UI mutation requires a second approval and AI-proposed UI mutations are restricted to Notepad. It is not a general-purpose autonomous AI desktop agent. The richer Codex coding-task engine runs from AURIX Task Center through the local companion.
 - A complete multi-engine public launch still requires live account acceptance tests for each advertised provider, production deployment, and clear disconnected/planned states for unavailable features.
 
 ## Release decision
