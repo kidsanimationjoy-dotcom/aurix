@@ -391,11 +391,15 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       }
       try {
         const quote = await higgsfield.quote({
+          kind: body.kind,
           modelId: body.modelId,
           prompt: body.prompt,
           duration: body.duration,
           resolution: body.resolution,
           aspectRatio: body.aspectRatio,
+          mode: body.mode,
+          quality: body.quality,
+          variant: body.variant,
         });
         return send(200, { ok: true, result: quote });
       } catch (error) {
