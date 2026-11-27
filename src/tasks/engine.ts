@@ -2,12 +2,15 @@ import type { ProviderAdapter, ProviderId } from '../adapters/types';
 import type { Db } from '../storage/db';
 import { routeTask, type TaskKind } from '../router/providerRouter';
 import { classifyIntent, createPlan } from './classifier';
+import { newId } from '../lib/id';
 import type {
   CreateTaskInput,
   TaskEventType,
   TaskExecutionAdapter,
   TaskExecutionContext,
   TaskExecutionRequest,
+  TaskActionApproval,
+  TaskActionApprovalDecision,
   TaskRecord,
   TaskStatus,
 } from './types';
@@ -20,6 +23,14 @@ const MAX_OUTPUT_CHARS = 200_000;
 interface RunningTask {
   controller: AbortController;
   promise: Promise<void>;
+}
+
+interface PendingActionApproval {
+  id: string;
+  resolve: (decision: TaskActionApprovalDecision) => void;
+  signal: AbortSignal;
+  onAbort: () => void;
+  settled: boolean;
 }
 
 function isExecutionAdapter(adapter: ProviderAdapter): adapter is ProviderAdapter & TaskExecutionAdapter {
@@ -48,6 +59,7 @@ function isTerminal(status: TaskStatus): boolean {
 export class TaskEngine {
   private readonly running = new Map<string, RunningTask>();
   private readonly approving = new Set<string>();
+  private readonly pendingActionApprovals = new Map<string, PendingActionApproval>();
   private recoveryPromise: Promise<number> | null = null;
 
   constructor(private readonly db: Db, private readonly adapters: ProviderAdapter[]) {}
@@ -67,6 +79,7 @@ export class TaskEngine {
       status: 'queued',
       approvalStatus: 'not_required',
       approvedAt: null,
+      pendingActionApproval: null,
       plan: [],
       progress: 0,
       output: '',
@@ -93,6 +106,7 @@ export class TaskEngine {
       selectedProviderId: null,
       approvalStatus: 'not_required',
       approvedAt: null,
+      pendingActionApproval: null,
       plan: [],
       progress: 0,
       output: '',
@@ -323,11 +337,12 @@ export class TaskEngine {
     this.recoveryPromise = (async () => {
       const interrupted = this.db.snapshot('tasks').filter((task) =>
         task.status === 'queued' || task.status === 'classifying' || task.status === 'planning'
-        || task.status === 'running' || task.status === 'cancelling'
+        || task.status === 'running' || task.status === 'cancelling' || task.status === 'awaiting_action_approval'
       );
       for (const task of interrupted) {
         await this.db.update('tasks', task.id, {
           status: 'failed',
+          pendingActionApproval: null,
           errorCode: 'INTERRUPTED_AFTER_RELOAD',
           errorMessage: 'The browser was closed or reloaded while this task was in progress. Submit it again to retry.',
           finishedAt: Date.now(),
@@ -392,6 +407,7 @@ export class TaskEngine {
         await this.db.update('tasks', taskId, { output: latest.output + safeDelta });
         await this.event(taskId, 'task.output.delta', `Received ${safeDelta.length} output characters.`, providerId);
       },
+      requestApproval: (request) => this.requestActionApproval(taskId, providerId, request, controller.signal),
     };
 
     const promise = (async () => {
@@ -439,6 +455,134 @@ export class TaskEngine {
 
     this.running.set(taskId, { controller, promise });
     await promise;
+  }
+
+  /**
+   * Pause a running task while Codex asks for a narrowly scoped local action.
+   * The task remains cancellable and the decision is one-time; no grant is cached.
+   */
+  private async requestActionApproval(
+    taskId: string,
+    providerId: ProviderId,
+    request: Omit<TaskActionApproval, 'id'>,
+    signal: AbortSignal,
+  ): Promise<TaskActionApprovalDecision> {
+    const current = this.db.get('tasks', taskId);
+    if (!current || current.status !== 'running' || signal.aborted) return 'cancel';
+    if (this.pendingActionApprovals.has(taskId)) {
+      throw new Error('A local permission request is already awaiting a decision for this task.');
+    }
+
+    const approval: TaskActionApproval = {
+      ...request,
+      id: newId('taskapproval'),
+      reason: String(request.reason ?? '').slice(0, 1000),
+      command: Array.isArray(request.command) ? request.command.slice(0, 40).map((item) => String(item).slice(0, 500)) : [],
+      cwd: String(request.cwd ?? '').slice(0, 2048),
+      changes: Array.isArray(request.changes) ? request.changes.slice(0, 30).map((change) => ({
+        path: String(change.path ?? '').slice(0, 500),
+        kind: String(change.kind ?? '').slice(0, 80),
+        diff: String(change.diff ?? '').slice(0, 6000),
+      })) : [],
+      grantRoot: typeof request.grantRoot === 'string' ? request.grantRoot.slice(0, 2048) : undefined,
+      commandActions: Array.isArray(request.commandActions) ? request.commandActions.slice(0, 20) : [],
+    };
+
+    let resolvePromise!: (decision: TaskActionApprovalDecision) => void;
+    const decisionPromise = new Promise<TaskActionApprovalDecision>((resolve) => { resolvePromise = resolve; });
+    let abortBeforeRegistration = false;
+    const pending: PendingActionApproval = {
+      id: approval.id,
+      resolve: resolvePromise,
+      signal,
+      settled: false,
+      onAbort: () => {
+        if (!this.pendingActionApprovals.has(taskId)) {
+          abortBeforeRegistration = true;
+          return;
+        }
+        void this.settleActionApproval(taskId, approval.id, 'cancel');
+      },
+    };
+    signal.addEventListener('abort', pending.onAbort, { once: true });
+
+    try {
+      const latest = this.db.get('tasks', taskId);
+      if (!latest || latest.status !== 'running' || signal.aborted) {
+        signal.removeEventListener('abort', pending.onAbort);
+        return 'cancel';
+      }
+      await this.db.update('tasks', taskId, {
+        status: 'awaiting_action_approval',
+        pendingActionApproval: approval,
+      });
+      this.pendingActionApprovals.set(taskId, pending);
+      await this.event(
+        taskId,
+        'task.action_approval.requested',
+        'Codex requested a local action. Review its exact scope before allowing it.',
+        providerId,
+      );
+      if (abortBeforeRegistration || signal.aborted) {
+        await this.settleActionApproval(taskId, approval.id, 'cancel');
+      }
+      return await decisionPromise;
+    } catch (error) {
+      signal.removeEventListener('abort', pending.onAbort);
+      this.pendingActionApprovals.delete(taskId);
+      if (!pending.settled) {
+        pending.settled = true;
+        pending.resolve('cancel');
+      }
+      throw error;
+    }
+  }
+
+  async resolveActionApproval(
+    taskId: string,
+    approvalId: string,
+    decision: Exclude<TaskActionApprovalDecision, 'cancel'>,
+  ): Promise<boolean> {
+    const task = this.db.get('tasks', taskId);
+    const pending = this.pendingActionApprovals.get(taskId);
+    if (!task || task.status !== 'awaiting_action_approval' ||
+        task.pendingActionApproval?.id !== approvalId || !pending || pending.id !== approvalId) {
+      return false;
+    }
+    return this.settleActionApproval(taskId, approvalId, decision);
+  }
+
+  private async settleActionApproval(
+    taskId: string,
+    approvalId: string,
+    decision: TaskActionApprovalDecision,
+  ): Promise<boolean> {
+    const pending = this.pendingActionApprovals.get(taskId);
+    if (!pending || pending.id !== approvalId || pending.settled) return false;
+    pending.settled = true;
+    this.pendingActionApprovals.delete(taskId);
+    pending.signal.removeEventListener('abort', pending.onAbort);
+
+    try {
+      const latest = this.db.get('tasks', taskId);
+      if (latest?.pendingActionApproval?.id === approvalId) {
+        const patch: Partial<TaskRecord> = { pendingActionApproval: null };
+        if (latest.status === 'awaiting_action_approval') {
+          patch.status = decision === 'cancel' ? 'cancelling' : 'running';
+        }
+        await this.db.update('tasks', taskId, patch);
+      }
+      if (decision === 'accept') {
+        await this.event(taskId, 'task.action_approval.granted', 'You approved this one-time local action.', latest?.selectedProviderId ?? null);
+      } else if (decision === 'decline') {
+        await this.event(taskId, 'task.action_approval.denied', 'You declined this local action. Codex was told not to perform it.', latest?.selectedProviderId ?? null);
+      }
+      pending.resolve(decision);
+      return true;
+    } catch (error) {
+      pending.resolve('cancel');
+      throw error;
+    }
   }
 
   private async finishAborted(taskId: string, reason: unknown, providerId: ProviderId): Promise<void> {
