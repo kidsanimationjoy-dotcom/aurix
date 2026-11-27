@@ -6,8 +6,9 @@ A browser cannot directly run or safely inspect software on the user's computer.
 
 - Binds to `127.0.0.1` only.
 - Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
-- Implements authenticated health, Codex status and sign-in, read-only Codex chat, and project-scoped Codex App Server sessions.
+- Implements authenticated health, Codex status and sign-in, read-only Codex chat, project-scoped Codex App Server sessions, and OAuth-backed Higgsfield CLI handoff.
 - Runs the official local REA CLI's documented JavaScript/Electron, desktop, Android APK, and passive browser-inspection workflows through authenticated `/v1/rea/*` endpoints, without API keys.
+- Connects to the official Higgsfield CLI using local browser OAuth. It discovers account status and models, obtains a credit estimate before generation, rechecks the estimate, and requires a separate explicit confirmation before creating a billable job.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
 - Runs AURIX chat through the documented `codex sandbox` wrapper with the named `aurix-chat-readonly` profile and managed configuration; the profile, not a generic `--sandbox` override, supplies the read-only workspace and denied-root/network policy.
@@ -58,22 +59,32 @@ The Coding Studio starts a Codex App Server session with the selected project as
 
 The App Server process uses the separate AURIX Codex profile and an allowlisted environment without `OPENAI_API_KEY`. It does not use a general-purpose shell or expose arbitrary filesystem/terminal endpoints to the browser. The bridge additionally validates the selected project folder, command working directories, and every write-permission path; extra filesystem grants are restricted to exact paths inside the project and the current turn only. This is a project coding integration, not broad desktop control.
 
+## Higgsfield video generation
+
+Install the official CLI locally with `npm install -g @higgsfield/cli`, then use **Media Studio → Sign in with Higgsfield**. The local companion starts the CLI's official browser OAuth flow in its terminal. AURIX never reads, returns, or asks the user to paste Higgsfield OAuth credentials or API keys. The supported workflow currently enables Seedance 2.5 text-to-video only when the live model catalog reports it. The prompt, duration, resolution and aspect ratio are checked against the AURIX-supported input set before asking the CLI for a cost estimate.
+
+AURIX does not run `generate create` when the user asks for a quote. It stores a short-lived, one-use quote ID in companion memory, displays the raw credit estimate in Media Studio, and requires the user to check the confirmation box and press **Confirm cost and generate**. The companion consumes the quote before any create attempt, re-runs the cost query and refuses to create a job when the price changed. This avoids accidental duplicate submissions using the same quote, although it cannot roll back a job after Higgsfield accepts it. No generation job has been sent during automated tests. Jobs are polled through the official CLI and are shown as completed only when Higgsfield returns a result URL.
+
+All command execution uses `shell: false`, bounded output and timeouts. The CLI handles browser OAuth in its local credential store; AURIX only returns safe account fields such as plan and credit balance. On Windows, the companion uses the installed package's JavaScript entry point instead of spawning an npm `.cmd` shim. The official binary can still be blocked by Windows security controls; do not disable SmartScreen, Defender, or other protections to make it run.
+
 ## Still disabled
 
 - Generic filesystem and terminal APIs.
 - Cross-application keyboard/mouse and operating-system control.
-- Browser-wide control beyond explicitly wired REA inspection.
-- AI image/video generation and other disconnected provider adapters.
+- General browser automation beyond the passive, explicitly authorised REA inspection.
+- Higgsfield image generation and video models other than the supported Seedance 2.5 workflow.
+- Claude and Grok account-backed chat adapters remain disconnected; AURIX does not proxy their subscription credentials.
 
 **The local App Server path has automated fake-server tests; this is not proof that your installed Codex version, Windows sandbox, or real project folder has been verified.** Run it locally after setting up the companion and inspect every permission request.
 
 ## Set up the companion
 
-1. Run `npm install` and then `npm run companion` on the computer that has the Codex CLI installed. Set `AURIX_REA_ROOTS` and `AURIX_CODEX_ROOTS` to the separate folders you explicitly authorize, when needed.
+1. Run `npm install` and then `npm run companion` on the computer that has the Codex CLI, REA, and/or Higgsfield CLI installed. Set `AURIX_REA_ROOTS` and `AURIX_CODEX_ROOTS` to the separate folders you explicitly authorise, when needed.
 2. Copy the local URL and pairing token printed in the companion terminal into **Settings → Local companion**.
 3. Select **Prepare AURIX profile & verify sandbox**. This creates the separate profile and invokes the real local Codex sandbox. AURIX reports failure when the CLI, platform helper, permission profile, or managed settings cannot be verified.
 4. After profile creation, select **Sign in to AURIX Codex with ChatGPT**. This sign-in is separate from the user's normal Codex profile.
 5. Check status again. For a project coding task, store its local folder path in Projects and ensure it is inside one of the directories in `AURIX_CODEX_ROOTS`.
+6. For Higgsfield, install the official package with `npm install -g @higgsfield/cli`, then use Media Studio's sign-in button. Review the account balance and each cost estimate before confirming any generation.
 
 For a hosted AURIX origin, set `AURIX_ORIGIN=https://your-site.example` and `AURIX_COMPANION_PORT=4317` before running the companion. The companion still binds to loopback.
 
