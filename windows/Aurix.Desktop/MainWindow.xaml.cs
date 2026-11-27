@@ -16,6 +16,8 @@ public partial class MainWindow : Window
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private readonly LocalOpenJarvisChatService _localOpenJarvisChat = new();
+    private readonly LocalOpenJarvisRuntimeService _localOpenJarvisRuntime = new();
+    private CancellationTokenSource? _openJarvisStartupCancellation;
     private SpeechSynthesizer? _speechSynthesizer;
     private ActiveOrbWindow? _activeOrb;
     private bool _microphoneTestRunning;
@@ -31,8 +33,8 @@ public partial class MainWindow : Window
         _companionToken = CompanionSettingsStore.LoadToken();
         CompanionTokenBox.Password = _companionToken;
         AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
-            ? "Optional: connect the local AURIX companion for AI answers and approval-gated Notepad actions."
-            : "Saved pairing token found. Connect to check the local AI engine.";
+            ? "Stanford OpenJarvis is the primary AI. Start its local server or check its status here. Codex is an optional backup."
+            : "Stanford OpenJarvis is primary. A saved Codex pairing token is available for backup.";
         try
         {
             _speechSynthesizer = new SpeechSynthesizer();
@@ -60,7 +62,10 @@ public partial class MainWindow : Window
             (nameof(TestMicrophoneButton), TestMicrophoneButton),
             (nameof(ListeningStatusText), ListeningStatusText),
             (nameof(AiProviderCombo), AiProviderCombo),
+            (nameof(StartOpenJarvisButton), StartOpenJarvisButton),
+            (nameof(StopOpenJarvisButton), StopOpenJarvisButton),
             (nameof(CheckOpenJarvisButton), CheckOpenJarvisButton),
+            (nameof(OpenJarvisSetupGuideButton), OpenJarvisSetupGuideButton),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
             (nameof(PairCompanionButton), PairCompanionButton),
@@ -322,6 +327,108 @@ public partial class MainWindow : Window
         finally
         {
             CheckOpenJarvisButton.IsEnabled = true;
+            StopOpenJarvisButton.IsEnabled = _localOpenJarvisRuntime.IsServerProcessRunning;
+        }
+    }
+
+    private async void StartOpenJarvisButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_openJarvisStartupCancellation is not null)
+            return;
+
+        var startup = new CancellationTokenSource();
+        _openJarvisStartupCancellation = startup;
+        StartOpenJarvisButton.IsEnabled = false;
+        CheckOpenJarvisButton.IsEnabled = false;
+        AiConnectionStatusText.Text = "Checking whether the local OpenJarvis API is already running…";
+
+        try
+        {
+            // Do not start a second API server if one is already responding on the
+            // loopback port, even when it was started outside AURIX.
+            if (await _localOpenJarvisChat.IsApiServerRespondingAsync(startup.Token))
+            {
+                AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(startup.Token);
+                AiProviderCombo.SelectedIndex = 0;
+                return;
+            }
+
+            var launchMessage = _localOpenJarvisRuntime.StartServer();
+            StopOpenJarvisButton.IsEnabled = true;
+            AiConnectionStatusText.Text = launchMessage + " Waiting for the local model API…";
+
+            for (var attempt = 0; attempt < 60; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), startup.Token);
+
+                if (!_localOpenJarvisRuntime.IsServerProcessRunning)
+                {
+                    var code = _localOpenJarvisRuntime.LastExitCode;
+                    throw new InvalidOperationException(
+                        code is null
+                            ? "The OpenJarvis process exited before its API became ready. Check the official Windows installation requirements and setup guide."
+                            : $"The OpenJarvis process exited with code {code} before its API became ready. Check its installation and model setup.");
+                }
+
+                if (await _localOpenJarvisChat.IsApiServerRespondingAsync(startup.Token))
+                {
+                    AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(startup.Token);
+                    AiProviderCombo.SelectedIndex = 0;
+                    AiConnectionStatusText.Text += " AURIX started this local server.";
+                    return;
+                }
+            }
+
+            AiConnectionStatusText.Text =
+                "OpenJarvis is still running, but its API did not become ready within 60 seconds. Check the model engine setup, then select Check OpenJarvis again.";
+        }
+        catch (OperationCanceledException) when (startup.IsCancellationRequested)
+        {
+            AiConnectionStatusText.Text = "OpenJarvis startup was cancelled.";
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "Could not start OpenJarvis: " + ex.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(_openJarvisStartupCancellation, startup))
+                _openJarvisStartupCancellation = null;
+            startup.Dispose();
+            StartOpenJarvisButton.IsEnabled = true;
+            CheckOpenJarvisButton.IsEnabled = true;
+            StopOpenJarvisButton.IsEnabled = _localOpenJarvisRuntime.IsServerProcessRunning;
+        }
+    }
+
+    private void StopOpenJarvisButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _localOpenJarvisRuntime.StopServer();
+            StopOpenJarvisButton.IsEnabled = false;
+            AiConnectionStatusText.Text =
+                "The OpenJarvis server started by AURIX has been stopped. Other OpenJarvis services started outside AURIX are not changed.";
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "AURIX could not stop its OpenJarvis process: " + ex.Message;
+        }
+    }
+
+    private void OpenJarvisSetupGuideButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://open-jarvis.github.io/OpenJarvis/getting-started/windows-native/",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "Could not open the official OpenJarvis Windows setup guide: " + ex.Message;
         }
     }
 
@@ -861,6 +968,9 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             return;
         }
 
+        _openJarvisStartupCancellation?.Cancel();
+        _localOpenJarvisRuntime.Dispose();
+        StopOpenJarvisButton.IsEnabled = false;
         ShutdownHandsFree();
         _taskRuns.CancelCurrent();
         _speechSynthesizer?.SpeakAsyncCancelAll();
