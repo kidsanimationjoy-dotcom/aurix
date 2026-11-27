@@ -49,6 +49,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 - [Phase 2 orchestration contract](docs/PHASE_2_CONTRACT.md)
 - [Phase 2 implementation notes](docs/PHASE_2_IMPLEMENTATION.md)
 - [Official Codex CLI local integration](docs/CODEX_LOCAL_INTEGRATION.md)
+- [Stanford OpenJarvis local chat integration](docs/OPENJARVIS-INTEGRATION.md)
 
 ## Initial technical direction
 
