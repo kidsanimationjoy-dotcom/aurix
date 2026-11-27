@@ -138,7 +138,7 @@ public partial class MainWindow : Window
     {
         _codexReady = status.CanChat;
         AiConnectionStatusText.Text = status.CanChat
-            ? "AI READY — local Codex is signed in and the read-only sandbox is verified. Voice questions can now receive AI answers."
+            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved desktop plans."
             : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
     }
 
@@ -369,10 +369,32 @@ public partial class MainWindow : Window
     private async Task RunAiChatAsync(string prompt)
     {
         var token = CurrentCompanionToken();
-        PlanText.Text = "READ-ONLY AI CHAT\nAURIX will ask the connected local Codex CLI for a text response. This does not authorise desktop actions.";
+        const string actionContract = """
+You are translating a user's voice request into either an answer or a proposed AURIX desktop plan.
+Return exactly one raw JSON object. Do not use Markdown or code fences.
+
+Supported formats:
+{"type":"answer","message":"Your normal conversational answer, or a clear explanation that the request is unsupported."}
+{"type":"desktop_plan","summary":"Short description","steps":[
+  {"kind":"launch_application","app":"Calculator"},
+  {"kind":"inspect_windows"},
+  {"kind":"inspect_controls","app":"Notepad"},
+  {"kind":"click_button","app":"Notepad","button":"Save"},
+  {"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}
+]}
+
+Use only these exact action kinds and fields. Use only these apps:
+Notepad, Calculator, Paint, File Explorer, Microsoft Edge, Google Chrome, Windows Terminal, Discord, Spotify.
+A plan may contain one to five steps. Use "answer" for anything outside this exact capability set.
+Only propose a click when the user explicitly names the button. Only propose text entry when the user explicitly supplies the text and names the field; never invent text to enter.
+Do not propose shell commands, scripts, arbitrary file access, network access, browser navigation, purchases, payments, message sending, publishing, account changes, password/secret fields, or destructive actions.
+AURIX will independently validate your JSON, display the exact plan, ask the user to approve it, and retain its own per-action approval gates. You cannot authorise or execute an action yourself. Never claim that a proposed action has already happened.
+""";
+
+        PlanText.Text = "LOCAL AI REASONING\nCodex may answer normally or propose only supported, approval-gated AURIX desktop actions.";
         if (string.IsNullOrWhiteSpace(token))
         {
-            TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI conversation. Typed local commands remain available without AI.";
+            TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI reasoning. Typed local commands remain available without AI.";
             return;
         }
 
@@ -390,32 +412,77 @@ public partial class MainWindow : Window
             UpdateCodexStatus(status);
             if (!status.CanChat)
             {
-                TaskOutputText.Text = "AI chat is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
+                TaskOutputText.Text = "AI reasoning is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
                 return;
             }
 
-            _voiceConversation.Add(new LocalCodexMessage("user", prompt));
-            TaskOutputText.Text = "AURIX is thinking…";
-            var answer = await _localCodexChat.ChatAsync(token, _voiceConversation, cancellationToken);
-            _voiceConversation.Add(new LocalCodexMessage("assistant", answer.Length > 4_000 ? answer[..4_000] : answer));
-            while (_voiceConversation.Count > 12)
-                _voiceConversation.RemoveAt(0);
-            TaskOutputText.Text = answer;
-            ListeningStatusText.Text = "AI response ready. Say “AURIX” for another instruction.";
-            SpeakAnswer(answer);
+            var messages = new List<LocalCodexMessage>
+            {
+                new("system", actionContract)
+            };
+            messages.AddRange(_voiceConversation.TakeLast(8));
+            messages.Add(new LocalCodexMessage("user", prompt));
+
+            TaskOutputText.Text = "AURIX is asking local Codex to understand your request…";
+            var rawResponse = await _localCodexChat.ChatAsync(token, messages, cancellationToken);
+            var interpretation = AiDesktopCommandParser.Parse(rawResponse);
+
+            if (!interpretation.IsPlan || interpretation.Plan is null)
+            {
+                AddVoiceConversationTurn(prompt, interpretation.Message);
+                TaskOutputText.Text = interpretation.Message;
+                ListeningStatusText.Text = "AI response ready. Say “AURIX” for another instruction.";
+                SpeakAnswer(interpretation.Message);
+                return;
+            }
+
+            var plan = interpretation.Plan;
+            if (!plan.IsValid || plan.Steps.Count == 0)
+                throw new InvalidOperationException("AURIX refused an empty or invalid AI-proposed plan.");
+
+            PlanText.Text = plan.Summary;
+            var approval = System.Windows.MessageBox.Show(
+                "Review the exact desktop actions proposed by local Codex:\n\n" + plan.Summary +
+                "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text will still require separate approval.",
+                "Approve AI-proposed desktop plan",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (approval != System.Windows.MessageBoxResult.Yes)
+            {
+                AddVoiceConversationTurn(prompt, "You declined the proposed desktop plan. No desktop action was taken.");
+                TaskOutputText.Text = "Plan declined. No desktop action was taken.";
+                ListeningStatusText.Text = "AI-proposed plan declined.";
+                return;
+            }
+
+            TaskOutputText.Text = "Running your approved desktop plan…";
+            var result = await Task.Run(() => DesktopTaskRunner.Execute(
+                plan,
+                cancellationToken,
+                message => Dispatcher.Invoke(() => TaskOutputText.Text = message),
+                promptText => Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
+                    promptText,
+                    "Approve AURIX action",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)), cancellationToken);
+
+            AddVoiceConversationTurn(prompt, "Approved plan:\n" + plan.Summary + "\nExecution result:\n" + result.Output);
+            TaskOutputText.Text = result.Output;
+            ListeningStatusText.Text = result.Cancelled
+                ? "Task stopped. Already completed actions are not undone."
+                : result.Success ? "Approved plan completed. Say “AURIX” for another instruction." : "Plan finished with an issue. Say “AURIX” when ready.";
+            SpeakAnswer(result.Output);
         }
         catch (OperationCanceledException)
         {
-            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
-                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
-            TaskOutputText.Text = "AI request stopped. No further response will be requested.";
+            TaskOutputText.Text = "AI request or desktop task stopped. Already completed actions are not undone.";
             ListeningStatusText.Text = "Emergency stop activated.";
         }
         catch (Exception ex)
         {
-            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
-                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
-            TaskOutputText.Text = $"AI chat could not complete: {ex.Message}";
+            TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
+            ListeningStatusText.Text = "AI request finished with an issue.";
         }
         finally
         {
@@ -424,6 +491,16 @@ public partial class MainWindow : Window
             _taskCancellation?.Dispose();
             _taskCancellation = null;
         }
+    }
+
+    private void AddVoiceConversationTurn(string userPrompt, string assistantResponse)
+    {
+        _voiceConversation.Add(new LocalCodexMessage("user", userPrompt));
+        _voiceConversation.Add(new LocalCodexMessage(
+            "assistant",
+            assistantResponse.Length > 4_000 ? assistantResponse[..4_000] : assistantResponse));
+        while (_voiceConversation.Count > 12)
+            _voiceConversation.RemoveAt(0);
     }
 
     private void SpeakAnswer(string answer)

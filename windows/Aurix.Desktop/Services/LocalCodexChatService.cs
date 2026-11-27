@@ -41,6 +41,13 @@ public sealed class LocalCodexChatService
             !root.TryGetProperty("apiVersion", out var version) || version.GetInt32() != 1)
             throw new InvalidOperationException("The local service is not a compatible AURIX companion.");
 
+        var supportsChat = root.TryGetProperty("capabilities", out var capabilities) &&
+            capabilities.ValueKind == JsonValueKind.Array &&
+            capabilities.EnumerateArray().Any(value =>
+                value.ValueKind == JsonValueKind.String && value.GetString() == "cli.codex.chat");
+        if (!supportsChat)
+            throw new InvalidOperationException("This local companion does not advertise the required read-only Codex chat capability. Update the companion first.");
+
         using var status = await SendAsync(HttpMethod.Get, "/v1/codex/status", token, null, cancellationToken);
         using var statusDocument = await JsonDocument.ParseAsync(await status.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
         var value = statusDocument.RootElement;
@@ -83,18 +90,24 @@ public sealed class LocalCodexChatService
         if (messages.Count == 0)
             throw new ArgumentException("Add a voice chat message before sending.", nameof(messages));
 
-        var bounded = messages.TakeLast(12)
-            .Where(message => (message.Role == "user" || message.Role == "assistant") && !string.IsNullOrWhiteSpace(message.Content))
+        var boundedInput = messages.TakeLast(12)
+            .Where(message => (message.Role == "system" || message.Role == "user" || message.Role == "assistant") &&
+                !string.IsNullOrWhiteSpace(message.Content))
             .Select(message => new LocalCodexMessage(message.Role, message.Content.Trim()))
             .ToList();
-        var totalCharacters = bounded.Sum(message => message.Content.Length);
-        while (bounded.Count > 1 && totalCharacters > 5_000)
+        var systemContext = boundedInput.Where(message => message.Role == "system").TakeLast(1).ToList();
+        var dialogue = boundedInput.Where(message => message.Role != "system").ToList();
+        var totalCharacters = systemContext.Sum(message => message.Content.Length) +
+            dialogue.Sum(message => message.Content.Length);
+        while (dialogue.Count > 1 && totalCharacters > 5_000)
         {
-            totalCharacters -= bounded[0].Content.Length;
-            bounded.RemoveAt(0);
+            totalCharacters -= dialogue[0].Content.Length;
+            dialogue.RemoveAt(0);
         }
-        if (bounded.Count == 0 || bounded[^1].Content.Length > 5_000)
-            throw new ArgumentException("A voice chat message must contain between 1 and 5,000 characters.", nameof(messages));
+        if (dialogue.Count == 0 || dialogue[^1].Content.Length > 5_000 ||
+            totalCharacters > 5_000 || dialogue[^1].Role != "user")
+            throw new ArgumentException("The final voice chat message must be a user request, and the request plus context must be 5,000 characters or fewer.", nameof(messages));
+        var bounded = systemContext.Concat(dialogue).ToList();
 
         using var response = await SendAsync(
             HttpMethod.Post,
