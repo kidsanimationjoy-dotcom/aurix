@@ -28,6 +28,22 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Package complete AURIX source for Claude handoff
+        shell: pwsh
+        run: |
+          git archive --format=zip --output "$env:RUNNER_TEMP\AURIX-Source-smaller-orb.zip" HEAD
+          if (!(Test-Path -LiteralPath "$env:RUNNER_TEMP\AURIX-Source-smaller-orb.zip")) {
+            throw "AURIX source archive was not created."
+          }
+
+      - name: Upload AURIX source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-Source-smaller-orb
+          path: ${{ runner.temp }}/AURIX-Source-smaller-orb.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Install .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
