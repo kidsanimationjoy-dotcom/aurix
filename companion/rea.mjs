@@ -5,6 +5,7 @@ import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 const MAX_OUTPUT = 1_000_000;
+const MAX_BROWSER_OUTPUT = 3_000_000;
 const DEFAULT_TIMEOUT_MS = 90_000;
 
 function within(root, candidate) {
@@ -19,7 +20,7 @@ function safeEnvironment() {
   return env;
 }
 
-function run(command, args, timeoutMs = DEFAULT_TIMEOUT_MS) {
+function run(command, args, timeoutMs = DEFAULT_TIMEOUT_MS, maxOutput = MAX_OUTPUT) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: safeEnvironment() });
     let stdout = '';
@@ -33,7 +34,7 @@ function run(command, args, timeoutMs = DEFAULT_TIMEOUT_MS) {
     };
     const append = (current, chunk) => {
       const next = current + chunk.toString('utf8');
-      if (next.length > MAX_OUTPUT) {
+      if (next.length > maxOutput) {
         child.kill();
         finish(reject, new Error('REA output exceeded the one-megabyte safety limit.'));
         return current;
@@ -104,8 +105,8 @@ async function resolveApprovedFile(target, roots) {
   return canonicalTarget;
 }
 
-async function runJsonAnalysis(command, args, canonicalTarget) {
-  const result = await run(command, args);
+async function runJsonAnalysis(command, args, canonicalTarget, options = {}) {
+  const result = await run(command, args, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, options.maxOutput ?? MAX_OUTPUT);
   let report;
   try { report = JSON.parse(result.stdout); }
   catch { throw new Error('REA did not return valid JSON. Raw output was withheld.'); }
@@ -118,4 +119,55 @@ export async function analyzeReaTarget({ target, roots = [], command = 'rea', ki
   if (kind === 'javascript') return runJsonAnalysis(command, ['analyze-javascript-application', canonicalTarget, '--json'], canonicalTarget);
   if (kind === 'desktop') return runJsonAnalysis(command, ['inspect-desktop-application', canonicalTarget, '--json'], canonicalTarget);
   throw new Error('Unsupported REA analysis workflow.');
+}
+
+/**
+ * REA's browser observer is strictly passive. Accept only a literal loopback
+ * CDP HTTP endpoint with an explicit TCP port; never forward arbitrary URLs.
+ */
+export function validateReaBrowserEndpoint(value) {
+  if (typeof value !== 'string' || value.length > 128) {
+    throw new Error('Enter a local Chrome DevTools endpoint such as http://127.0.0.1:9222.');
+  }
+  const match = /^http:\/\/127\.0\.0\.1:([0-9]{1,5})\/?$/u.exec(value.trim());
+  if (!match) {
+    throw new Error('Browser inspection accepts only http://127.0.0.1:PORT with an explicit port.');
+  }
+  const port = Number(match[1]);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('The local Chrome DevTools port must be between 1 and 65535.');
+  }
+  return 'http://127.0.0.1:' + String(port);
+}
+
+function validateBrowserTargetId(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 256 ||
+      /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new Error('Select a valid browser tab from the discovered target list.');
+  }
+  return value;
+}
+
+export async function listReaBrowserTargets({ endpoint, command = 'rea' } = {}) {
+  const localEndpoint = validateReaBrowserEndpoint(endpoint);
+  const result = await run(command, ['list-browser-targets', localEndpoint, '--json'], 20_000, MAX_BROWSER_OUTPUT);
+  let report;
+  try { report = JSON.parse(result.stdout); }
+  catch { throw new Error('REA did not return valid browser target JSON. Raw output was withheld.'); }
+  return { endpoint: localEndpoint, engine: 'rea-agents', inspectedAt: new Date().toISOString(), report };
+}
+
+export async function inspectReaBrowserTarget({ endpoint, targetId, kind = 'page', command = 'rea' } = {}) {
+  const localEndpoint = validateReaBrowserEndpoint(endpoint);
+  const selectedTargetId = validateBrowserTargetId(targetId);
+  const operation = kind === 'bundle' ? 'analyze-web-bundle' : kind === 'page' ? 'inspect-web-page' : null;
+  if (!operation) throw new Error('Unsupported passive browser inspection workflow.');
+  const args = kind === 'bundle'
+    ? [operation, localEndpoint, selectedTargetId, '--json']
+    : [operation, localEndpoint, selectedTargetId, '--observation-ms', '500', '--json'];
+  const result = await runJsonAnalysis(command, args, selectedTargetId, {
+    timeoutMs: kind === 'bundle' ? 300_000 : DEFAULT_TIMEOUT_MS,
+    maxOutput: MAX_BROWSER_OUTPUT,
+  });
+  return { ...result, endpoint: localEndpoint, targetId: selectedTargetId, kind };
 }
