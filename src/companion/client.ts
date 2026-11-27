@@ -345,9 +345,39 @@ export async function analyzeReaTarget(config: LocalCompanionConfig, target: str
   return body.result;
 }
 
+
 export interface ReaBrowserAuthorization {
   statement: string;
   confirmedAt: number;
+}
+
+async function reaBrowserRequest(
+  config: LocalCompanionConfig,
+  route: string,
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+  fetchImpl: typeof fetch,
+): Promise<unknown> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before inspecting a browser tab.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(base + route, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + config.token.trim(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
+    if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Local REA browser inspection failed.');
+    return body.result;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('The local browser inspection timed out. Confirm that the browser and companion are still running.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function listReaBrowserTargets(
@@ -356,16 +386,7 @@ export async function listReaBrowserTargets(
   authorization: ReaBrowserAuthorization,
   fetchImpl: typeof fetch = fetch,
 ): Promise<unknown> {
-  const base = companionBaseUrl(config.url);
-  if (!config.token.trim()) throw new Error('Pair the local companion before listing browser tabs.');
-  const response = await fetchImpl(base + '/v1/rea/browser/targets', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + config.token.trim(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, authorization }),
-  });
-  const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
-  if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Could not list local browser tabs.');
-  return body.result;
+  return reaBrowserRequest(config, '/v1/rea/browser/targets', { endpoint, authorization }, 30_000, fetchImpl);
 }
 
 export async function inspectReaBrowserTarget(
@@ -376,14 +397,11 @@ export async function inspectReaBrowserTarget(
   authorization: ReaBrowserAuthorization,
   fetchImpl: typeof fetch = fetch,
 ): Promise<unknown> {
-  const base = companionBaseUrl(config.url);
-  if (!config.token.trim()) throw new Error('Pair the local companion before inspecting a browser tab.');
-  const response = await fetchImpl(base + '/v1/rea/browser/inspect', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + config.token.trim(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, targetId, kind, authorization }),
-  });
-  const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
-  if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Local browser inspection failed.');
-  return body.result;
+  return reaBrowserRequest(
+    config,
+    '/v1/rea/browser/inspect',
+    { endpoint, targetId, kind, authorization },
+    kind === 'bundle' ? 320_000 : 120_000,
+    fetchImpl,
+  );
 }
