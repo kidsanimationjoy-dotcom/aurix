@@ -1,4 +1,4 @@
-import { getHiggsfieldStatus, listHiggsfieldModels, quoteHiggsfieldJob, createHiggsfieldJob, getHiggsfieldJob } from '../companion/client';
+import { getHiggsfieldStatus, listHiggsfieldModels, quoteHiggsfieldJob, createHiggsfieldJob, getHiggsfieldJob, startHiggsfieldLogin } from '../companion/client';
 import type { LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, MediaAdapter, MediaJob, MediaJobRequest, MediaModel, ProviderMeta, ProviderStatus, Result } from './types';
 
@@ -45,6 +45,18 @@ export class HiggsfieldAdapter implements MediaAdapter {
 
   setCompanionConfigProvider(provider: () => LocalCompanionConfig): void {
     this.getConfig = provider;
+  }
+
+  async startLogin() {
+    try {
+      return { ok: true as const, value: await startHiggsfieldLogin(this.getConfig()) };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'Could not start Higgsfield sign-in.' } };
+    }
+  }
+
+  async getAccountStatus() {
+    return getHiggsfieldStatus(this.getConfig());
   }
 
   async getStatus(): Promise<ProviderStatus> {
