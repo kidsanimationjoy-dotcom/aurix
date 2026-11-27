@@ -20,6 +20,7 @@ export type CompanionCapability =
   | 'cli.codex.sandbox.verify'
   | 'cli.codex.chat'
   | 'cli.codex.agent'
+  | 'cli.codex.agent.validate'
   | 'cli.grok-build'
   | 'cli.rea'
   | 'rea.status'
