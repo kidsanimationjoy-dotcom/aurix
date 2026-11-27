@@ -180,22 +180,20 @@ export function renderCodexProfileConfig(workspaceRoot, platform = process.platf
 
 function parseManagedCodexProfileRoots(configText, workspaceRoot, platform) {
   const header = '[permissions.' + AURIX_CODEX_PROFILE + '.workspace_roots]';
-  const lines = String(configText).split(/\\r?\\n/u);
+  const lines = String(configText).split('\n');
   const headerIndex = lines.indexOf(header);
   if (headerIndex < 0) return null;
   const roots = [];
+  const suffix = ' = true';
   for (let index = headerIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim()) break;
-    const match = /^\\s*("(?:[^"\\\\]|\\\\.)*")\\s*=\\s*true\\s*$/u.exec(line);
-    if (!match) return null;
-    try {
-      const root = JSON.parse(match[1]);
-      if (typeof root !== 'string' || !path.isAbsolute(root)) return null;
-      roots.push(root);
-    } catch {
-      return null;
-    }
+    if (!line.endsWith(suffix)) return null;
+    let root;
+    try { root = JSON.parse(line.slice(0, -suffix.length)); }
+    catch { return null; }
+    if (typeof root !== 'string' || !path.isAbsolute(root)) return null;
+    roots.push(root);
   }
   if (!roots.length || !samePath(roots[0], workspaceRoot)) return null;
   const projectRoots = roots.slice(1);
