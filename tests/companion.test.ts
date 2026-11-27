@@ -290,20 +290,11 @@ test('companion shutdown aborts active Codex chat and closes the response', asyn
     await closeCompanion();
     await assert.rejects(request);
 
-    let exited = false;
-    for (let attempt = 0; attempt < 120; attempt++) {
-      try {
-        process.kill(pid!, 0);
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      } catch (error) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') {
-          exited = true;
-          break;
-        }
-        throw error;
-      }
-    }
-    assert.equal(exited, true, 'companion shutdown should force-stop the active Codex child');
+    assert.throws(
+      () => process.kill(pid!, 0),
+      (error: unknown) => error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH',
+      'closeCompanion should wait until the active Codex child has exited',
+    );
   } finally {
     if (server.listening) {
       const closeCompanion = (server as unknown as { closeCompanion: () => Promise<void> }).closeCompanion;
