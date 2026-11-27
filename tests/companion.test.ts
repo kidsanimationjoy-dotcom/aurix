@@ -175,14 +175,14 @@ test('Codex project roots reject broad roots, AURIX internal folders and symboli
   }
 });
 
-test('Codex upgrades only the exact previous managed profile to the root-scoped v4 profile', async () => {
+test('Codex updates an exact AURIX-managed v4 profile when approved project roots change', async () => {
   const profile = await makeCodexProfile();
   const approved = path.join(profile.root, 'approved-projects');
   try {
     await mkdir(approved);
     await prepareCodexHome(profile.paths);
     const previous = await readFile(profile.paths.configPath, 'utf8');
-    assert.ok(previous.includes('AURIX isolated read-only chat profile'));
+    assert.ok(previous.includes('AURIX isolated read-only workspace profile v4'));
     await prepareCodexHome(profile.paths, { projectRoots: [approved] });
     const current = await readFile(profile.paths.configPath, 'utf8');
     assert.ok(current.includes('AURIX isolated read-only workspace profile v4'));
@@ -205,7 +205,7 @@ test('AURIX refuses a modified profile config and never overwrites it', async ()
   }
 });
 
-test('AURIX upgrades only its exact v2 config to the platform-aware v3 profile', async () => {
+test('AURIX upgrades only its exact v2 config to the platform-aware v4 profile', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aurix-codex-v2-upgrade-'));
   const paths = resolveCodexPaths({ HOME: root, XDG_DATA_HOME: path.join(root, 'data') }, 'win32', root);
   const legacy = [
