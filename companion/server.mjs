@@ -277,7 +277,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/login') {
       try {
-        await validateCodexHome(paths);
+        await validateCodexHome(paths, { projectRoots: codexRoots });
       } catch {
         return send(409, { error: 'CODEX_PROFILE_NOT_PREPARED', message: 'Prepare the separate AURIX Codex profile before signing in.' });
       }
@@ -469,7 +469,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         if (!codexRoots.length) {
           return send(409, { error: 'CODEX_PROJECT_ROOTS_NOT_CONFIGURED', message: 'Set AURIX_CODEX_ROOTS to the project folders you explicitly approve for coding.' });
         }
-        await validateCodexHome(paths);
+        await validateCodexHome(paths, { projectRoots: codexRoots });
         const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
         if (status.state !== 'ready') {
           return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
@@ -565,7 +565,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         if (!sandboxVerified) {
           return send(409, { error: 'CODEX_SANDBOX_NOT_VERIFIED', message: 'Prepare the AURIX Codex profile and pass its local sandbox check before starting chat.' });
         }
-        await validateCodexHome(paths);
+        await validateCodexHome(paths, { projectRoots: codexRoots });
         const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
         if (status.state !== 'ready') {
           return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
