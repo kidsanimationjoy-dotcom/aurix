@@ -147,6 +147,17 @@ function normalizeSpec(spec) {
   const prompt = typeof spec.prompt === 'string' ? spec.prompt.trim() : '';
   if (!prompt || prompt.length > 8000) throw new Error('Enter a prompt of 1–8,000 characters.');
 
+  if (modelId === 'seedance_2_5') {
+    // The official CLI quickstart documents this fixed 2.5 text-to-video profile.
+    // Keep the option set narrow until the model-specific schema is published.
+    return {
+      kind: 'video',
+      modelId,
+      prompt,
+      settings: { duration: 5, resolution: '1080p', aspectRatio: '16:9', mode: 't2v', bitrateMode: 'high' },
+    };
+  }
+
   if (modelId === 'seedance_2_0') {
     const duration = Number(spec.duration ?? 5);
     const resolution = String(spec.resolution ?? '720p');
@@ -188,10 +199,11 @@ function normalizeSpec(spec) {
 function makeArgs(action, spec) {
   const normalized = normalizeSpec(spec);
   if (normalized.kind === 'video') {
-    const { duration, resolution, aspectRatio, mode } = normalized.settings;
+    const { duration, resolution, aspectRatio, mode, bitrateMode } = normalized.settings;
     return [
       'generate', action, normalized.modelId,
       '--mode', mode,
+      ...(bitrateMode ? ['--bitrate_mode', bitrateMode] : []),
       '--prompt', normalized.prompt,
       '--duration', String(duration),
       '--resolution', resolution,
