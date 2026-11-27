@@ -169,6 +169,8 @@ Check("orb opens after wake phrase",
     VoiceOrbStatusPolicy.Classify("AURIX heard you. Listening for your instruction…") == VoiceOrbDisposition.Listening);
 Check("orb shows partial speech while listening",
     VoiceOrbStatusPolicy.Classify("Hearing: open Notepad") == VoiceOrbDisposition.Listening);
+Check("partial wake phrase does not prematurely show the orb",
+    VoiceOrbStatusPolicy.Classify("Checking wake phrase: hey") == VoiceOrbDisposition.None);
 Check("orb switches to thinking after recognised speech",
     VoiceOrbStatusPolicy.Classify("I heard: open Notepad") == VoiceOrbDisposition.Thinking);
 Check("orb closes after command silence timeout",
