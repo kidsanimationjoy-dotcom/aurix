@@ -102,7 +102,13 @@ Reject("NUL in proposed text rejected",
 Reject("non-JSON response rejected", """not JSON""", "Hello");
 
 Reject("button not explicitly named by user rejected", clickJson, "Open Notepad");
+Reject("mentioning a button without asking to click rejected",
+    """{"type":"desktop_plan","summary":"Save a file","steps":[{"kind":"click_button","app":"Notepad","button":"Save"}]}""",
+    "The Save button is visible in Notepad");
 Reject("text not supplied by user rejected", typeJson, "Type text into Text Editor in Notepad");
+Reject("disconnected type verb and value rejected",
+    """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
+    "I can type. Hello is a greeting. Text Editor in Notepad");
 Reject("editable field not named by user rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
     "Type Hello into Notepad");
