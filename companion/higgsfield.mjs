@@ -245,6 +245,8 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       }
       const args = makeArgs('cost', spec);
       const raw = parseJson(await cli(args, 60_000), 'generation cost estimate');
+      const pricing = stablePricing(raw);
+      if (!Object.keys(pricing).length) throw new Error('Higgsfield returned no recognised numeric credit estimate. AURIX will not submit a generation without a verifiable cost field.');
       for (const [id, oldQuote] of quotes) if (oldQuote.expiresAt < Date.now()) quotes.delete(id);
       while (quotes.size >= 50) quotes.delete(quotes.keys().next().value);
       const quoteId = randomUUID();
@@ -256,7 +258,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
         prompt: spec.prompt.trim(),
         settings: { duration: Number(spec.duration ?? 5), resolution: String(spec.resolution ?? '720p'), aspectRatio: String(spec.aspectRatio ?? '16:9') },
         raw,
-        pricing: stablePricing(raw),
+        pricing,
       };
       quotes.set(quoteId, quote);
       return quote;
@@ -271,6 +273,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       const spec = { modelId: quote.modelId, prompt: quote.prompt, ...quote.settings };
       const fresh = parseJson(await cli(makeArgs('cost', spec), 60_000), 'fresh generation cost estimate');
       const pricing = stablePricing(fresh);
+      if (!Object.keys(pricing).length) throw new Error('Higgsfield returned no fresh credit estimate. The quote was consumed; request a new estimate before trying again.');
       if (JSON.stringify(pricing) !== JSON.stringify(quote.pricing)) {
         quotes.delete(quoteId);
         throw new Error('Higgsfield pricing changed since the estimate. Request a new estimate and review the updated credits.');
