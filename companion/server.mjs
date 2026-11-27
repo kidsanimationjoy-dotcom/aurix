@@ -9,6 +9,7 @@ import path from 'node:path';
 import { analyzeReaTarget, inspectReaBrowserTarget, listReaBrowserTargets, reaStatus } from './rea.mjs';
 import { runCodexReadOnlyChat } from './codex-chat.mjs';
 import { createCodexAgentManager } from './codex-agent.mjs';
+import { createHiggsfieldManager } from './higgsfield.mjs';
 import {
   checkLegacySystemConfig,
   prepareCodexHome,
@@ -18,7 +19,7 @@ import {
   validateCodexHome,
 } from './codex-profile.mjs';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 function safeEqual(a, b) {
   const x = Buffer.from(a);
@@ -189,11 +190,12 @@ async function readJson(req, limit = 4096) {
   }
 }
 
-export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [], codexRoots = [] }) {
+export function createCompanionServer({ token, origin, codexCommand = 'codex', codexPrefixArgs = [], codexPaths = null, reaCommand = 'rea', reaRoots = [], codexRoots = [], higgsfieldCommand = 'higgsfield' }) {
   let loginChild = null;
   // The companion process must re-prove the OS sandbox after every restart.
   let sandboxVerified = false;
   let codexAgentManager = null;
+  const higgsfield = createHiggsfieldManager({ command: higgsfieldCommand });
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
   const server = http.createServer(async (req, res) => {
     const reqOrigin = req.headers.origin;
@@ -234,7 +236,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job'],
         grantedRoots: [],
         codexApprovedRootCount: codexRoots.length,
       });
@@ -356,6 +358,65 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         return send(200, { ok: true, result });
       } catch (error) {
         return send(400, { ok: false, error: 'REA_BROWSER_INSPECTION_FAILED', message: error instanceof Error ? error.message.slice(0, 1000) : 'Could not inspect this local browser tab.' });
+      }
+    }
+
+
+    if (req.method === 'GET' && url.pathname === '/v1/higgsfield/status') {
+      return send(200, { ok: true, result: await higgsfield.status() });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/higgsfield/models') {
+      try {
+        return send(200, { ok: true, result: await higgsfield.listModels() });
+      } catch (error) {
+        return send(409, { ok: false, error: 'HIGGSFIELD_MODELS_UNAVAILABLE', message: error instanceof Error ? error.message.slice(0, 800) : 'Could not load Higgsfield models.' });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/higgsfield/quote') {
+      let body;
+      try { body = await readJson(req, 16_000); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, { ok: false, error: 'INVALID_REQUEST', message: status === 413 ? 'Cost estimate request is too large.' : 'Cost estimate request must contain valid JSON.' });
+      }
+      try {
+        const quote = await higgsfield.quote({
+          modelId: body.modelId,
+          prompt: body.prompt,
+          duration: body.duration,
+          resolution: body.resolution,
+          aspectRatio: body.aspectRatio,
+        });
+        return send(200, { ok: true, result: quote });
+      } catch (error) {
+        return send(409, { ok: false, error: 'HIGGSFIELD_QUOTE_FAILED', message: error instanceof Error ? error.message.slice(0, 900) : 'Could not estimate the Higgsfield credit cost.' });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/higgsfield/create') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, { ok: false, error: 'INVALID_REQUEST', message: 'Generation confirmation request must contain valid JSON.' });
+      }
+      try {
+        const result = await higgsfield.create({ quoteId: body.quoteId, confirmed: body.confirmed });
+        return send(202, { ok: true, result });
+      } catch (error) {
+        return send(409, { ok: false, error: 'HIGGSFIELD_GENERATION_NOT_STARTED', message: error instanceof Error ? error.message.slice(0, 900) : 'Higgsfield did not start the generation.' });
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/higgsfield/job') {
+      const jobId = url.searchParams.get('id') ?? '';
+      try {
+        const result = await higgsfield.getJob(jobId);
+        return send(200, { ok: true, result });
+      } catch (error) {
+        return send(409, { ok: false, error: 'HIGGSFIELD_JOB_UNAVAILABLE', message: error instanceof Error ? error.message.slice(0, 900) : 'Could not retrieve the Higgsfield job.' });
       }
     }
 
@@ -539,7 +600,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`AURIX companion ${VERSION} listening on http://127.0.0.1:${port}`);
     console.log(`Allowed origin: ${origin}`);
     console.log(`Pairing token:  ${token}`);
-    console.log('Capabilities: health, Codex read-only chat, project-scoped coding agent with explicit approvals, and REA analysis.');
+    console.log('Capabilities: Codex chat/coding, REA analysis, and official Higgsfield OAuth CLI generation with credit preflight.');
     console.log('REA approved roots: ' + reaRoots.length);
     console.log('Codex approved project roots: ' + codexRoots.length);
   });
