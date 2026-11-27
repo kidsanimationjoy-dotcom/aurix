@@ -115,17 +115,17 @@
               <ComboBox x:Name="AiProviderCombo" SelectedIndex="0" Height="34" Margin="0,0,12,7"
                         Background="#0A1728" Foreground="#F1F7FF" BorderBrush="#34516F"
                         Padding="8,5">
-                <ComboBoxItem Content="AURIX + Codex (approval-gated desktop plans)"/>
-                <ComboBoxItem Content="Stanford OpenJarvis (local chat only)"/>
+                <ComboBoxItem Content="Stanford OpenJarvis (primary AURIX AI brain)"/>
+                <ComboBoxItem Content="Codex (backup AI provider)"/>
               </ComboBox>
               <PasswordBox x:Name="CompanionTokenBox" Height="38" Margin="0,7,12,5"
                            Padding="10,7" Background="#0A1728" Foreground="#F1F7FF"
                            BorderBrush="#34516F" BorderThickness="1"
                            ToolTip="Pairing token printed by the local AURIX companion"/>
-              <TextBlock Text="Recognised speech is sent as text to the selected local AI provider; microphone audio stays on this PC. Stanford OpenJarvis is chat-only in this integration. Codex may propose limited desktop actions, but AURIX validates every plan and asks you before running it. AI-generated clicks and text entry remain limited to Notepad."
+              <TextBlock Text="Recognised speech is sent as text to the selected local AI provider; microphone audio stays on this PC. Stanford OpenJarvis is the primary AURIX reasoning engine and may propose only allowlisted actions. AURIX validates every proposal, asks before running a plan, and keeps separate approval for each Notepad change. Codex remains available as a backup."
                          Foreground="#839BB9" FontSize="10" TextWrapping="Wrap" Margin="0,0,12,5"/>
               <TextBlock x:Name="AiConnectionStatusText"
-                         Text="Optional: connect the local AURIX companion for AI answers and approval-gated Notepad actions."
+                         Text="Primary: Stanford OpenJarvis on this PC. Codex is available as a separately paired backup provider."
                          Foreground="#9CB0CC" FontSize="11" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
