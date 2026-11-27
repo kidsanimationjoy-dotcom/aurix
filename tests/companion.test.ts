@@ -459,7 +459,7 @@ process.exit(2);
       assert.equal(polled.status, 200);
       assert.equal((await polled.json()).result.status, 'completed');
 
-      const calls = (await readFile(logPath, 'utf8')).trim().split('\\n');
+      const calls = (await readFile(logPath, 'utf8')).trim().split(/\r?\n/u);
       assert.deepEqual(calls, ['cost', 'cost', 'create']);
     }, { higgsfieldCommand: command });
   } finally {
