@@ -74,6 +74,10 @@ jobs:
             "This ZIP is a portable preview package, not an installer. It has no automatic update or uninstall service."
           ) | Set-Content -LiteralPath (Join-Path $publish "RELEASE-STATUS.txt") -Encoding utf8
 
+      - name: Verify portable preview package contents and integrity
+        shell: pwsh
+        run: pwsh -NoProfile -File windows/Aurix.Desktop.Tests/Test-ReleasePackage.ps1 -PublishDirectory "$env:RUNNER_TEMP\aurix-publish"
+
       - name: Upload Windows x64 portable preview
         uses: actions/upload-artifact@v4
         with:
