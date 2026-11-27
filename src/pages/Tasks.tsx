@@ -177,7 +177,7 @@ export function Tasks() {
 
                   {task.status === 'awaiting_action_approval' && task.pendingActionApproval && (() => {
                     const approval = task.pendingActionApproval;
-                    const isNetwork = approval.kind === 'network';
+                    const isNetwork = approval.kind === 'network' || Boolean(approval.network);
                     const isSessionGrant = !!approval.grantRoot;
                     const isUnreviewableFileChange = approval.kind === 'file_change' && approval.changes.length === 0;
                     const canApprove = !isNetwork && !isSessionGrant && !isUnreviewableFileChange;
