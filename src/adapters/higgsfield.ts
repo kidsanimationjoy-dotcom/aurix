@@ -138,6 +138,7 @@ export class HiggsfieldAdapter implements MediaAdapter {
         duration: Number(request.settings.duration ?? 5),
         resolution: String(request.settings.resolution ?? '720p'),
         aspectRatio: String(request.settings.aspectRatio ?? '16:9'),
+        mode: String(request.settings.mode ?? 'std'),
       });
       return { ok: true as const, value: quote };
     } catch (error) {
