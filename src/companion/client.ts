@@ -480,7 +480,7 @@ export async function createHiggsfieldJob(
   quoteId: string,
   confirmed: boolean,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ jobId: string; submittedAt: string; raw: unknown }> {
+): Promise<{ jobId: string; submittedAt: string }> {
   return higgsfieldRequest(
     config,
     '/v1/higgsfield/create',
