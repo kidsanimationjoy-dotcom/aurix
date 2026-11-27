@@ -14,7 +14,7 @@ The current native Windows guide lists these prerequisites:
 - Microsoft C++ build tools (MSVC linker).
 - Approximately 5 GB of free disk space.
 
-The official installer clones OpenJarvis to `%LOCALAPPDATA%\OpenJarvis\src` by default, prepares its desktop/server Python environment, and creates a `uv` command shim. The installer may offer to register a separate Windows scheduled task. When using AURIX's on-demand server controls, skip that separate scheduled task to avoid running two server managers. Restart AURIX after installation so it can read the updated user PATH.
+The official installer clones OpenJarvis to `%LOCALAPPDATA%\OpenJarvis\src` by default, prepares its desktop/server Python environment, installs `uv`, and creates a `jarvis.cmd` command shim. The installer may offer to register a separate Windows scheduled task. When using AURIX's on-demand server controls, skip that separate scheduled task to avoid running two server managers. Restart AURIX after installation so it can read the updated user PATH.
 
 The installation is performed by Stanford's installer, not by AURIX. AURIX does not download or run the install script itself.
 
