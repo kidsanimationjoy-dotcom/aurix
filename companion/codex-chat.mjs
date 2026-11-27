@@ -86,8 +86,18 @@ export function runCodexReadOnlyChat({
       if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       fn(value);
     };
+    const terminateChild = () => {
+      try { child.kill('SIGTERM'); } catch { /* The process may already have exited. */ }
+      const hardKillTimer = setTimeout(() => {
+        if (child.exitCode !== null || child.signalCode !== null)
+          return;
+        try { child.kill('SIGKILL'); } catch { /* The process may already have exited. */ }
+      }, 750);
+      hardKillTimer.unref?.();
+      child.once('close', () => clearTimeout(hardKillTimer));
+    };
     onAbort = () => {
-      try { child.kill(); } catch { /* The process may already have exited. */ }
+      terminateChild();
       const error = new Error('Codex chat was cancelled by the caller.');
       error.name = 'AbortError';
       finish(reject, error);
@@ -97,7 +107,7 @@ export function runCodexReadOnlyChat({
       if (settled) return;
       stdout += chunk.toString('utf8');
       if (stdout.length > MAX_STDOUT_CHARS) {
-        child.kill();
+        terminateChild();
         finish(reject, new Error('Codex output exceeded the one-megabyte safety limit.'));
       }
     });
@@ -146,7 +156,7 @@ export function runCodexReadOnlyChat({
 
     signal?.addEventListener('abort', onAbort, { once: true });
     timer = setTimeout(() => {
-      try { child.kill(); } catch { /* The process may already have exited. */ }
+      terminateChild();
       finish(reject, new Error('Codex did not complete the read-only chat before the time limit.'));
     }, Math.max(1_000, Math.min(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)));
 
