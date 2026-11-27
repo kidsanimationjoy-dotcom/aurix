@@ -16,6 +16,20 @@ You do not need to reopen the window or press a microphone button for each task.
 
 Hands-free opt-in is saved for the current Windows user. If you also press **Enable start with Windows**, AURIX registers itself to launch hidden in the tray at sign-in and restores hands-free mode if it was enabled. Pausing hands-free turns off the saved preference, so the next sign-in will not reactivate the microphone until you enable it again.
 
+## Local AI conversation
+
+The Windows companion can route ordinary spoken questions to the separate AURIX Codex profile through the authenticated loopback companion:
+
+1. Start the Node companion on this same PC at its default address, `http://127.0.0.1:4317`.
+2. Copy the pairing token printed in that companion terminal into **Local AI Chat → Connect**. AURIX stores it encrypted with Windows DPAPI for the current Windows user.
+3. Use **Verify AI sandbox** and wait for the local Codex profile and operating-system sandbox check to pass.
+4. If Codex is not signed in, use **Sign in to Codex** and complete the official sign-in in the companion terminal.
+5. Say “AURIX” and ask a question. Requests that do not match a supported local desktop command are sent as text to the local Codex CLI; the microphone audio is not sent.
+
+AI conversation is read-only. It cannot launch apps, click controls, type into other applications, run commands or change files. The existing bounded desktop planner handles its documented local actions, and UI changes still require their individual approval. The Codex chat endpoint independently checks sandbox verification and sign-in before every request. An emergency stop cancels the in-flight chat request and stops local speech output.
+
+The pairing token is encrypted for the current Windows user and is not written to the task audit log. The local companion must remain running. The desktop companion does not bypass the Codex plan, account, or usage limits.
+
 ## Voice privacy and requirements
 
 The hands-free service uses `System.Speech` and a locally installed English Windows speech recognizer. While waiting, it loads a narrow grammar containing only the AURIX wake phrase choices; it does not run general dictation in the background. Only after the wake phrase is recognised does it load a dictation grammar for one instruction. The dictation grammar is unloaded after that command and the wake-word grammar is restored.
@@ -58,7 +72,7 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - `Click button "Save" in Notepad`
 - `Type "Hello AURIX" into "Search" in Edge`
 
-Spoken commands are submitted after one wake phrase and one utterance. The task planner still accepts only its documented local command patterns; the connected AI reasoning layer is not implemented yet. Actions that change another app still require their existing approval prompt.
+Spoken commands are submitted after one wake phrase and one utterance. The local task planner accepts only its documented desktop command patterns. Other voice requests can use the optional read-only local Codex chat path described above. Actions that change another app still require their existing approval prompt.
 
 For a button click, AURIX must find exactly one visible, enabled button with that exact name. Buttons whose names suggest sending, sharing, purchasing, paying, transferring, submitting or publishing display an additional warning. Destructive button names are blocked.
 
