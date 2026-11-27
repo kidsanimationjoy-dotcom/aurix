@@ -151,8 +151,8 @@ function makeArgs(action, spec) {
   const resolution = String(spec.resolution ?? '720p');
   const aspectRatio = String(spec.aspectRatio ?? '16:9');
   if (![5, 10].includes(duration)) throw new Error('Choose a supported 5- or 10-second duration.');
-  if (!['720p', '1080p'].includes(resolution)) throw new Error('Choose 720p or 1080p resolution.');
-  if (!['16:9', '9:16', '1:1'].includes(aspectRatio)) throw new Error('Choose a supported aspect ratio.');
+  if (!['480p', '720p', '1080p', '4k'].includes(resolution)) throw new Error('Choose 720p or 1080p resolution.');
+  if (!['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'].includes(aspectRatio)) throw new Error('Choose a supported aspect ratio.');
   return [
     'generate', action, spec.modelId,
     '--mode', 'std',
