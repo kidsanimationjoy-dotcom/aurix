@@ -435,7 +435,7 @@ process.exit(2);
         method: 'POST', headers, body: JSON.stringify({ endpoint: 'http://example.com:9222', authorization }),
       });
       assert.equal(remote.status, 400);
-      assert.match((await remote.json()).message, /loopback/);
+      assert.match((await remote.json()).message, /127\\.0\\.0\\.1/);
     }, { reaCommand: fake.command });
   } finally {
     await rm(fake.directory, { recursive: true, force: true });
