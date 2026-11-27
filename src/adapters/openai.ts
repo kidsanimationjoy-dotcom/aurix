@@ -6,6 +6,7 @@ import {
   respondCodexAgentApproval,
   interruptCodexAgent,
   closeCodexAgent,
+  validateCodexAgentTarget,
 } from '../companion/client';
 import type { CodexAgentEvent, LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, ChatAdapter, ChatRequest, ProviderMeta } from './types';
@@ -203,6 +204,11 @@ export class OpenAiAdapter implements ChatAdapter, TaskExecutionAdapter {
     if (!projectPath) return 'Link this project to its real local folder in Projects before starting a Codex coding task.';
     if (Number(status.codexApprovedRootCount ?? 0) < 1) {
       return 'No approved project roots are configured. Set AURIX_CODEX_ROOTS, restart the local companion, and prepare the AURIX profile again.';
+    }
+    try {
+      await validateCodexAgentTarget(config, projectPath);
+    } catch (error) {
+      return error instanceof Error ? error.message : 'The selected project folder is not inside the approved local roots.';
     }
     return null;
   }
