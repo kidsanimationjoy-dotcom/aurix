@@ -135,11 +135,12 @@ export function Tasks() {
                   <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <strong>{task.prompt.length > 100 ? `${task.prompt.slice(0, 100)}…` : task.prompt}</strong>
-                      <small className="muted">{fmtTime(task.createdAt)} · {task.intent} · {task.intentReason}</small>
+                      <small className="muted">{fmtTime(task.createdAt)} · {task.intent} · {task.intentReason}{task.agentProfile ? ' · Agent: ' + task.agentProfile.name : ''}</small>
                     </div>
                     <span className={`pill task-status ${task.status}`}>{STATUS_LABEL[task.status]}</span>
                   </div>
 
+                  {task.agentProfile && <small>Agent: {task.agentProfile.name} · File changes: {task.agentProfile.permissions.fileWrite} · Commands: {task.agentProfile.permissions.terminal} · Network: denied</small>}
                   {task.selectedProviderId && <small>Provider: {adapters.find((item) => item.meta.id === task.selectedProviderId)?.meta.name ?? task.selectedProviderId}</small>}
                   <div className="task-progress" role="progressbar" aria-label="Task progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={task.progress}>
                     <span style={{ width: `${task.progress}%` }} />
