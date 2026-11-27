@@ -60,13 +60,15 @@ A recognised certificate authority may issue an organization-validated code-sign
 
 ## Latest merged build and cancellation evidence (November 27, 2026)
 
-- Current main head after PR [#43](https://github.com/kidsanimationjoy-dotcom/aurix/pull/43): `ba476391a731570589d626ceaded44f918a1c8d1`.
+- Current main head after PR [#45](https://github.com/kidsanimationjoy-dotcom/aurix/pull/45): `6b70a229c3fd35410e8155d29c7ec6170c33a449`.
 - Latest Windows desktop source update is PR [#39](https://github.com/kidsanimationjoy-dotcom/aurix/pull/39). Its [Windows workflow run 46014044710](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46014044710) passed native compilation, desktop task-policy and lifecycle tests, self-contained publishing, portable ZIP packaging and unsigned MSIX validation packaging.
 - Latest Windows package containing the local pairing-disconnect control is PR [#43](https://github.com/kidsanimationjoy-dotcom/aurix/pull/43), [Windows workflow run 46017864230](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46017864230). Build, all 47 desktop tests and both package uploads passed.
 - Portable preview artifact 15206324568 has GitHub digest sha256:560de6beb05b61e9f5fc65cb8507277a32c4b175602da1856c0eafb78b9d5484; unsigned MSIX validation artifact 15207670222 has GitHub digest sha256:df00ca6a80e4a131e925b941f877fa35c028bfea6ca1d8d9df223114eb354beb. These are CI integrity digests, not signatures or publisher verification.
 - PR [#40](https://github.com/kidsanimationjoy-dotcom/aurix/pull/40) adds end-to-end client-disconnect cancellation for the local Codex chat process. [AURIX verification run 46015853751](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853751) and [AURIX CI run 46015853805](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853805) passed, including the child-process cancellation regression.
 - PR [#41](https://github.com/kidsanimationjoy-dotcom/aurix/pull/41) adds a graceful stop followed by a hard-stop fallback after 750 ms when the Codex child remains alive. [Verification run 46016349854](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46016349854) passed TypeScript, unit tests, production build and browser smoke tests. The regression test makes the fake Codex process ignore SIGTERM and checks that it exits after escalation.
 - PRs #40 and #41 changed companion code and tests only; they did not change the Windows executable built by PR #39.
+- PR [#45](https://github.com/kidsanimationjoy-dotcom/aurix/pull/45) adds tracked active-chat shutdown to the Node companion. Its [AURIX CI run 46020458611](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46020458611) and [verification run 46020458674](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46020458674) passed all 92 tests, TypeScript, production build and browser smoke tests. PR #45 changed no Windows desktop code or Windows package artifacts.
+- The latest Windows x64 and MSIX validation artifact IDs and digests above remain the PR #43 build evidence; both packages remain unsigned.
 - These CI results confirm build and test behavior, not publisher identity or trusted signing. The portable ZIP and MSIX validation package remain unsigned. No SmartScreen or Defender bypass is permitted.
 
 ## Signing controls
