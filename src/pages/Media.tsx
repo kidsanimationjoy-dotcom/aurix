@@ -64,7 +64,7 @@ export function Media() {
     } finally {
       setLoading(false);
     }
-  }, [higgsfield, modelId, refreshStatuses, status?.checkedAt]);
+  }, [higgsfield, modelId, refreshStatuses, status?.state]);
 
   useEffect(() => { void reload(); }, [reload]);
 
