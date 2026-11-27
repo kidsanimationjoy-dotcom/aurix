@@ -9,7 +9,7 @@ import {
 } from '../companion/client';
 import type { CodexAgentEvent, LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, ChatAdapter, CodingAgentAdapter, ChatRequest, ProviderMeta } from './types';
-import type { TaskActionApprovalDecision, TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest, TaskExecutionResult } from '../tasks/types';
+import type { TaskActionApproval, TaskActionApprovalDecision, TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest, TaskExecutionResult } from '../tasks/types';
 
 const MAX_TASK_OUTPUT = 200_000;
 const POLL_INTERVAL_MS = 900;
@@ -34,7 +34,7 @@ function textValue(value: unknown, max = 12_000): string {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
-function actionApprovalFromEvent(event: CodexAgentEvent) {
+function actionApprovalFromEvent(event: CodexAgentEvent): Omit<TaskActionApproval, 'id'> {
   const kindValue = event.kind;
   const kind = kindValue === 'network' || kindValue === 'file_change' || kindValue === 'filesystem'
     ? kindValue
