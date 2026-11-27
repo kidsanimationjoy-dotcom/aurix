@@ -507,6 +507,107 @@ test('task readiness is rechecked after the user approves the provider and can s
   assert.equal(executions, 0);
 });
 
+
+test('agent run snapshots its role, instructions and permission settings into Task Center', async () => {
+  const db = await freshDb();
+  let readinessProfile: unknown;
+  let executedProfile: unknown;
+  const executor: TaskExecutionAdapter['executeTask'] = async (request) => {
+    executedProfile = request.agentProfile;
+    return { output: 'Agent task completed.' };
+  };
+  const agentAdapter: ProviderAdapter & TaskExecutionAdapter = {
+    meta: { ...claudeMeta, plannedCapabilities: ['chat', 'coding_agent'] },
+    getStatus: async () => ({
+      state: 'connected',
+      implementation: 'implemented_tested',
+      summary: 'Connected in test',
+      checkedAt: Date.now(),
+    }),
+    getCapabilities: async () => ['chat', 'coding_agent'],
+    checkTaskReadiness: async (request) => {
+      readinessProfile = request.agentProfile;
+      return null;
+    },
+    executeTask: executor,
+  };
+  const engine = new TaskEngine(db, [agentAdapter]);
+  const sourceProfile = {
+    id: 'agent-alpha',
+    name: 'Build specialist',
+    role: 'coding specialist',
+    summary: 'Creates small project changes',
+    instructions: 'Use clear names and explain the result.',
+    permissions: { fileWrite: 'deny' as const, terminal: 'ask' as const, network: 'ask' as const },
+  };
+  const task = await engine.submit({
+    projectId: 'project-1',
+    prompt: 'Explain the project structure',
+    preferredProvider: 'claude',
+    intentOverride: 'chat',
+    agentProfile: sourceProfile,
+  });
+  assert.equal(task.intent, 'chat');
+  assert.equal(task.status, 'awaiting_approval');
+  assert.deepEqual(task.agentProfile?.permissions, { fileWrite: 'deny', terminal: 'ask', network: 'ask' });
+  sourceProfile.instructions = 'Modified after submit';
+  assert.equal(task.agentProfile?.instructions, 'Use clear names and explain the result.');
+  assert.equal((readinessProfile as { instructions: string }).instructions, 'Use clear names and explain the result.');
+
+  await engine.approve(task.id);
+  for (let index = 0; index < 60 && db.get('tasks', task.id)?.status !== 'succeeded'; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(db.get('tasks', task.id)?.status, 'succeeded');
+  assert.equal((executedProfile as { id: string }).id, 'agent-alpha');
+  assert.equal((executedProfile as { permissions: { fileWrite: string } }).permissions.fileWrite, 'deny');
+});
+
+test('agent task mode can override the text classifier without changing the stored user prompt', async () => {
+  const db = await freshDb();
+  const executor: TaskExecutionAdapter['executeTask'] = async () => ({ output: 'Done.' });
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({
+    projectId: null,
+    prompt: 'Hello there',
+    preferredProvider: 'claude',
+    intentOverride: 'coding',
+    agentProfile: {
+      id: 'agent-coder',
+      name: 'Coder',
+      role: 'coding specialist',
+      summary: '',
+      instructions: '',
+      permissions: { fileWrite: 'ask', terminal: 'deny', network: 'deny' },
+    },
+  });
+  assert.equal(task.intent, 'coding');
+  assert.equal(task.prompt, 'Hello there');
+  assert.match(task.intentReason, /explicitly selected/);
+});
+
+test('invalid agent profiles are rejected before a task is created', async () => {
+  const db = await freshDb();
+  const engine = new TaskEngine(db, [adapter()]);
+  await assert.rejects(
+    () => engine.submit({
+      projectId: null,
+      prompt: 'Hello',
+      preferredProvider: 'auto',
+      agentProfile: {
+        id: '',
+        name: '',
+        role: '',
+        summary: '',
+        instructions: '',
+        permissions: { fileWrite: 'ask', terminal: 'ask', network: 'ask' },
+      },
+    }),
+    /agent profile is invalid/,
+  );
+  assert.equal(db.snapshot('tasks').length, 0);
+});
+
 test('retry re-checks provider availability for the same saved task', async () => {
   const db = await freshDb();
   let connected = false;
