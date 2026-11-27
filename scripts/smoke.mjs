@@ -13,7 +13,7 @@ const ctx = await browser.newContext({ viewport: { width: 1360, height: 860 } })
 const page = await ctx.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-page.on('console', (m) => { if (m.type() === 'error' && !/fonts\\.(googleapis|gstatic)|ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION)/.test(m.text() + (m.location().url ?? ''))) problems.push(`console: ${m.text()}`); });
+page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.(googleapis|gstatic)|ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION)/.test(m.text() + (m.location().url ?? ''))) problems.push(`console: ${m.text()}`); });
 
 await page.goto(URL_ + '/#/');
 await page.waitForSelector('nav a');
@@ -75,7 +75,7 @@ check('waiting task can be cancelled', await page.getByText('Cancelled', { exact
 await page.goto(`${URL_}/#/coding`);
 await page.getByLabel('New file path').fill('src/app.ts');
 await page.getByRole('button', { name: 'Create file' }).click();
-await page.getByLabel('Editing src/app.ts').fill('const a = 1;\\n');
+await page.getByLabel('Editing src/app.ts').fill('const a = 1;\n');
 check('diff shows unsaved additions', await page.getByLabel('Diff of unsaved changes').getByText('const a = 1;').isVisible());
 await page.getByRole('button', { name: 'Save', exact: true }).click();
 await page.getByText('Saved', { exact: true }).waitFor({ timeout: 5000 }).catch(() => {});
@@ -119,5 +119,5 @@ if (SHOTS) await page.screenshot({ path: `${SHOTS}/mobile-home.png` });
 
 check('no page errors or console errors', problems.length === 0, problems.join(' | '));
 await browser.close();
-console.log(failed ? `\\n${failed} check(s) failed` : '\\nAll smoke checks passed');
+console.log(failed ? `\n${failed} check(s) failed` : '\nAll smoke checks passed');
 process.exit(failed ? 1 : 0);
