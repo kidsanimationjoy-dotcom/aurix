@@ -122,7 +122,7 @@
                            Padding="10,7" Background="#0A1728" Foreground="#F1F7FF"
                            BorderBrush="#34516F" BorderThickness="1"
                            ToolTip="Pairing token printed by the local AURIX companion"/>
-              <TextBlock Text="Recognised speech is sent as text to your locally signed-in Codex CLI; microphone audio stays on this PC. AI may propose supported desktop actions, but AURIX validates the plan and asks you before running it. AI-generated clicks and text entry are limited to Notepad; browsers and messaging apps are excluded."
+              <TextBlock Text="Recognised speech is sent as text to the selected local AI provider; microphone audio stays on this PC. Stanford OpenJarvis is chat-only in this integration. Codex may propose limited desktop actions, but AURIX validates every plan and asks you before running it. AI-generated clicks and text entry remain limited to Notepad."
                          Foreground="#839BB9" FontSize="10" TextWrapping="Wrap" Margin="0,0,12,5"/>
               <TextBlock x:Name="AiConnectionStatusText"
                          Text="Optional: connect the local AURIX companion for AI answers and approval-gated Notepad actions."
