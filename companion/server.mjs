@@ -398,6 +398,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
           resolution: body.resolution,
           aspectRatio: body.aspectRatio,
           mode: body.mode,
+          bitrateMode: body.bitrateMode,
           quality: body.quality,
           variant: body.variant,
         });
