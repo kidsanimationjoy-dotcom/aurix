@@ -169,7 +169,7 @@ export function Media() {
               <span><b>{typeof account.account.email === 'string' ? account.account.email : 'Signed in account'}</b></span>
               {account.account.plan !== undefined && <span>Plan: {String(account.account.plan)}</span>}
               {hasCredits !== null && <span>Available credits: <b>{hasCredits}</b></span>}
-              {account.version && <span>CLI: {String((account.version as Record<string, unknown>).version ?? account.version)}</span>}
+              {account.version !== undefined && account.version !== null && <span>CLI: {String((account.version as Record<string, unknown>).version ?? account.version)}</span>}
             </div>
             <div className="row">
               <button className="btn" disabled={loading} onClick={() => void reload()}>{loading ? 'Refreshing…' : 'Refresh account and models'}</button>
