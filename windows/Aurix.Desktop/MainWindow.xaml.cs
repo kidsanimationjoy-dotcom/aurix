@@ -16,7 +16,6 @@ public partial class MainWindow : Window
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private SpeechSynthesizer? _speechSynthesizer;
-    private ActiveOrbWindow? _activeOrb;
     private bool _microphoneTestRunning;
     private string _companionToken = string.Empty;
     private bool _codexReady;
@@ -35,10 +34,8 @@ public partial class MainWindow : Window
         try
         {
             _speechSynthesizer = new SpeechSynthesizer();
-            _speechSynthesizer.SpeakCompleted += (_, _) => Dispatcher.BeginInvoke(new Action(HideActiveOrb));
         }
         catch { _speechSynthesizer = null; }
-        _activeOrb = new ActiveOrbWindow();
         Loaded += async (_, _) =>
         {
             UpdateStartupButton();
@@ -137,7 +134,6 @@ public partial class MainWindow : Window
 
         ListeningStatusText.Text =
             "MICROPHONE TEST ACTIVE — say a short sentence now. Audio is processed locally and is not saved.";
-        ShowActiveOrb("Listening", "Microphone test — speak now");
 
         try
         {
@@ -155,34 +151,12 @@ public partial class MainWindow : Window
         finally
         {
             _microphoneTestRunning = false;
-            HideActiveOrb();
             TestMicrophoneButton.IsEnabled = true;
             VoiceDiagnosticsButton.IsEnabled = true;
 
             if (resumeHandsFree)
                 StartHandsFreeListening(savePreference: false);
         }
-    }
-
-    private void ShowActiveOrb(string state, string hint)
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(() => ShowActiveOrb(state, hint)));
-            return;
-        }
-        _activeOrb ??= new ActiveOrbWindow();
-        _activeOrb.SetState(state, hint);
-    }
-
-    private void HideActiveOrb()
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(HideActiveOrb));
-            return;
-        }
-        _activeOrb?.HideOrb();
     }
 
     private string CurrentCompanionToken()
@@ -382,20 +356,6 @@ public partial class MainWindow : Window
                  message.Contains("paused", StringComparison.OrdinalIgnoreCase)))
                 return;
 
-            switch (VoiceOrbStatusPolicy.Classify(message))
-            {
-                case VoiceOrbDisposition.Listening:
-                    ShowActiveOrb("Listening", message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase)
-                        ? "Hearing your speech"
-                        : "Listening to you");
-                    break;
-                case VoiceOrbDisposition.Thinking:
-                    ShowActiveOrb("Thinking", "Preparing your request");
-                    break;
-                case VoiceOrbDisposition.Hide:
-                    HideActiveOrb();
-                    break;
-            }
             var active = _handsFreeVoice?.IsRunning == true;
             if (!active && message.Contains("stopped", StringComparison.OrdinalIgnoreCase))
             {
@@ -418,7 +378,6 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            ShowActiveOrb("Thinking", "Working on your request");
             CommandInput.Text = command;
             CommandInput.CaretIndex = CommandInput.Text.Length;
             ListeningStatusText.Text = $"AURIX heard your instruction: “{command}”. Working on it…";
@@ -431,7 +390,6 @@ public partial class MainWindow : Window
         var voice = _handsFreeVoice;
         _handsFreeVoice = null;
         voice?.Dispose();
-        HideActiveOrb();
         UpdateTrayWakeState?.Invoke(false);
     }
 
@@ -549,7 +507,6 @@ public partial class MainWindow : Window
                 return;
 
             TaskOutputText.Text = result.Output;
-            HideActiveOrb();
             ListeningStatusText.Text = result.Cancelled
                 ? "Task stopped. Already completed actions are not undone."
                 : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
@@ -583,8 +540,7 @@ public partial class MainWindow : Window
             RunTaskButton.IsEnabled = true;
             EmergencyStopButton.IsEnabled = false;
             if (_speechSynthesizer?.State != SynthesizerState.Speaking)
-                HideActiveOrb();
-        }
+            }
     }
 
     private async Task RunAiChatAsync(string prompt)
@@ -756,13 +712,11 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         try
         {
             _speechSynthesizer.SpeakAsyncCancelAll();
-            ShowActiveOrb("Speaking", "AURIX is speaking");
             var spoken = answer.Length > 1800 ? answer[..1800] + ". The rest of the answer is shown on screen." : answer;
             _speechSynthesizer.SpeakAsync(spoken);
         }
         catch
         {
-            HideActiveOrb();
             // Text remains available even if Windows has no usable speech voice.
         }
     }
@@ -831,9 +785,6 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         ShutdownHandsFree();
         _taskRuns.CancelCurrent();
         _speechSynthesizer?.SpeakAsyncCancelAll();
-        HideActiveOrb();
-        _activeOrb?.Close();
-        _activeOrb = null;
         _speechSynthesizer?.Dispose();
         _speechSynthesizer = null;
     }
