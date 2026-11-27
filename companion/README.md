@@ -61,7 +61,7 @@ The App Server process uses the separate AURIX Codex profile and an allowlisted 
 
 ## Higgsfield video generation
 
-Install the official CLI locally with `npm install -g @higgsfield/cli`, then use **Media Studio → Sign in with Higgsfield**. The local companion starts the CLI's official browser OAuth flow in its terminal. AURIX never reads, returns, or asks the user to paste Higgsfield OAuth credentials or API keys. The supported workflow currently enables Seedance 2.0 text-to-video only when the live model catalog reports it. The prompt, duration, resolution and aspect ratio are checked against the AURIX-supported input set before asking the CLI for a cost estimate.
+Install the official CLI locally with `npm install -g @higgsfield/cli`, then use **Media Studio → Sign in with Higgsfield**. The local companion starts the CLI's official browser OAuth flow in its terminal. AURIX never reads, returns, or asks the user to paste Higgsfield OAuth credentials or API keys. The supported workflows currently enable Seedance 2.0 text-to-video and GPT Image 2.5 text-to-image only when the live model catalog reports them. The prompt and model-specific duration, resolution, aspect ratio, mode, quality and variant are validated against the published CLI schema before asking the CLI for a cost estimate. Reference-image editing is not included in this initial integration.
 
 AURIX does not run `generate create` when the user asks for a quote. It stores a short-lived, one-use quote ID in companion memory, displays the raw credit estimate in Media Studio, and requires the user to check the confirmation box and press **Confirm cost and generate**. The companion consumes the quote before any create attempt, re-runs the cost query and refuses to create a job when the price changed. This avoids accidental duplicate submissions using the same quote, although it cannot roll back a job after Higgsfield accepts it. No generation job has been sent during automated tests. Jobs are polled through the official CLI and are shown as completed only when Higgsfield returns a result URL.
 
@@ -72,7 +72,7 @@ All command execution uses `shell: false`, bounded output and timeouts. The CLI 
 - Generic filesystem and terminal APIs.
 - Cross-application keyboard/mouse and operating-system control.
 - General browser automation beyond the passive, explicitly authorised REA inspection.
-- Higgsfield image generation and video models other than the supported Seedance 2.0 workflow.
+- Additional Higgsfield image/video models, reference-image editing and image-to-video workflows beyond the supported Seedance 2.0 and GPT Image 2.5 text workflows.
 - Claude and Grok account-backed chat adapters remain disconnected; AURIX does not proxy their subscription credentials.
 
 **The local App Server path has automated fake-server tests; this is not proof that your installed Codex version, Windows sandbox, or real project folder has been verified.** Run it locally after setting up the companion and inspect every permission request.
