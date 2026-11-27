@@ -463,7 +463,7 @@ export async function listHiggsfieldModels(
 
 export async function quoteHiggsfieldJob(
   config: LocalCompanionConfig,
-  request: { kind: 'video' | 'image'; modelId: string; prompt: string; duration?: number; resolution?: string; aspectRatio?: string; mode?: 'std' | 'fast'; quality?: string; variant?: string },
+  request: { kind: 'video' | 'image'; modelId: string; prompt: string; duration?: number; resolution?: string; aspectRatio?: string; mode?: 'std' | 'fast' | 't2v'; bitrateMode?: string; quality?: string; variant?: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<HiggsfieldQuote> {
   return higgsfieldRequest<HiggsfieldQuote>(
