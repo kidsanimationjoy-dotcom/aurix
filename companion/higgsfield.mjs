@@ -53,10 +53,13 @@ function run(command, args, options = {}) {
     child.once('error', (error) => finish(reject, error));
     child.once('close', (code) => {
       if (code !== 0) {
-        const message = /not authenticated|session expired|unauthorized|please log in/i.test(stderr + stdout)
-          ? 'Higgsfield is not signed in. Run the official "higgsfield auth login" command in your local terminal.'
-          : ('Higgsfield CLI exited with code ' + code + '. Check the local CLI installation and run the official command in your terminal for details.');
-        finish(reject, new Error(message));
+        const diagnostic = stderr + '\\n' + stdout;
+        const error = new Error(/not authenticated|session expired|unauthorized|please log in/i.test(diagnostic)
+          ? 'Higgsfield is not signed in. Use the official browser sign-in from Media Studio.'
+          : 'Higgsfield CLI exited with code ' + code + '. Check the local CLI installation and run the official command in your terminal for details.');
+        if (/workspace_membership_required|workspace membership required/i.test(diagnostic)) error.code = 'WORKSPACE_MEMBERSHIP_REQUIRED';
+        else if (/not authenticated|session expired|unauthorized|please log in/i.test(diagnostic)) error.code = 'AUTH_REQUIRED';
+        finish(reject, error);
         return;
       }
       finish(resolve, { stdout, stderr });
@@ -260,25 +263,63 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
     },
 
     async status() {
+      let version;
       try {
-        const [versionOut, accountOut] = await Promise.all([
-          cli(['version', '--json'], 10_000),
-          cli(['account', 'status', '--json'], 15_000),
-        ]);
-        const version = parseJson(versionOut, 'version');
-        const account = pickAccount(parseJson(accountOut, 'account status'));
-        return { installed: true, signedIn: true, version, account, message: 'Higgsfield CLI is installed and signed in.' };
+        version = parseJson(await cli(['version', '--json'], 10_000), 'version');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Higgsfield status is unavailable.';
         const missing = /not found|ENOENT|install the official package/i.test(message);
-        const unauthenticated = /not signed in|auth login|session expired/i.test(message);
         return {
           installed: !missing,
           signedIn: false,
           version: null,
           account: {},
           message,
-          code: missing ? 'CLI_MISSING' : unauthenticated ? 'AUTH_REQUIRED' : 'STATUS_ERROR',
+          code: missing ? 'CLI_MISSING' : 'VERSION_UNAVAILABLE',
+        };
+      }
+
+      try {
+        const account = pickAccount(parseJson(await cli(['account', 'status', '--json'], 15_000), 'account status'));
+        return { installed: true, signedIn: true, version, account, message: 'Higgsfield CLI is installed and signed in.' };
+      } catch (error) {
+        if (error && typeof error === 'object' && error.code === 'WORKSPACE_MEMBERSHIP_REQUIRED') {
+          // A known CLI condition can block account/status even though model
+          // endpoints still work for the saved OAuth session. Do not ask for
+          // tokens or read credential files; verify only via the public CLI.
+          try {
+            const catalog = await this.listModels();
+            const probe = catalog.models.find((model) => model.id);
+            if (!probe) throw new Error('No models were returned by the signed-in CLI.');
+            await cli(['model', 'get', probe.id, '--json'], 20_000);
+            return {
+              installed: true,
+              signedIn: true,
+              version,
+              account: {},
+              message: 'Higgsfield model access is working, but the CLI account-status endpoint cannot read this account because workspace membership is missing. AURIX cannot display the available credit balance until a workspace is selected; every generation still requires a fresh credit estimate and confirmation.',
+              code: 'WORKSPACE_STATUS_LIMITED',
+            };
+          } catch {
+            return {
+              installed: true,
+              signedIn: false,
+              version,
+              account: {},
+              message: 'Higgsfield requires a workspace selection before account status and model access are available. Open Higgsfield in your browser, select a workspace for this account, then refresh AURIX.',
+              code: 'WORKSPACE_REQUIRED',
+            };
+          }
+        }
+        const message = error instanceof Error ? error.message : 'Higgsfield account status is unavailable.';
+        const unauthenticated = !!(error && typeof error === 'object' && error.code === 'AUTH_REQUIRED') || /not signed in|auth login|session expired/i.test(message);
+        return {
+          installed: true,
+          signedIn: false,
+          version,
+          account: {},
+          message,
+          code: unauthenticated ? 'AUTH_REQUIRED' : 'STATUS_ERROR',
         };
       }
     },
