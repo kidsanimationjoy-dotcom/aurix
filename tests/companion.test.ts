@@ -485,7 +485,7 @@ process.exit(2);
         method: 'POST', headers, body: JSON.stringify({ quoteId: imageQuote.quoteId, confirmed: false }),
       });
       assert.equal(imageRefused.status, 409);
-      assert.equal((await readFile(logPath, 'utf8')).trim().split(/\\r?\\n/u).filter((line) => line === 'create').length, 1);
+      assert.equal((await readFile(logPath, 'utf8')).trim().split(/\r?\n/u).filter((line) => line === 'create').length, 1);
 
       const imageCreated = await fetch(url + '/v1/higgsfield/create', {
         method: 'POST', headers, body: JSON.stringify({ quoteId: imageQuote.quoteId, confirmed: true }),
@@ -500,7 +500,7 @@ process.exit(2);
       assert.equal(imagePolled.status, 200);
       assert.equal((await imagePolled.json()).result.image_url, 'https://media.example.test/output.png');
 
-      const allCalls = (await readFile(logPath, 'utf8')).trim().split(/\\r?\\n/u);
+      const allCalls = (await readFile(logPath, 'utf8')).trim().split(/\r?\n/u);
       assert.deepEqual(allCalls, ['cost', 'cost', 'create', 'cost', 'cost', 'create']);
     }, { higgsfieldCommand: command });
   } finally {
