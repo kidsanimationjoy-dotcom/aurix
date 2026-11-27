@@ -344,3 +344,46 @@ export async function analyzeReaTarget(config: LocalCompanionConfig, target: str
   if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'REA analysis failed.');
   return body.result;
 }
+
+export interface ReaBrowserAuthorization {
+  statement: string;
+  confirmedAt: number;
+}
+
+export async function listReaBrowserTargets(
+  config: LocalCompanionConfig,
+  endpoint: string,
+  authorization: ReaBrowserAuthorization,
+  fetchImpl: typeof fetch = fetch,
+): Promise<unknown> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before listing browser tabs.');
+  const response = await fetchImpl(base + '/v1/rea/browser/targets', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + config.token.trim(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, authorization }),
+  });
+  const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
+  if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Could not list local browser tabs.');
+  return body.result;
+}
+
+export async function inspectReaBrowserTarget(
+  config: LocalCompanionConfig,
+  endpoint: string,
+  targetId: string,
+  kind: 'page' | 'bundle',
+  authorization: ReaBrowserAuthorization,
+  fetchImpl: typeof fetch = fetch,
+): Promise<unknown> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before inspecting a browser tab.');
+  const response = await fetchImpl(base + '/v1/rea/browser/inspect', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + config.token.trim(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, targetId, kind, authorization }),
+  });
+  const body = await response.json() as { ok?: boolean; result?: unknown; message?: string };
+  if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Local browser inspection failed.');
+  return body.result;
+}
