@@ -445,6 +445,67 @@ test('a task waiting for a local action approval is failed safely after app relo
   assert.equal(db.get('tasks', task.id)?.errorCode, 'INTERRUPTED_AFTER_RELOAD');
 });
 
+
+test('task readiness blockers are checked before the user is asked to approve execution', async () => {
+  const db = await freshDb();
+  let executions = 0;
+  let readinessCalls = 0;
+  const guarded: ProviderAdapter & TaskExecutionAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => ({
+      state: 'connected',
+      implementation: 'implemented_tested',
+      summary: 'Connected in test',
+      checkedAt: Date.now(),
+    }),
+    checkTaskReadiness: async (request) => {
+      readinessCalls += 1;
+      assert.equal(request.projectId, null);
+      return 'Select a project before starting this local coding workflow.';
+    },
+    executeTask: async () => {
+      executions += 1;
+      return { output: 'must not run' };
+    },
+  };
+  const engine = new TaskEngine(db, [guarded]);
+  const task = await engine.submit({ projectId: null, prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'waiting_for_provider');
+  assert.equal(task.errorCode, 'TASK_NOT_READY');
+  assert.equal(task.approvalStatus, 'not_required');
+  assert.equal(readinessCalls, 1);
+  assert.equal(executions, 0);
+});
+
+test('task readiness is rechecked after the user approves the provider and can stop dispatch', async () => {
+  const db = await freshDb();
+  let ready = true;
+  let executions = 0;
+  const guarded: ProviderAdapter & TaskExecutionAdapter = {
+    meta: claudeMeta,
+    getStatus: async () => ({
+      state: 'connected',
+      implementation: 'implemented_tested',
+      summary: 'Connected in test',
+      checkedAt: Date.now(),
+    }),
+    checkTaskReadiness: async () => ready ? null : 'The local project folder is no longer available.',
+    executeTask: async () => {
+      executions += 1;
+      return { output: 'must not run' };
+    },
+  };
+  const engine = new TaskEngine(db, [guarded]);
+  const task = await engine.submit({ projectId: 'project-1', prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+  ready = false;
+  const result = await engine.approve(task.id);
+  assert.equal(result?.status, 'waiting_for_provider');
+  assert.equal(result?.approvalStatus, 'not_required');
+  assert.equal(result?.approvedAt, null);
+  assert.equal(executions, 0);
+});
+
 test('retry re-checks provider availability for the same saved task', async () => {
   const db = await freshDb();
   let connected = false;
