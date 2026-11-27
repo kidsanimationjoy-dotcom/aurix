@@ -12,8 +12,8 @@ export const reaMeta: ProviderMeta = {
   authentication: 'Runs the official REA CLI locally through the paired AURIX companion; no API key.',
   references: [{ label: 'REA engine', url: 'https://github.com/morluto/rea' }],
   constraints: [
-    'Only inspects application directories or JavaScript .asar archives, desktop installation directories, and Android APK files inside folders explicitly allowlisted by the user on their own computer.',
-    'Supports JavaScript/Electron graph analysis from application directories or .asar archives, desktop installation discovery from directories, and static Android APK inspection from approved files.',
+    'Inspects local application folders, .asar archives and APK files inside explicitly approved roots, plus user-authorised browser tabs exposed through a loopback-only Chrome DevTools endpoint.',
+    'Supports JavaScript/Electron graph analysis, desktop installation discovery, static Android APK inspection, passive page structure capture, and static browser-bundle analysis.',
     'Every report is returned by the local REA engine; unknowns and missing evidence must remain visible.',
   ],
 };
@@ -40,14 +40,14 @@ export class ReaAdapter implements InvestigationAdapter {
     }
     try {
       const status = await getReaStatus(config);
-      const ready = status.available && status.approvedRootCount > 0;
+      const ready = status.available;
       return {
         state: ready ? 'connected' as const : 'not_configured' as const,
         implementation: 'implemented_untested' as const,
-        summary: ready ? 'Local REA engine available' : status.available ? 'No approved REA folders' : 'REA CLI unavailable',
+        summary: ready ? 'Local REA engine available' : 'REA CLI unavailable',
         detail: status.message ?? (ready
           ? status.version + ' · ' + status.approvedRootCount + ' approved folder(s)'
-          : 'Install REA locally and configure AURIX_REA_ROOTS with folders you explicitly approve.'),
+          : 'Install the official REA CLI locally. Add AURIX_REA_ROOTS for local application/APK files; browser inspection uses a separately authorised loopback endpoint.'),
         checkedAt: Date.now(),
       };
     } catch (error) {
