@@ -38,16 +38,18 @@ A recognised certificate authority may issue an organization-validated code-sign
 
 ## Current build evidence
 
-- Current source branch: `feature/windows-desktop-release-current`.
-- Windows x64 build: [GitHub Actions run 45918490446](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490446) — compile, self-contained publish, release notice, checksum generation and artifact upload all succeeded.
-- Application verification: [run 45918490424](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490424) — TypeScript, unit tests, production build and browser smoke tests all passed.
-- Additional repository CI: [run 45918490437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490437) — install, typecheck, unit tests, production build and browser smoke tests passed.
-- Artifact ID: `15162979150`; ZIP SHA-256: `aac0c61d91c831cf895bb472b048ce1564ac6e5da9f24ed3c7f12dd07673dd64`.
-- Executable SHA-256: `cfc8f3c3b6e20ecfda45a87af83a63b672faba34073eb448d216e890371cb11d`; verified against `SHA256SUMS.txt` inside the downloaded ZIP.
-- The ZIP contains a single portable Windows x64 package with the executable, PDB, README, release-status notice and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are both zero; the executable has **no embedded Authenticode certificate**.
+- Current main base: `859bed74bdf842b471b1c1f8b7f70dd71fff184b`.
+- PR source head: `3880ca2d38756728de558f084cd9f15eeb0b36bf`.
+- Windows x64 build: [GitHub Actions run 45920383886](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383886) — native compile, self-contained publish, release notice, checksum generation and artifact upload succeeded.
+- Application verification: [run 45920383862](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383862) — TypeScript, unit tests, production build and browser smoke tests passed.
+- Repository CI: [run 45920383906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383906) — install, typecheck, unit tests, production build and browser smoke tests passed.
+- Artifact ID: `15164501756`; ZIP SHA-256: `ac7029046bfa09f5217a346be004c0deb2c39fdcb541fa10b92afdff8e6408fd`.
+- Executable SHA-256: `e163fdd460325fa1b0f2c83292d008fff030c00d7f522c444647939be3109cdb`; checked against the included `SHA256SUMS.txt`.
+- The ZIP is a single portable Windows x64 package containing the executable, PDB, README, release-status notice and checksum manifest.
+- PE inspection confirms the Authenticode certificate-table offset and size are zero. The executable has **no embedded Authenticode certificate**.
+- The package's release notice explicitly labels it UNSIGNED and says not to disable SmartScreen or Microsoft Defender.
 - No SignPath application, approved project, certificate, trusted signing workflow, production token, Store developer account, MSIX package or signing approval is configured.
-- The workflow labels the preview UNSIGNED and instructs users not to disable SmartScreen or Microsoft Defender.
+
 
 ## Signing controls
 
