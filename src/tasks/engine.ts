@@ -31,7 +31,7 @@ interface PendingActionApproval {
   resolve: (decision: TaskActionApprovalDecision) => void;
   signal: AbortSignal;
   onAbort: () => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: ReturnType<typeof setTimeout> | undefined;
   settled: boolean;
 }
 
@@ -501,7 +501,7 @@ export class TaskEngine {
       id: approval.id,
       resolve: resolvePromise,
       signal,
-      timer: setTimeout(() => undefined, ACTION_APPROVAL_TIMEOUT_MS),
+      timer: undefined,
       settled: false,
       onAbort: () => {
         if (!this.pendingActionApprovals.has(taskId)) {
