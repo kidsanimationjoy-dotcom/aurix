@@ -272,7 +272,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         });
       }
       const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
-      return send(200, { ...status, profilePrepared: true, sandboxVerified, profileName: paths.profileName });
+      return send(200, { ...status, profilePrepared: true, sandboxVerified, profileName: paths.profileName, codexApprovedRootCount: codexRoots.length });
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/login') {
