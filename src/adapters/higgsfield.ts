@@ -132,13 +132,15 @@ export class HiggsfieldAdapter implements MediaAdapter {
   async quoteJob(request: MediaJobRequest) {
     try {
       if (request.kind !== 'video') throw new Error('AURIX has not enabled paid image generation in this initial Higgsfield workflow.');
+      const requestedMode = request.settings.mode;
+      if (requestedMode !== undefined && requestedMode !== 'std' && requestedMode !== 'fast') throw new Error('Choose a supported Seedance generation mode.');
       const quote = await quoteHiggsfieldJob(this.getConfig(), {
         modelId: request.modelId,
         prompt: request.prompt,
         duration: Number(request.settings.duration ?? 5),
         resolution: String(request.settings.resolution ?? '720p'),
         aspectRatio: String(request.settings.aspectRatio ?? '16:9'),
-        mode: String(request.settings.mode ?? 'std'),
+        mode: requestedMode === 'fast' ? 'fast' : 'std',
       });
       return { ok: true as const, value: quote };
     } catch (error) {
