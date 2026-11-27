@@ -38,6 +38,7 @@ export interface TaskActionApproval {
   changes: { path: string; kind: string; diff: string }[];
   requestedPermissions?: unknown;
   grantRoot?: string;
+  network?: { host: string; protocol: string } | null;
   commandActions?: unknown[];
 }
 
