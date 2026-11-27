@@ -81,6 +81,16 @@ function agentContext(profile: NonNullable<TaskExecutionRequest['agentProfile']>
   ].filter(Boolean).join('\n\n');
 }
 
+export function agentDeniesAction(
+  profile: TaskExecutionRequest['agentProfile'],
+  kind: unknown,
+): boolean {
+  if (kind === 'network') return true;
+  if (kind === 'command' && profile?.permissions.terminal === 'deny') return true;
+  if ((kind === 'file_change' || kind === 'filesystem') && profile?.permissions.fileWrite === 'deny') return true;
+  return false;
+}
+
 function approvalMayBeGranted(event: CodexAgentEvent): boolean {
   if (event.kind === 'network') return false;
   if (typeof event.grantRoot === 'string' && event.grantRoot.length > 0) return false;
@@ -298,10 +308,8 @@ export class OpenAiAdapter implements ChatAdapter, TaskExecutionAdapter {
           if (!approvalId) throw new Error('Codex sent a permission request without an approval identifier.');
           const requestApproval = actionApprovalFromEvent(event);
           const agentPermissions = request.agentProfile?.permissions;
-          const deniedByAgent =
-            (event.kind === 'command' && agentPermissions?.terminal === 'deny') ||
-            ((event.kind === 'file_change' || event.kind === 'filesystem') && agentPermissions?.fileWrite === 'deny');
-          if (event.kind === 'network' || !approvalMayBeGranted(event) || deniedByAgent) {
+          const deniedByAgent = agentDeniesAction(request.agentProfile, event.kind);
+          if (deniedByAgent || !approvalMayBeGranted(event)) {
             await respondCodexAgentApproval(config, session.id, approvalId, 'decline');
             await appendOutput(
               event.kind === 'network'
