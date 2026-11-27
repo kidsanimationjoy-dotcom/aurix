@@ -28,7 +28,7 @@ public partial class MainWindow : Window
         _companionToken = CompanionSettingsStore.LoadToken();
         CompanionTokenBox.Password = _companionToken;
         AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
-            ? "Optional: connect the local AURIX companion for read-only AI conversation."
+            ? "Optional: connect the local AURIX companion for AI answers and approval-gated Notepad actions."
             : "Saved pairing token found. Connect to check the local AI engine.";
         try { _speechSynthesizer = new SpeechSynthesizer(); }
         catch { _speechSynthesizer = null; }
@@ -138,7 +138,7 @@ public partial class MainWindow : Window
     {
         _codexReady = status.CanChat;
         AiConnectionStatusText.Text = status.CanChat
-            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved desktop plans."
+            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI-generated clicks and text entry are limited to Notepad."
             : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
     }
 
@@ -385,6 +385,7 @@ Supported formats:
 
 Use only these exact action kinds and fields. Use only these apps:
 Notepad, Calculator, Paint, File Explorer, Microsoft Edge, Google Chrome, Windows Terminal, Discord, Spotify.
+Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks and text entry are restricted to Notepad only; use "answer" when a requested UI change targets any other app.
 A plan may contain one to five steps. Use "answer" for anything outside this exact capability set.
 Only propose a click when the user explicitly names the button. Only propose text entry when the user explicitly supplies the text and names the field; never invent text to enter.
 Do not propose shell commands, scripts, arbitrary file access, network access, browser navigation, purchases, payments, message sending, publishing, account changes, password/secret fields, or destructive actions.
