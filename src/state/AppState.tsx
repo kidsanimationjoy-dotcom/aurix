@@ -61,7 +61,14 @@ export function AppProvider(props: { db: Db; adapters: ProviderAdapter[]; persis
           token: companionToken.get(),
         }));
       }
-      if (adapter instanceof OpenAiAdapter || adapter instanceof ReaAdapter) {
+      if (adapter instanceof OpenAiAdapter) {
+        adapter.setCompanionConfigProvider(() => ({
+          url: db.get('settings', SETTINGS_ID)?.companionUrl ?? '',
+          token: companionToken.get(),
+        }));
+        adapter.setProjectPathProvider((projectId) => db.get('projects', projectId)?.localPath ?? null);
+      }
+      if (adapter instanceof ReaAdapter) {
         adapter.setCompanionConfigProvider(() => ({
           url: db.get('settings', SETTINGS_ID)?.companionUrl ?? '',
           token: companionToken.get(),
