@@ -16,8 +16,11 @@ public static class AiDesktopCommandParser
         @"\b(send|submit|publish|post|share|pay|purchase|buy|transfer|checkout|order|subscribe|confirm)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    public static AiDesktopInterpretation Parse(string response)
+    public static AiDesktopInterpretation Parse(string response, string userPrompt)
     {
+        if (string.IsNullOrWhiteSpace(userPrompt) || userPrompt.Length > 4_000)
+            throw new InvalidOperationException("The original user instruction is empty or oversized. No desktop action was taken.");
+
         if (string.IsNullOrWhiteSpace(response) || response.Length > 20_000)
             throw new InvalidOperationException("Codex returned an empty or oversized desktop proposal.");
 
@@ -60,7 +63,7 @@ public static class AiDesktopCommandParser
 
             var steps = new List<DesktopTaskStep>();
             foreach (var stepElement in stepsElement.EnumerateArray())
-                steps.Add(ParseStep(stepElement));
+                steps.Add(ParseStep(stepElement, userPrompt));
 
             var planSummary = "AI proposal — " + summary + Environment.NewLine +
                 string.Join(Environment.NewLine, steps.Select((step, index) => $"{index + 1}. {step.Description}")) +
@@ -70,7 +73,43 @@ public static class AiDesktopCommandParser
         }
     }
 
-    private static DesktopTaskStep ParseStep(JsonElement item)
+
+    private static bool ExplicitlyRequestedButton(string button, string userPrompt)
+    {
+        if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Require an action verb followed by the exact button label. This
+        // prevents "open Notepad" from authorizing a click on a button named "Open".
+        if (Regex.IsMatch(userPrompt,
+            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:click|press|select|activate)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return false;
+
+        var label = Regex.Escape(button.Trim());
+        var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}\b" + label + @"\b";
+        return Regex.IsMatch(userPrompt, pattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool ExplicitlyRequestedTextEntry(string control, string text, string userPrompt)
+    {
+        if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase) ||
+            !userPrompt.Contains(control, StringComparison.OrdinalIgnoreCase) ||
+            !userPrompt.Contains(text, StringComparison.Ordinal))
+            return false;
+
+        if (Regex.IsMatch(userPrompt,
+            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:type|enter|write|paste|fill|put|insert|replace)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return false;
+
+        return Regex.IsMatch(userPrompt,
+            @"\b(?:type|enter|write|paste|fill|put|insert|replace)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static DesktopTaskStep ParseStep(JsonElement item, string userPrompt)
     {
         if (item.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("A proposed desktop step is not an object.");
@@ -110,6 +149,8 @@ public static class AiDesktopCommandParser
                     throw new InvalidOperationException("The proposed button name cannot be blank.");
                 if (ExternalImpactButton.IsMatch(button))
                     throw new InvalidOperationException("AURIX refuses AI-proposed buttons that could send, publish, share, pay, purchase, transfer, order, subscribe or confirm an external action.");
+                if (!ExplicitlyRequestedButton(button, userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to click a button unless the user explicitly named that button in the latest instruction.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.ClickButton,
                     "Click button “" + button + "” in " + app.DisplayName,
@@ -124,6 +165,8 @@ public static class AiDesktopCommandParser
                 var text = RequiredString(item, "text", 1, 1_000);
                 if (control.Length == 0)
                     throw new InvalidOperationException("The proposed editable field name cannot be blank.");
+                if (!ExplicitlyRequestedTextEntry(control, text, userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to enter model-invented text or target an unnamed field. The exact text and field must appear in the latest user instruction.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.TypeText,
                     "Type approved text into “" + control + "” in " + app.DisplayName,

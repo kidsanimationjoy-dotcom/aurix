@@ -387,7 +387,7 @@ Use only these exact action kinds and fields. Use only these apps:
 Notepad, Calculator, Paint, File Explorer, Microsoft Edge, Google Chrome, Windows Terminal, Discord, Spotify.
 Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks and text entry are restricted to Notepad only; use "answer" when a requested UI change targets any other app.
 A plan may contain one to five steps. Use "answer" for anything outside this exact capability set.
-Only propose a click when the user explicitly names the button. Only propose text entry when the user explicitly supplies the text and names the field; never invent text to enter.
+Only propose a click when the exact button label appears in the user's latest instruction as the target of a click/press/select/activate request. Only propose text entry when the exact text and exact field label both appear in the user's latest instruction together with an affirmative type/enter/write/paste request. Do not infer or invent a button, text value, or field name: AURIX independently checks these values against that latest instruction.
 Do not propose shell commands, scripts, arbitrary file access, network access, browser navigation, purchases, payments, message sending, publishing, account changes, password/secret fields, or destructive actions.
 AURIX will independently validate your JSON, display the exact plan, ask the user to approve it, and retain its own per-action approval gates. You cannot authorise or execute an action yourself. Never claim that a proposed action has already happened.
 """;
@@ -426,7 +426,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 
             TaskOutputText.Text = "AURIX is asking local Codex to understand your request…";
             var rawResponse = await _localCodexChat.ChatAsync(token, messages, cancellationToken);
-            var interpretation = AiDesktopCommandParser.Parse(rawResponse);
+            var interpretation = AiDesktopCommandParser.Parse(rawResponse, prompt);
 
             if (!interpretation.IsPlan || interpretation.Plan is null)
             {
