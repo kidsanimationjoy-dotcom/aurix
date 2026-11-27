@@ -440,6 +440,13 @@ async function higgsfieldRequest<T>(
   }
 }
 
+export async function startHiggsfieldLogin(
+  config: LocalCompanionConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ message: string }> {
+  return higgsfieldRequest(config, '/v1/higgsfield/login', { method: 'POST' }, 15_000, fetchImpl);
+}
+
 export async function getHiggsfieldStatus(
   config: LocalCompanionConfig,
   fetchImpl: typeof fetch = fetch,
