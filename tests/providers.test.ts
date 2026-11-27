@@ -9,6 +9,7 @@ import { HiggsfieldAdapter } from '../src/adapters/higgsfield';
 import { ReaAdapter } from '../src/adapters/rea';
 import { TwentyFirstAdapter } from '../src/adapters/twentyfirst';
 import { ClaudeAdapter } from '../src/adapters/claude';
+import { agentDeniesAction } from '../src/adapters/openai';
 
 test('all six providers are registered and correctly report their current connection state', async () => {
   const adapters = createDefaultAdapters();
@@ -34,6 +35,28 @@ test('adapter operations never return ok:true while disconnected', async () => {
     assert.equal(r.ok, false);
     if (!r.ok) assert.ok(['NOT_CONNECTED', 'AUTHORIZATION_REQUIRED'].includes(r.error.code));
   }
+});
+
+
+test('specialist agent permission policy auto-denies prohibited local actions and all network access', () => {
+  const askEverything = {
+    id: 'agent-1',
+    name: 'Research helper',
+    role: 'specialist',
+    summary: '',
+    instructions: '',
+    permissions: { fileWrite: 'ask' as const, terminal: 'ask' as const, network: 'ask' as const },
+  };
+  const denyWrites = { ...askEverything, permissions: { ...askEverything.permissions, fileWrite: 'deny' as const } };
+  const denyCommands = { ...askEverything, permissions: { ...askEverything.permissions, terminal: 'deny' as const } };
+
+  assert.equal(agentDeniesAction(askEverything, 'command'), false);
+  assert.equal(agentDeniesAction(askEverything, 'file_change'), false);
+  assert.equal(agentDeniesAction(denyCommands, 'command'), true);
+  assert.equal(agentDeniesAction(denyWrites, 'file_change'), true);
+  assert.equal(agentDeniesAction(denyWrites, 'filesystem'), true);
+  assert.equal(agentDeniesAction(askEverything, 'network'), true);
+  assert.equal(agentDeniesAction(undefined, 'network'), true);
 });
 
 test('router refuses when nothing is connected and explains why', async () => {
