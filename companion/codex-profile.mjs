@@ -178,6 +178,32 @@ export function renderCodexProfileConfig(workspaceRoot, platform = process.platf
   return lines.join('\n');
 }
 
+function parseManagedCodexProfileRoots(configText, workspaceRoot, platform) {
+  const header = '[permissions.' + AURIX_CODEX_PROFILE + '.workspace_roots]';
+  const lines = String(configText).split(/\\r?\\n/u);
+  const headerIndex = lines.indexOf(header);
+  if (headerIndex < 0) return null;
+  const roots = [];
+  for (let index = headerIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) break;
+    const match = /^\\s*("(?:[^"\\\\]|\\\\.)*")\\s*=\\s*true\\s*$/u.exec(line);
+    if (!match) return null;
+    try {
+      const root = JSON.parse(match[1]);
+      if (typeof root !== 'string' || !path.isAbsolute(root)) return null;
+      roots.push(root);
+    } catch {
+      return null;
+    }
+  }
+  if (!roots.length || !samePath(roots[0], workspaceRoot)) return null;
+  const projectRoots = roots.slice(1);
+  return renderCodexProfileConfig(workspaceRoot, platform, projectRoots) === configText
+    ? projectRoots
+    : null;
+}
+
 async function replaceManagedProfileAtomically(target, content) {
   const temporary = path.join(
     path.dirname(target),
@@ -306,9 +332,11 @@ export async function prepareCodexHome(paths, options = {}) {
   }
 
   if (existing !== expected) {
+    const platform = paths.platform ?? process.platform;
     const legacyV2 = renderLegacyCodexProfileConfigV2(paths.workspaceRoot);
-    const legacyV3 = renderCodexProfileConfigV3(paths.workspaceRoot, paths.platform ?? process.platform);
-    if (existing === legacyV2 || existing === legacyV3) {
+    const legacyV3 = renderCodexProfileConfigV3(paths.workspaceRoot, platform);
+    const priorV4Roots = parseManagedCodexProfileRoots(existing, paths.workspaceRoot, platform);
+    if (existing === legacyV2 || existing === legacyV3 || priorV4Roots !== null) {
       await assertRegularFile(paths.configPath);
       await replaceManagedProfileAtomically(paths.configPath, expected);
       existing = expected;
