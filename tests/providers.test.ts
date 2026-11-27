@@ -16,7 +16,7 @@ test('all six providers are registered and correctly report their current connec
   for (const a of adapters) {
     const s = await a.getStatus();
     assert.equal(s.state, 'not_configured');
-    assert.equal(s.implementation, ['openai', 'rea'].includes(a.meta.id) ? 'implemented_untested' : 'interface_only');
+    assert.equal(s.implementation, ['openai', 'rea', 'higgsfield'].includes(a.meta.id) ? 'implemented_untested' : 'interface_only');
   }
 });
 
