@@ -350,7 +350,7 @@ public partial class MainWindow : Window
         {
             // Disposing the wake-word listener just before the explicit
             // microphone test raises a queued "paused" event. It must not
-            // hide the orb or overwrite the microphone-test status.
+            // overwrite the microphone-test status.
             if (_microphoneTestRunning &&
                 (message.Contains("stopped", StringComparison.OrdinalIgnoreCase) ||
                  message.Contains("paused", StringComparison.OrdinalIgnoreCase)))
