@@ -43,12 +43,25 @@ export interface TaskActionApproval {
   commandActions?: unknown[];
 }
 
+export interface TaskAgentProfile {
+  id: string;
+  name: string;
+  role: string;
+  summary: string;
+  instructions: string;
+  permissions: { fileWrite: 'ask' | 'deny'; terminal: 'ask' | 'deny'; network: 'ask' | 'deny' };
+}
+
 export interface TaskRecord {
   id: string;
   createdAt: number;
   updatedAt: number;
   projectId: string | null;
   prompt: string;
+  /** Optional immutable snapshot of the agent configuration used for this task. */
+  agentProfile?: TaskAgentProfile | null;
+  /** Explicit mode selected for an agent run; ordinary Task Center tasks are classified automatically. */
+  intentOverride?: 'chat' | 'coding';
   intent: TaskIntent;
   intentReason: string;
   preferredProvider: ProviderChoice;
@@ -109,6 +122,8 @@ export interface CreateTaskInput {
   projectId: string | null;
   prompt: string;
   preferredProvider: ProviderChoice;
+  agentProfile?: TaskAgentProfile;
+  intentOverride?: 'chat' | 'coding';
   timeoutMs?: number;
 }
 
@@ -117,6 +132,7 @@ export interface TaskExecutionRequest {
   projectId: string | null;
   prompt: string;
   intent: TaskIntent;
+  agentProfile?: TaskAgentProfile | null;
   plan: TaskPlanStep[];
 }
 
