@@ -26,7 +26,7 @@ The Windows companion can route ordinary spoken questions to the separate AURIX 
 4. If Codex is not signed in, use **Sign in to Codex** and complete the official sign-in in the companion terminal.
 5. Say “AURIX” and ask a question. Requests that do not match a supported local desktop command are sent as text to the local Codex CLI; the microphone audio is not sent.
 
-AI conversation is read-only. It cannot launch apps, click controls, type into other applications, run commands or change files. The existing bounded desktop planner handles its documented local actions, and UI changes still require their individual approval. The Codex chat endpoint independently checks sandbox verification and sign-in before every request. An emergency stop cancels the in-flight chat request and stops local speech output.
+AI conversation is read-only. It cannot launch apps, click controls, type into other applications, run commands or change files. The last 12 user/assistant turns are kept in memory for the current desktop session only; use **Clear conversation** to erase that in-memory context. The existing bounded desktop planner handles its documented local actions, and UI changes still require their individual approval. The Codex chat endpoint independently checks sandbox verification and sign-in before every request. An emergency stop cancels the in-flight chat request and stops local speech output.
 
 The pairing token is encrypted for the current Windows user and is not written to the task audit log. The local companion must remain running. The desktop companion does not bypass the Codex plan, account, or usage limits.
 
