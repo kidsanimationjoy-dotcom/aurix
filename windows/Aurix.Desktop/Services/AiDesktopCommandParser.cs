@@ -92,11 +92,31 @@ public static class AiDesktopCommandParser
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
+
+    private static bool ContainsExactTargetLabel(string label, string userPrompt, string allowedContinuation)
+    {
+        var escapedLabel = Regex.Escape(label.Trim());
+        var pattern = @"(?<![\p{L}\p{N}_])" + escapedLabel +
+            @"(?=(?:[""']?\s*(?:" + allowedContinuation + @")\b|[""']?\s*(?:[.,!?;:]|$)))";
+        return Regex.IsMatch(userPrompt, pattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool ContainsExactTextValue(string text, string userPrompt)
+    {
+        // The full supplied value must end at a phrase boundary. This rejects
+        // model-truncated values such as "Hello" when the user said "Hello World".
+        var escapedText = Regex.Escape(text);
+        var pattern = @"(?<![\p{L}\p{N}_])" + escapedText +
+            @"(?=(?:[""']?\s*(?:into|in|to|inside|within|for|as)\b|[""']?\s*(?:[.,!?;:]|$)))";
+        return Regex.IsMatch(userPrompt, pattern, RegexOptions.CultureInvariant);
+    }
+
     private static bool ExplicitlyRequestedTextEntry(string control, string text, string userPrompt)
     {
         if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase) ||
-            !userPrompt.Contains(control, StringComparison.OrdinalIgnoreCase) ||
-            !userPrompt.Contains(text, StringComparison.Ordinal))
+            !ContainsExactTargetLabel(control, userPrompt, @"(?:field|control|box|in|on|within|at)") ||
+            !ContainsExactTextValue(text, userPrompt))
             return false;
 
         if (Regex.IsMatch(userPrompt,
