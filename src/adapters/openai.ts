@@ -8,7 +8,7 @@ import {
   closeCodexAgent,
 } from '../companion/client';
 import type { CodexAgentEvent, LocalCompanionConfig } from '../companion/protocol';
-import type { Capability, ChatAdapter, CodingAgentAdapter, ChatRequest, ProviderMeta } from './types';
+import type { Capability, ChatAdapter, ChatRequest, ProviderMeta } from './types';
 import type { TaskActionApproval, TaskActionApprovalDecision, TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest, TaskExecutionResult } from '../tasks/types';
 
 const MAX_TASK_OUTPUT = 200_000;
@@ -89,11 +89,10 @@ export const openaiMeta: ProviderMeta = {
   ],
 };
 
-export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecutionAdapter {
+export class OpenAiAdapter implements ChatAdapter, TaskExecutionAdapter {
   readonly meta = openaiMeta;
   private getConfig: () => LocalCompanionConfig = () => ({ url: '', token: '' });
   private getProjectPath: (projectId: string) => string | null = () => null;
-  private readonly sessions = new Map<string, string>();
 
   setCompanionConfigProvider(provider: () => LocalCompanionConfig): void {
     this.getConfig = provider;
@@ -234,7 +233,6 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
     ].join('\n');
 
     const session = await startCodexAgent(config, projectPath, instruction);
-    this.sessions.set(request.taskId, session.id);
     let cursor = 0;
     let collectedOutput = '';
     let sawAssistantDelta = false;
@@ -316,29 +314,9 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
       }
       return { output: collectedOutput || 'Codex completed the task without returning a text summary.' };
     } finally {
-      this.sessions.delete(request.taskId);
       await closeCodexAgent(config, session.id).catch(() => undefined);
     }
   }
 
-  async startSession() {
-    return {
-      ok: false as const,
-      error: { code: 'NOT_IMPLEMENTED' as const, message: 'Use Task Center to launch a project-scoped Codex coding task, or Coding Studio for a standalone session.' },
-    };
-  }
 
-  async cancelSession(sessionId: string) {
-    const taskId = [...this.sessions.entries()].find(([, activeSessionId]) => activeSessionId === sessionId)?.[0];
-    if (!taskId) {
-      return { ok: false as const, error: { code: 'NOT_CONNECTED' as const, message: 'No active AURIX Codex session matches that identifier.' } };
-    }
-    try {
-      const config = this.getConfig();
-      await interruptCodexAgent(config, sessionId);
-      return { ok: true as const, value: undefined };
-    } catch (error) {
-      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'Could not stop the Codex session.' } };
-    }
-  }
 }
