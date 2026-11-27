@@ -58,6 +58,9 @@ function actionApprovalFromEvent(event: CodexAgentEvent) {
     changes,
     requestedPermissions: event.requestedPermissions,
     grantRoot: textValue(event.grantRoot, 2048),
+    network: event.network && typeof event.network === 'object'
+      ? { host: textValue((event.network as Record<string, unknown>).host, 255), protocol: textValue((event.network as Record<string, unknown>).protocol, 40) }
+      : null,
     commandActions: Array.isArray(event.commandActions) ? event.commandActions.slice(0, 20) : [],
   };
 }
