@@ -501,11 +501,11 @@ networkMustBeBlocked(networkProbePort).then((blocked) => {
 }).catch(() => process.exit(51));
 `;
 
-export async function runCodexSandboxCanary({ paths, command = 'codex', env = process.env, platform = process.platform, timeoutMs = 20000 } = {}) {
+export async function runCodexSandboxCanary({ paths, command = 'codex', env = process.env, platform = process.platform, projectRoots = [], timeoutMs = 20000 } = {}) {
   const created = [];
   let networkProbeServer;
   try {
-    await validateCodexHome(paths);
+    await validateCodexHome(paths, { projectRoots });
     const executable = await resolveNativeCodexCommand(command, env, platform);
     const token = randomBytes(24).toString('hex');
     const insidePath = path.join(paths.workspaceRoot, '.aurix-canary-' + token + '.txt');
