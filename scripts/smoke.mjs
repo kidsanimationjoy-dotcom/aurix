@@ -92,9 +92,10 @@ const wanted = ['project.create', 'chat.not_sent', 'file.create', 'file.save'];
 const missing = wanted.filter((a) => !log.includes(a));
 check('audit log recorded project, chat and file actions', missing.length === 0, missing.length ? `missing: ${missing.join(', ')}` : '');
 
-// Media: generate disabled
+// Media: generation controls remain unavailable until Higgsfield is signed in
 await page.goto(`${URL_}/#/media`);
-check('Media generate button is disabled while disconnected', await page.getByRole('button', { name: /Generate video/ }).isDisabled());
+check('Higgsfield sign-in requires a configured local companion', await page.getByRole('button', { name: /Sign in with Higgsfield/ }).isDisabled());
+check('Media generation form stays hidden until account sign-in', await page.getByRole('heading', { name: 'Video prompt' }).count() === 0);
 
 // Mobile layout
 await page.setViewportSize({ width: 390, height: 800 });
