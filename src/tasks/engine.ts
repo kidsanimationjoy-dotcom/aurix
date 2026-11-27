@@ -11,6 +11,7 @@ import type {
   TaskExecutionRequest,
   TaskActionApproval,
   TaskActionApprovalDecision,
+  TaskAgentProfile,
   TaskRecord,
   TaskStatus,
 } from './types';
@@ -33,6 +34,27 @@ interface PendingActionApproval {
   onAbort: () => void;
   timer: ReturnType<typeof setTimeout> | undefined;
   settled: boolean;
+}
+
+
+function snapshotAgentProfile(profile: TaskAgentProfile | undefined): TaskAgentProfile | null {
+  if (!profile) return null;
+  const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 100) : '';
+  const id = typeof profile.id === 'string' ? profile.id.trim().slice(0, 128) : '';
+  if (!name || !id) throw new Error('The selected agent profile is invalid. Configure its name before running it.');
+  const permissions = profile.permissions ?? { fileWrite: 'ask', terminal: 'ask', network: 'ask' };
+  return {
+    id,
+    name,
+    role: typeof profile.role === 'string' ? profile.role.trim().slice(0, 100) : 'specialist',
+    summary: typeof profile.summary === 'string' ? profile.summary.trim().slice(0, 300) : '',
+    instructions: typeof profile.instructions === 'string' ? profile.instructions.trim().slice(0, 8000) : '',
+    permissions: {
+      fileWrite: permissions.fileWrite === 'deny' ? 'deny' : 'ask',
+      terminal: permissions.terminal === 'deny' ? 'deny' : 'ask',
+      network: permissions.network === 'deny' ? 'deny' : 'ask',
+    },
+  };
 }
 
 function isExecutionAdapter(adapter: ProviderAdapter): adapter is ProviderAdapter & TaskExecutionAdapter {
@@ -71,9 +93,15 @@ export class TaskEngine {
     if (!prompt) throw new Error('Enter a task before submitting it.');
     if (prompt.length > 10_000) throw new Error('Task descriptions must be 10,000 characters or fewer.');
 
+    if (input.intentOverride && !['chat', 'coding'].includes(input.intentOverride)) {
+      throw new Error('Agent runs can use only chat or coding mode.');
+    }
+    const agentProfile = snapshotAgentProfile(input.agentProfile);
     const task = await this.db.create('tasks', {
       projectId: input.projectId,
       prompt,
+      agentProfile,
+      intentOverride: input.intentOverride,
       intent: 'unknown',
       intentReason: '',
       preferredProvider: input.preferredProvider,
@@ -132,6 +160,7 @@ export class TaskEngine {
       projectId: task.projectId,
       prompt: task.prompt,
       intent: task.intent,
+      agentProfile: task.agentProfile ?? null,
       plan: task.plan,
     };
     try {
@@ -146,7 +175,9 @@ export class TaskEngine {
     if (!task) throw new Error(`Task ${taskId} not found.`);
 
     await this.setStatus(taskId, 'classifying');
-    const classification = classifyIntent(task.prompt);
+    const classification = task.intentOverride
+      ? { intent: task.intentOverride, reason: 'Task mode explicitly selected for agent execution.' }
+      : classifyIntent(task.prompt);
     await this.db.update('tasks', taskId, {
       intent: classification.intent,
       intentReason: classification.reason,
