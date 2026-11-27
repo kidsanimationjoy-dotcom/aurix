@@ -165,6 +165,19 @@ Reject("negated text-entry request with conversational wording rejected",
     "I don't want you to type Hello into Text Editor in Notepad");
 
 
+Check("orb opens after wake phrase", 
+    VoiceOrbStatusPolicy.Classify("AURIX heard you. Listening for your instruction…") == VoiceOrbDisposition.Listening);
+Check("orb shows partial speech while listening",
+    VoiceOrbStatusPolicy.Classify("Hearing: open Notepad") == VoiceOrbDisposition.Listening);
+Check("orb switches to thinking after recognised speech",
+    VoiceOrbStatusPolicy.Classify("I heard: open Notepad") == VoiceOrbDisposition.Thinking);
+Check("orb closes after command silence timeout",
+    VoiceOrbStatusPolicy.Classify("No speech detected within 6 seconds. The orb is closing.") == VoiceOrbDisposition.Hide);
+Check("orb closes when speech cannot be transcribed",
+    VoiceOrbStatusPolicy.Classify("I heard speech, but couldn't recognise the instruction clearly.") == VoiceOrbDisposition.Hide);
+Check("orb closes when hands-free is paused",
+    VoiceOrbStatusPolicy.Classify("AURIX wake-word listening is paused.") == VoiceOrbDisposition.Hide);
+
 var taskRuns = new TaskRunCoordinator();
 var firstRun = taskRuns.BeginRun();
 Check("first desktop task becomes active", taskRuns.IsCurrent(firstRun));
