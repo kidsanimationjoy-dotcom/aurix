@@ -129,8 +129,13 @@
                          Foreground="#9CB0CC" FontSize="11" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <Button x:Name="StartOpenJarvisButton" Content="Start local server" Click="StartOpenJarvisButton_Click"
+                      Background="#176B9C" BorderBrush="#2B9DD9"/>
+              <Button x:Name="StopOpenJarvisButton" Content="Stop local server" Click="StopOpenJarvisButton_Click"
+                      IsEnabled="False" Background="#48232D" BorderBrush="#87404D"/>
               <Button x:Name="CheckOpenJarvisButton" Content="Check OpenJarvis" Click="CheckOpenJarvisButton_Click"
                       Background="#244C5A" BorderBrush="#4389A4"/>
+              <Button x:Name="OpenJarvisSetupGuideButton" Content="OpenJarvis setup guide" Click="OpenJarvisSetupGuideButton_Click"/>
               <Button x:Name="PairCompanionButton" Content="Connect" Click="PairCompanionButton_Click"
                       Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
               <Button x:Name="DisconnectCompanionButton" Content="Disconnect" Click="DisconnectCompanionButton_Click"
