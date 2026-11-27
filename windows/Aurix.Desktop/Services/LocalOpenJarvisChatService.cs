@@ -7,8 +7,9 @@ using System.Text.Json;
 namespace Aurix.Desktop.Services;
 
 /// <summary>
-/// Optional local-only connection to the Stanford OpenJarvis API.
-/// This adapter is chat-only: it never exposes desktop tools or executes actions.
+/// Local-only connection to the Stanford OpenJarvis API. This service submits
+/// AURIX's constrained reasoning contract and receives text/structured plans;
+/// it never exposes desktop tools or executes computer actions.
 /// </summary>
 public sealed class LocalOpenJarvisChatService
 {
