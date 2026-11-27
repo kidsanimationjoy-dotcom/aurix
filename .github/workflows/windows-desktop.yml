@@ -28,14 +28,35 @@ jobs:
       - name: Publish self-contained Windows x64 application
         run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"
 
-      - name: Package Windows x64 application
+      - name: Add release instructions and executable checksum
         shell: pwsh
-        run: Compress-Archive -Path "$env:RUNNER_TEMP\aurix-publish\*" -DestinationPath "$env:RUNNER_TEMP\AURIX-Windows-x64.zip" -Force
+        run: |
+          $publish = "$env:RUNNER_TEMP\aurix-publish"
+          $exe = Join-Path $publish "Aurix.Desktop.exe"
+          if (!(Test-Path -LiteralPath $exe)) {
+            throw "Published executable was not found."
+          }
+
+          Copy-Item "windows/Aurix.Desktop/README.md" (Join-Path $publish "README.txt")
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Aurix.Desktop.exe" | Set-Content -LiteralPath (Join-Path $publish "SHA256SUMS.txt") -Encoding utf8
+
+          @(
+            "AURIX Windows Desktop Companion — CI preview build"
+            "Build commit: $env:GITHUB_SHA"
+            "Architecture: Windows x64"
+            "Publisher status: UNSIGNED — no trusted publisher certificate is attached."
+            "This is an early preview, not a public-launch release or a complete autonomous AI assistant."
+            "Do not disable Microsoft Defender or SmartScreen to run this build. If Windows warns that the publisher is unrecognised, stop and wait for a properly signed release."
+            "Verify Aurix.Desktop.exe against SHA256SUMS.txt before testing."
+            "The application uses the microphone only after hands-free is explicitly enabled; while enabled, local wake-word recognition remains active. Use the tray control to pause it or Exit AURIX to release the microphone."
+            "This ZIP is a portable preview package, not an installer. It has no automatic update or uninstall service."
+          ) | Set-Content -LiteralPath (Join-Path $publish "RELEASE-STATUS.txt") -Encoding utf8
 
       - name: Upload Windows x64 build artifact
         uses: actions/upload-artifact@v4
         with:
           name: AURIX-Windows-x64
-          path: ${{ runner.temp }}/AURIX-Windows-x64.zip
+          path: ${{ runner.temp }}/aurix-publish/*
           if-no-files-found: error
           retention-days: 14

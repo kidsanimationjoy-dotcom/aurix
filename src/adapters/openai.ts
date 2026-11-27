@@ -10,7 +10,7 @@ import {
 } from '../companion/client';
 import type { CodexAgentEvent, LocalCompanionConfig } from '../companion/protocol';
 import type { Capability, ChatAdapter, ChatRequest, ProviderMeta } from './types';
-import type { TaskActionApproval, TaskActionApprovalDecision, TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest, TaskExecutionResult } from '../tasks/types';
+import type { TaskActionApproval, TaskActionApprovalDecision, TaskActionApprovalKind, TaskExecutionAdapter, TaskExecutionContext, TaskExecutionRequest, TaskExecutionResult } from '../tasks/types';
 
 const MAX_TASK_OUTPUT = 200_000;
 const POLL_INTERVAL_MS = 900;
@@ -37,9 +37,10 @@ function textValue(value: unknown, max = 12_000): string {
 
 function actionApprovalFromEvent(event: CodexAgentEvent): Omit<TaskActionApproval, 'id' | 'expiresAt'> {
   const kindValue = event.kind;
-  const kind = kindValue === 'network' || kindValue === 'file_change' || kindValue === 'filesystem'
-    ? kindValue
-    : 'command';
+  const kind: TaskActionApprovalKind =
+    kindValue === 'command' || kindValue === 'network' || kindValue === 'file_change' || kindValue === 'filesystem'
+      ? kindValue
+      : 'network';
   const changes = Array.isArray(event.changes)
     ? event.changes.slice(0, 30).flatMap((entry) => {
       if (!entry || typeof entry !== 'object') return [];
@@ -92,7 +93,8 @@ export function agentDeniesAction(
 }
 
 function approvalMayBeGranted(event: CodexAgentEvent): boolean {
-  if (event.kind === 'network') return false;
+  if (event.kind !== 'command' && event.kind !== 'file_change' && event.kind !== 'filesystem') return false;
+  if (event.network && typeof event.network === 'object') return false;
   if (typeof event.grantRoot === 'string' && event.grantRoot.length > 0) return false;
   if (event.kind === 'file_change' && (!Array.isArray(event.changes) || event.changes.length === 0)) return false;
   return true;

@@ -31,6 +31,14 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Documentation
 
+- [Windows code-signing policy and current status](docs/CODE_SIGNING_POLICY.md)
+
+- [AURIX launch readiness and release gates](docs/LAUNCH_READINESS.md)
+
+- [Windows desktop architecture and limits](docs/WINDOWS_DESKTOP_ARCHITECTURE.md)
+
+- [Windows desktop companion guide](windows/Aurix.Desktop/README.md)
+
 - [Complete feature catalogue](docs/FEATURE_CATALOG.md)
 - [System architecture](docs/ARCHITECTURE.md)
 - [Provider and authentication matrix](docs/PROVIDER_MATRIX.md)
@@ -52,12 +60,13 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Current status
 
-The Phase 0–1 application source is now available as ordinary tracked project files on the source-promotion branch. Its clean-source CI has verified dependency installation, TypeScript checks, unit tests, production build and browser smoke tests.
+The Phase 0–1 application source is tracked and its clean-source CI verifies dependency installation, TypeScript checks, unit tests, production build and browser smoke tests.
 
-The Phase 2 Task Center and local task engine are implemented on the current development branch: tasks persist locally, receive transparent rule-based classification, build plans, route only to eligible connected providers, store progress/output events, support retry, timeout and cancellation, and recover interrupted work honestly. The real Codex/Claude/Grok/Higgsfield/REA/21st.dev provider execution adapters are not yet connected; a task must remain waiting rather than fabricate an AI result. See the Phase 2 docs for exact acceptance and limitations.
+The local Task Center supports project-scoped Codex coding tasks through the official Codex CLI when the companion is paired, the user has signed in, the selected project folder passes local preflight validation, and AURIX has passed a fresh OS sandbox verification. Codex command and file-change requests pause for one-time approval cards showing the exact command, working folder and proposed changes. Network access and persistent folder-root grants are refused. Pending approval requests expire and are declined automatically. Specialist agent profiles support user-defined instructions and per-agent terminal/file-write restrictions; each task uses a saved profile snapshot. These policies do not permit network access.
 
-The official Codex CLI local integration path has been researched and documented. No API key is required for the supported ChatGPT sign-in path, but Codex use still follows the user's plan limits. AURIX is not yet deployed, and a passing CI run is not a deployment or proof of a connected provider.
+The source also includes local REA investigation through the companion for explicitly approved application and browser targets, and Higgsfield media workflows through its official CLI with account status, model discovery, fresh credit estimates and confirmation before credit-consuming generation. Claude, Grok and 21st.dev currently expose interface-only adapters, not live provider execution. AURIX is not yet deployed, and CI does not establish that a user's provider account is connected.
 
+The native Windows companion provides tray, opt-in local wake-word listening, bounded application launching, read-only window/control inspection, approval-gated named UI Automation, Microsoft Defender status/confirmed quick scan, emergency stop, reversible startup and a privacy-limited local audit log. It remains a bounded desktop companion, not a general-purpose autonomous AI desktop agent.
 ## Legal and technical note
 
 AURIX may independently implement similar user-facing capabilities and reuse code only where the upstream licence permits it. Reused dependencies, components, skills, plugins and models must retain applicable notices, comply with provider terms and be reviewed before use.
