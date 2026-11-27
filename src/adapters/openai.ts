@@ -190,21 +190,38 @@ export class OpenAiAdapter implements ChatAdapter, CodingAgentAdapter, TaskExecu
     }
   }
 
-  async executeTask(request: TaskExecutionRequest, context: TaskExecutionContext): Promise<TaskExecutionResult> {
+  async checkTaskReadiness(request: TaskExecutionRequest): Promise<string | null> {
     const config = this.getConfig();
-    if (!config.url || !config.token) throw new Error('Pair the local AURIX companion in Settings before running a Codex task.');
-    if (!request.projectId) throw new Error('Select a project and link its real local folder before starting a Codex coding task.');
-    const projectPath = this.getProjectPath(request.projectId);
-    if (!projectPath) throw new Error('Link this project to its real local folder in Projects before starting a Codex coding task.');
-
+    if (!config.url || !config.token) return 'Pair the local AURIX companion in Settings before using Codex.';
     const status = await getCodexStatus(config);
     if (status.state !== 'ready' || status.sandboxVerified !== true) {
-      throw new Error('Prepare and verify the AURIX Codex profile, then sign in to the separate local Codex profile.');
+      return 'Prepare and verify the AURIX Codex profile, then sign in to the separate local Codex profile.';
     }
+    if (request.intent === 'chat') return null;
+    if (request.intent !== 'coding') return 'The local Codex Task Center executor currently supports chat and coding tasks only.';
+    if (!request.projectId) return 'Select a project before creating a coding task.';
+    const projectPath = this.getProjectPath(request.projectId);
+    if (!projectPath) return 'Link this project to its real local folder in Projects before starting a Codex coding task.';
     if (Number(status.codexApprovedRootCount ?? 0) < 1) {
-      throw new Error('No approved project roots are configured. Set AURIX_CODEX_ROOTS, restart the local companion, and prepare the AURIX profile again.');
+      return 'No approved project roots are configured. Set AURIX_CODEX_ROOTS, restart the local companion, and prepare the AURIX profile again.';
+    }
+    return null;
+  }
+
+  async executeTask(request: TaskExecutionRequest, context: TaskExecutionContext): Promise<TaskExecutionResult> {
+    const config = this.getConfig();
+    const blocker = await this.checkTaskReadiness(request);
+    if (blocker) throw new Error(blocker);
+
+    if (request.intent === 'chat') {
+      const reply = await sendCodexMessage(config, [{ role: 'user', content: request.prompt }]);
+      await context.emitOutput(reply.content);
+      await context.emitProgress('Read-only Codex response completed.', 95);
+      return { output: reply.content };
     }
 
+    const projectPath = this.getProjectPath(request.projectId!);
+    if (!projectPath) throw new Error('This project no longer has a linked local folder.');
     const instruction = [
       'You are executing an AURIX Task Center coding task in the selected project folder.',
       'Work only inside the selected project. Start with inspection and a short plan.',
