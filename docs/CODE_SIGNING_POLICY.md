@@ -50,6 +50,14 @@ A recognised certificate authority may issue an organization-validated code-sign
 - No trusted signing certificate, SignPath project/approval, Store developer account, MSIX package or production signing workflow is configured.
 
 
+## Latest merged voice-enabled preview evidence
+
+- Main merge commit: [`e37bf46129518cc281d9209374e3f3332ab2c23c`](https://github.com/kidsanimationjoy-dotcom/aurix/commit/e37bf46129518cc281d9209374e3f3332ab2c23c); PR [#20](https://github.com/kidsanimationjoy-dotcom/aurix/pull/20) merged.
+- Windows x64 compile and packaging: [run 45922086971](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086971) — passed.
+- Application verification: [run 45922086918](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086918) — passed.
+- Artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`.
+- The artifact digest is integrity metadata, not publisher identity or an Authenticode signature. The build remains unsigned.
+
 ## Signing controls
 
 - Sign only reviewed release binaries produced from the repository's verified source/build.
