@@ -104,7 +104,7 @@ Add-Check 'Privacy and safety' 'PASS' 'This preflight is read-only. It does not 
 Add-Check 'Live wake-word test' 'INFO' 'Not tested by this script. After AURIX is safely installed, enable hands-free yourself, say “AURIX”, speak one harmless test instruction, then pause listening.'
 
 if ($Json) {
-    $checks | ConvertTo-Json -Depth 4
+    ConvertTo-Json -InputObject @($checks.ToArray()) -Depth 4
 } else {
     Write-Host ''
     Write-Host 'AURIX WINDOWS READINESS CHECK' -ForegroundColor Cyan
