@@ -54,6 +54,7 @@ public partial class MainWindow : Window
             (nameof(RefreshButton), RefreshButton),
             (nameof(ScanButton), ScanButton),
             (nameof(HandsFreeButton), HandsFreeButton),
+            (nameof(VoiceDiagnosticsButton), VoiceDiagnosticsButton),
             (nameof(ListeningStatusText), ListeningStatusText),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
@@ -521,6 +522,8 @@ public partial class MainWindow : Window
         {
             RunTaskButton.IsEnabled = true;
             EmergencyStopButton.IsEnabled = false;
+            if (_speechSynthesizer?.State != SynthesizerState.Speaking)
+                HideActiveOrb();
         }
     }
 
@@ -699,6 +702,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         }
         catch
         {
+            HideActiveOrb();
             // Text remains available even if Windows has no usable speech voice.
         }
     }
