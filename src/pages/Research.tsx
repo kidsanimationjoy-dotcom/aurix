@@ -5,6 +5,35 @@ import { researchToMarkdown } from '../lib/researchExport';
 import { useActiveProject, useApp, useAudit, useCollection, useSettings } from '../state/AppState';
 import { ConfirmButton, EmptyState, Field, Notice, PageHeader, Panel, download } from '../ui/kit';
 
+type LocalBrowserTarget = {
+  target_id: string;
+  type: string;
+  title: string;
+  url: string;
+  origin: string;
+  attached: boolean | null;
+};
+
+function readBrowserTargets(value: unknown): LocalBrowserTarget[] {
+  if (!value || typeof value !== 'object') return [];
+  const report = (value as { report?: { normalized_result?: { targets?: unknown[] } } }).report;
+  const targets = report?.normalized_result?.targets;
+  if (!Array.isArray(targets)) return [];
+  return targets.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const item = entry as Record<string, unknown>;
+    if (typeof item.target_id !== 'string' || typeof item.url !== 'string') return [];
+    return [{
+      target_id: item.target_id,
+      type: typeof item.type === 'string' ? item.type : 'page',
+      title: typeof item.title === 'string' ? item.title : item.url,
+      url: item.url,
+      origin: typeof item.origin === 'string' ? item.origin : '',
+      attached: typeof item.attached === 'boolean' ? item.attached : null,
+    }];
+  });
+}
+
 const EMPTY = { title: '', claim: '', status: 'unverified' as ClaimStatus, sourceTitle: '', sourceUrl: '', notes: '' };
 
 function validUrl(u: string): boolean {
@@ -26,6 +55,14 @@ export function Research() {
   const [reaAuthorized, setReaAuthorized] = useState(false);
   const [reaBusy, setReaBusy] = useState(false);
   const [reaError, setReaError] = useState('');
+  const [browserEndpoint, setBrowserEndpoint] = useState('http://127.0.0.1:9222');
+  const [browserTargets, setBrowserTargets] = useState<LocalBrowserTarget[]>([]);
+  const [browserTargetId, setBrowserTargetId] = useState('');
+  const [browserKind, setBrowserKind] = useState<'page' | 'bundle'>('page');
+  const [browserAuthorized, setBrowserAuthorized] = useState(false);
+  const [browserBusy, setBrowserBusy] = useState(false);
+  const [browserError, setBrowserError] = useState('');
+  const [browserResult, setBrowserResult] = useState<unknown | null>(null);
   const [reaReport, setReaReport] = useState<{ findings: { claim: string; evidence: { id: string; description: string }[] }[]; unknowns: string[]; graphSummary?: { nodes: number; edges: number; coverage: string }; graphNodes?: { id: string; kind: string; path?: string }[]; desktopSummary?: unknown; artifactSummary?: unknown } | null>(null);
 
   const needsSource = form.status === 'verified' && !validUrl(form.sourceUrl);
@@ -81,6 +118,70 @@ export function Research() {
           <h3>Unknowns and limitations ({reaReport.unknowns.length})</h3>
           {reaReport.unknowns.length ? <ul>{reaReport.unknowns.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No unknowns were reported by REA.</p>}
           </> : null}
+        </div> : null}
+      </Panel>
+
+      <Panel title="Inspect a local browser tab with REA">
+        <p className="muted">Passively inspect an existing Chrome-family browser tab through its local DevTools endpoint. This does not navigate, click, execute page scripts or change the page. The endpoint must be bound to localhost; remote browser hosts are refused.</p>
+        <Field label="Local Chrome DevTools endpoint" hint="Example: http://127.0.0.1:9222. The local browser must already expose a DevTools endpoint on this computer.">
+          <input value={browserEndpoint} onChange={(e) => setBrowserEndpoint(e.target.value)} placeholder="http://127.0.0.1:9222" />
+        </Field>
+        <label className="check"><input type="checkbox" checked={browserAuthorized} onChange={(e) => setBrowserAuthorized(e.target.checked)} /> I own this browser session or have permission to inspect it.</label>
+        {browserError ? <Notice>{browserError}</Notice> : null}
+        <div className="row">
+          <button className="btn" disabled={!rea || !browserEndpoint.trim() || !browserAuthorized || browserBusy} onClick={async () => {
+            if (!rea) return;
+            setBrowserBusy(true); setBrowserError(''); setBrowserResult(null); setBrowserTargets([]); setBrowserTargetId('');
+            try {
+              const discovered = await rea.listBrowserTargets(browserEndpoint.trim(), {
+                statement: 'I own or have permission to inspect this local browser session.',
+                confirmedAt: Date.now(),
+              });
+              if (!discovered.ok) throw new Error(discovered.error.message);
+              const targets = readBrowserTargets(discovered.value);
+              setBrowserTargets(targets);
+              setBrowserTargetId(targets[0]?.target_id ?? '');
+              if (!targets.length) setBrowserError('REA found no eligible page tabs. Confirm the local DevTools endpoint and open an eligible page.');
+              await audit({ action: 'rea.browser.targets', detail: targets.length + ' local browser target(s)' });
+            } catch (error) {
+              setBrowserError(error instanceof Error ? error.message : 'Could not list local browser tabs.');
+            } finally { setBrowserBusy(false); }
+          }}>{browserBusy ? 'Listing tabs…' : 'List local browser tabs'}</button>
+        </div>
+        {browserTargets.length > 0 ? <>
+          <Field label="Browser tab">
+            <select value={browserTargetId} onChange={(e) => { setBrowserTargetId(e.target.value); setBrowserResult(null); }}>
+              {browserTargets.map((target) => <option key={target.target_id} value={target.target_id}>{target.title} — {target.url}</option>)}
+            </select>
+          </Field>
+          <Field label="Inspection type">
+            <select value={browserKind} onChange={(e) => setBrowserKind(e.target.value as 'page' | 'bundle')}>
+              <option value="page">Page structure and accessibility inspection</option>
+              <option value="bundle">Static JavaScript bundle, route and endpoint analysis</option>
+            </select>
+          </Field>
+          <div className="row">
+            <button className="btn primary" disabled={!browserAuthorized || !browserTargetId || browserBusy} onClick={async () => {
+              if (!rea) return;
+              setBrowserBusy(true); setBrowserError(''); setBrowserResult(null);
+              try {
+                const inspected = await rea.inspectBrowserTarget(browserEndpoint.trim(), browserTargetId, browserKind, {
+                  statement: 'I own or have permission to inspect this local browser session.',
+                  confirmedAt: Date.now(),
+                });
+                if (!inspected.ok) throw new Error(inspected.error.message);
+                setBrowserResult(inspected.value);
+                await audit({ action: browserKind === 'bundle' ? 'rea.browser.bundle' : 'rea.browser.page', target: browserTargetId, detail: browserEndpoint.trim() });
+              } catch (error) {
+                setBrowserError(error instanceof Error ? error.message : 'REA could not inspect this browser tab.');
+              } finally { setBrowserBusy(false); }
+            }}>{browserBusy ? 'Inspecting tab…' : browserKind === 'bundle' ? 'Analyze selected tab bundle' : 'Inspect selected tab'}</button>
+          </div>
+        </> : null}
+        {browserResult !== null ? <div className="stack">
+          <h3>{browserKind === 'bundle' ? 'Static browser bundle analysis' : 'Passive page inspection'}</h3>
+          <p className="muted">REA evidence is an observation of the selected tab and capture window. Missing or partial evidence does not prove a feature is absent.</p>
+          <pre className="code-block">{JSON.stringify((browserResult as { report?: unknown }).report ?? browserResult, null, 2)}</pre>
         </div> : null}
       </Panel>
       <Panel title="Add a claim">
