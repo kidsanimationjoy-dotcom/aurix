@@ -34,7 +34,7 @@ function textValue(value: unknown, max = 12_000): string {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
-function actionApprovalFromEvent(event: CodexAgentEvent): Omit<TaskActionApproval, 'id'> {
+function actionApprovalFromEvent(event: CodexAgentEvent): Omit<TaskActionApproval, 'id' | 'expiresAt'> {
   const kindValue = event.kind;
   const kind = kindValue === 'network' || kindValue === 'file_change' || kindValue === 'filesystem'
     ? kindValue
