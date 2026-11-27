@@ -391,16 +391,18 @@ if (process.env.OPENAI_API_KEY || process.env.HIGGSFIELD_API_KEY || process.env.
 if (args[0] === 'version' && args.includes('--json')) { console.log(JSON.stringify({ version: '1.2.2' })); process.exit(0); }
 if (args[0] === 'account' && args[1] === 'status' && args.includes('--json')) { console.log(JSON.stringify({ email: 'user@example.test', plan: 'Creator', available_credits: 120 })); process.exit(0); }
 if (args[0] === 'model' && args[1] === 'list' && args.includes('--json')) {
-  console.log(JSON.stringify({ models: [{ job_set_type: 'seedance_2_5', name: 'Seedance 2.5', categories: ['video'] }] }));
+  console.log(JSON.stringify({ models: [{ job_set_type: 'seedance_2_0', name: 'Seedance 2.5', categories: ['video'] }] }));
   process.exit(0);
 }
 if (args[0] === 'generate' && args[1] === 'cost') {
+  if (args[2] !== 'seedance_2_0' || !args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std') process.exit(91);
   if (!args.includes('--json') || !args.includes('--prompt') || args.includes('--wait')) process.exit(91);
   log('cost');
   console.log(JSON.stringify({ estimated_credits: 10 }));
   process.exit(0);
 }
 if (args[0] === 'generate' && args[1] === 'create') {
+  if (args[2] !== 'seedance_2_0' || !args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std') process.exit(92);
   if (!args.includes('--json') || args.includes('--wait')) process.exit(92);
   log('create');
   console.log(JSON.stringify({ job_id: 'job-abc', status: 'queued' }));
@@ -426,11 +428,11 @@ process.exit(2);
       const modelsResponse = await fetch(url + '/v1/higgsfield/models', { headers: { Authorization: 'Bearer secret-token' } });
       assert.equal(modelsResponse.status, 200);
       const models = (await modelsResponse.json()).result.models;
-      assert.equal(models[0].id, 'seedance_2_5');
+      assert.equal(models[0].id, 'seedance_2_0');
 
       const quoted = await fetch(url + '/v1/higgsfield/quote', {
         method: 'POST', headers,
-        body: JSON.stringify({ modelId: 'seedance_2_5', prompt: 'A sunrise over a calm ocean', duration: 5, resolution: '720p', aspectRatio: '16:9' }),
+        body: JSON.stringify({ modelId: 'seedance_2_0', prompt: 'A sunrise over a calm ocean', duration: 5, resolution: '720p', aspectRatio: '16:9' }),
       });
       assert.equal(quoted.status, 200);
       const quote = (await quoted.json()).result;
