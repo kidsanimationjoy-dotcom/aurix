@@ -130,9 +130,9 @@ export async function inspectCodex({ command = 'codex', prefixArgs = [], codexHo
 }
 
 
-async function prepareAndVerifyCodex({ command, paths }) {
+async function prepareAndVerifyCodex({ command, paths, codexRoots = [] }) {
   try {
-    const prepared = await prepareCodexHome(paths);
+    const prepared = await prepareCodexHome(paths, { projectRoots: codexRoots });
     const env = safeEnvironment(paths.codexHome);
     const executable = process.platform === 'win32'
       ? await resolveNativeCodexCommand(command, env, process.platform)
@@ -256,14 +256,14 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
             : 'The profile preparation request must contain valid JSON.',
         });
       }
-      const prepared = await prepareAndVerifyCodex({ command: codexCommand, paths });
+      const prepared = await prepareAndVerifyCodex({ command: codexCommand, paths, codexRoots });
       sandboxVerified = prepared.profilePrepared === true && prepared.sandboxVerified === true;
       return send(200, { ...prepared, sandboxVerified });
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/codex/status') {
       try {
-        await validateCodexHome(paths);
+        await validateCodexHome(paths, { projectRoots: codexRoots });
       } catch {
         return send(200, {
           state: 'error', installed: false, signedIn: false, version: null, authMode: 'unknown',
