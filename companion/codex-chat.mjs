@@ -78,6 +78,7 @@ export function runCodexReadOnlyChat({
     let stderr = '';
     let settled = false;
     let terminationRequested = false;
+    let terminationPromise;
     let timer;
     let onAbort;
     const finish = (fn, value) => {
@@ -87,51 +88,59 @@ export function runCodexReadOnlyChat({
       if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       fn(value);
     };
-    const terminateChild = () => new Promise((resolve) => {
-      let completed = false;
-      let hardKillTimer;
-      const complete = () => {
-        if (completed) return;
-        completed = true;
-        if (hardKillTimer) clearTimeout(hardKillTimer);
-        child.off('close', complete);
-        resolve();
-      };
+    const terminateChild = () => {
+      if (terminationPromise)
+        return terminationPromise;
 
-      child.once('close', complete);
-      if (child.exitCode !== null || child.signalCode !== null) {
-        complete();
-        return;
-      }
+      terminationPromise = new Promise((resolve) => {
+        let completed = false;
+        let hardKillTimer;
+        const complete = () => {
+          if (completed) return;
+          completed = true;
+          if (hardKillTimer) clearTimeout(hardKillTimer);
+          child.off('close', complete);
+          resolve();
+        };
 
-      try { child.kill('SIGTERM'); } catch { /* The process may already have exited. */ }
-      hardKillTimer = setTimeout(() => {
+        child.once('close', complete);
         if (child.exitCode !== null || child.signalCode !== null) {
           complete();
           return;
         }
-        try { child.kill('SIGKILL'); } catch { /* The process may already have exited. */ }
-      }, 750);
-      hardKillTimer.unref?.();
-    });
-    onAbort = () => {
+
+        try { child.kill('SIGTERM'); } catch { /* The process may already have exited. */ }
+        hardKillTimer = setTimeout(() => {
+          if (child.exitCode !== null || child.signalCode !== null) {
+            complete();
+            return;
+          }
+          try { child.kill('SIGKILL'); } catch { /* The process may already have exited. */ }
+        }, 750);
+        hardKillTimer.unref?.();
+      });
+      return terminationPromise;
+    };
+    const requestTermination = (error) => {
+      if (terminationRequested)
+        return;
       terminationRequested = true;
+      void terminateChild().then(() => finish(reject, error));
+    };
+    onAbort = () => {
       const error = new Error('Codex chat was cancelled by the caller.');
       error.name = 'AbortError';
-      void terminateChild().then(() => finish(reject, error));
+      requestTermination(error);
     };
 
     child.stdout.on('data', (chunk) => {
-      if (settled) return;
+      if (settled || terminationRequested) return;
       stdout += chunk.toString('utf8');
-      if (stdout.length > MAX_STDOUT_CHARS) {
-        terminationRequested = true;
-        const error = new Error('Codex output exceeded the one-megabyte safety limit.');
-        void terminateChild().then(() => finish(reject, error));
-      }
+      if (stdout.length > MAX_STDOUT_CHARS)
+        requestTermination(new Error('Codex output exceeded the one-megabyte safety limit.'));
     });
     child.stderr.on('data', (chunk) => {
-      if (settled) return;
+      if (settled || terminationRequested) return;
       if (stderr.length < MAX_STDERR_CHARS) stderr += chunk.toString('utf8').slice(0, MAX_STDERR_CHARS - stderr.length);
     });
     child.once('error', (error) => {
@@ -178,9 +187,7 @@ export function runCodexReadOnlyChat({
 
     signal?.addEventListener('abort', onAbort, { once: true });
     timer = setTimeout(() => {
-      terminationRequested = true;
-      const error = new Error('Codex did not complete the read-only chat before the time limit.');
-      void terminateChild().then(() => finish(reject, error));
+      requestTermination(new Error('Codex did not complete the read-only chat before the time limit.'));
     }, Math.max(1_000, Math.min(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)));
 
     // Check again after listener registration to close the spawn/subscribe race.
