@@ -236,7 +236,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.login', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'cli.codex.agent.validate', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.login', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job'],
         grantedRoots: [],
         codexApprovedRootCount: codexRoots.length,
       });
@@ -452,6 +452,51 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
       }
     }
 
+
+
+    if (req.method === 'POST' && url.pathname === '/v1/codex/agent/validate') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, {
+          ok: false,
+          error: 'INVALID_REQUEST',
+          message: 'The project validation request must contain valid JSON.',
+        });
+      }
+      try {
+        if (!sandboxVerified) {
+          return send(409, { ok: false, error: 'CODEX_SANDBOX_NOT_VERIFIED', message: 'Prepare the AURIX Codex profile and verify its local sandbox before checking a coding project.' });
+        }
+        if (!codexRoots.length) {
+          return send(409, { ok: false, error: 'CODEX_PROJECT_ROOTS_NOT_CONFIGURED', message: 'Set AURIX_CODEX_ROOTS to the project folders you explicitly approve for coding.' });
+        }
+        await validateCodexHome(paths, { projectRoots: codexRoots });
+        const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
+        if (status.state !== 'ready') {
+          return send(409, { ok: false, error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
+        }
+        if (!codexAgentManager) {
+          const executable = process.platform === 'win32'
+            ? await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform)
+            : codexCommand;
+          codexAgentManager = createCodexAgentManager({
+            command: executable,
+            codexHome: paths.codexHome,
+            roots: codexRoots,
+          });
+        }
+        await codexAgentManager.validateTarget(body.target);
+        return send(200, { ok: true, valid: true });
+      } catch (error) {
+        return send(400, {
+          ok: false,
+          error: 'CODEX_PROJECT_NOT_APPROVED',
+          message: error instanceof Error ? error.message.slice(0, 800) : 'The selected folder is not within the approved project roots.',
+        });
+      }
+    }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/agent/start') {
       let body;
