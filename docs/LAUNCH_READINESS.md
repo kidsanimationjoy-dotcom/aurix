@@ -4,15 +4,16 @@
 
 ## Verified Windows preview
 
-- Source branch: `feature/windows-desktop-release-current`
-- PR source commit: `b1b18e7ad7393dd243134fbda9c64a5927e46335`
-- Windows build: [run 45918490446](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490446) — native compile, self-contained x64 publish, release notice, executable checksum generation and artifact upload all succeeded.
-- Application verification: [run 45918490424](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490424) — TypeScript, unit tests, production build and browser smoke tests all passed.
-- Additional repository CI: [run 45918490437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45918490437) — install, typecheck, unit tests, production build and browser smoke tests passed.
-- Artifact: `AURIX-Windows-x64`, artifact ID `15162979150`, ZIP SHA-256 `aac0c61d91c831cf895bb472b048ce1564ac6e5da9f24ed3c7f12dd07673dd64`.
-- Executable SHA-256: `cfc8f3c3b6e20ecfda45a87af83a63b672faba34073eb448d216e890371cb11d`; independently verified against `SHA256SUMS.txt` in the downloaded ZIP.
-- ZIP inspection confirmed a single-level portable package with the executable, PDB, README, release status and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are both zero. The executable is **unsigned**.
+- Current main base: `859bed74bdf842b471b1c1f8b7f70dd71fff184b`
+- PR source head: `3880ca2d38756728de558f084cd9f15eeb0b36bf`
+- Windows x64 build and packaging: [run 45920383886](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383886) — WPF compile, self-contained publish, release status, executable checksum generation and artifact upload all passed.
+- Application verification: [run 45920383862](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383862) — TypeScript, unit tests, production build and browser smoke tests all passed.
+- Repository CI: [run 45920383906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383906) — dependency installation, typecheck, unit tests, production build and browser smoke tests all passed.
+- Artifact ID: `15164501756`; ZIP SHA-256: `ac7029046bfa09f5217a346be004c0deb2c39fdcb541fa10b92afdff8e6408fd`.
+- Executable SHA-256: `e163fdd460325fa1b0f2c83292d008fff030c00d7f522c444647939be3109cdb`; independently verified against `SHA256SUMS.txt` inside the downloaded ZIP.
+- ZIP inspection confirmed a single-level portable Windows x64 package containing the executable, PDB, README, release-status notice and checksum manifest.
+- PE inspection confirms the Authenticode certificate-table offset and size are both zero. The executable has **no embedded Authenticode certificate** and is not signed.
+- The packaged `RELEASE-STATUS.txt` records build ref `afadec2efa80fea09ddc66145391e63712d37cea`; the GitHub Actions run metadata ties this artifact to PR head `3880ca2d38756728de558f084cd9f15eeb0b36bf`.
 
 ## What the Windows companion currently does
 
