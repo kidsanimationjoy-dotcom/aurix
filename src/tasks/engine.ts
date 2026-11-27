@@ -460,6 +460,7 @@ export class TaskEngine {
       projectId: task.projectId,
       prompt: task.prompt,
       intent: task.intent,
+      agentProfile: task.agentProfile ?? null,
       plan: task.plan,
     };
     const context: TaskExecutionContext = {
