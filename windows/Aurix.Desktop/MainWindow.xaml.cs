@@ -13,6 +13,7 @@ public partial class MainWindow : Window
 
     private HandsFreeVoiceService? _handsFreeVoice;
     private CancellationTokenSource? _taskCancellation;
+    private LocalCodexClient? _localCodexClient;
 
     public event Action<bool>? UpdateTrayWakeState;
 
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
         {
             UpdateStartupButton();
             await RefreshDefenderStatusAsync();
+            await RefreshLocalCodexStatusAsync();
         };
     }
 
@@ -144,6 +146,156 @@ public partial class MainWindow : Window
         UpdateTrayWakeState?.Invoke(false);
     }
 
+
+    private bool TryLoadSavedCodexClient(out LocalCodexClient? client, out string error)
+    {
+        client = null;
+        error = string.Empty;
+        if (!LocalCompanionSettings.TryLoad(out var url, out var token, out error))
+            return false;
+        return LocalCodexClient.TryCreate(url, token, out client, out error);
+    }
+
+    private async Task RefreshLocalCodexStatusAsync()
+    {
+        if (!TryLoadSavedCodexClient(out var client, out var error) || client is null)
+        {
+            _localCodexClient = null;
+            LocalCodexStatusText.Text = string.IsNullOrWhiteSpace(error)
+                ? "AI reasoning is not paired. Exact supported commands still work locally."
+                : error;
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+            return;
+        }
+
+        _localCodexClient = client;
+        LocalCodexStatusText.Text = "Checking the local companion and Codex readiness…";
+        try
+        {
+            var health = await client.CheckHealthAsync();
+            var status = await client.GetCodexStatusAsync();
+            var chatAvailable = health.Capabilities.Contains("cli.codex.chat", StringComparer.Ordinal);
+            var ready = chatAvailable && status.Installed && status.SignedIn && status.SandboxVerified;
+            LocalCodexStatusText.Text = ready
+                ? "LOCAL AI READY — Codex is signed in and the local sandbox is verified. Unrecognised instructions can be interpreted into approved AURIX actions."
+                : !chatAvailable
+                    ? "The paired companion does not advertise read-only Codex chat. Update the local companion."
+                    : "Companion connected · " + status.Message +
+                      (status.SignedIn && !status.SandboxVerified ? " Run Prepare / verify Codex before using AI reasoning." : string.Empty);
+            LocalCodexStatusText.Foreground = ready
+                ? System.Windows.Media.Brushes.LightGreen
+                : System.Windows.Media.Brushes.Orange;
+        }
+        catch (Exception ex)
+        {
+            LocalCodexStatusText.Text = "Local companion unavailable: " + ex.Message;
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+        }
+    }
+
+    private async void ConnectLocalCompanionButton_Click(object sender, RoutedEventArgs e)
+    {
+        ConnectLocalCompanionButton.IsEnabled = false;
+        try
+        {
+            LocalCodexClient? client;
+            if (!string.IsNullOrWhiteSpace(LocalCompanionTokenInput.Password))
+            {
+                if (!LocalCodexClient.TryCreate(
+                    LocalCompanionUrlInput.Text,
+                    LocalCompanionTokenInput.Password,
+                    out client,
+                    out var createError) || client is null)
+                    throw new InvalidOperationException(createError);
+
+                var health = await client.CheckHealthAsync();
+                if (!health.Capabilities.Contains("cli.codex.chat", StringComparer.Ordinal))
+                    throw new InvalidOperationException("This companion does not support read-only Codex chat. Update it before pairing.");
+
+                if (!LocalCompanionSettings.TrySave(
+                    LocalCompanionUrlInput.Text,
+                    LocalCompanionTokenInput.Password,
+                    out var saveError))
+                    throw new InvalidOperationException(saveError);
+                LocalCompanionTokenInput.Clear();
+            }
+            else if (!TryLoadSavedCodexClient(out client, out var loadError) || client is null)
+            {
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(loadError) ? "Enter the pairing token printed by the local companion." : loadError);
+            }
+
+            _localCodexClient = client;
+            LocalCodexStatusText.Text = "Pairing accepted. Checking Codex sign-in and sandbox status…";
+            await RefreshLocalCodexStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            LocalCodexStatusText.Text = ex.Message;
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+        }
+        finally
+        {
+            ConnectLocalCompanionButton.IsEnabled = true;
+        }
+    }
+
+    private async void PrepareCodexButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localCodexClient is null)
+        {
+            LocalCodexStatusText.Text = "Pair the local companion first.";
+            return;
+        }
+
+        PrepareCodexButton.IsEnabled = false;
+        LocalCodexStatusText.Text = "Preparing the separate AURIX Codex profile and checking the operating-system sandbox…";
+        try
+        {
+            var result = await _localCodexClient.PrepareCodexAsync();
+            LocalCodexStatusText.Text = result.Message;
+            LocalCodexStatusText.Foreground = result.SandboxVerified
+                ? System.Windows.Media.Brushes.LightGreen
+                : System.Windows.Media.Brushes.Orange;
+            await RefreshLocalCodexStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            LocalCodexStatusText.Text = "Codex preparation failed: " + ex.Message;
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+        }
+        finally
+        {
+            PrepareCodexButton.IsEnabled = true;
+        }
+    }
+
+    private async void SignInCodexButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localCodexClient is null)
+        {
+            LocalCodexStatusText.Text = "Pair the local companion first.";
+            return;
+        }
+
+        SignInCodexButton.IsEnabled = false;
+        try
+        {
+            var message = await _localCodexClient.StartCodexLoginAsync();
+            LocalCodexStatusText.Text = message + " Complete the official sign-in in the companion terminal, then press Pair / refresh status.";
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.LightGreen;
+        }
+        catch (Exception ex)
+        {
+            LocalCodexStatusText.Text = "Could not start Codex sign-in: " + ex.Message;
+            LocalCodexStatusText.Foreground = System.Windows.Media.Brushes.Orange;
+        }
+        finally
+        {
+            SignInCodexButton.IsEnabled = true;
+        }
+    }
+
     private async Task RefreshDefenderStatusAsync()
     {
         RefreshButton.IsEnabled = false;
@@ -219,13 +371,6 @@ public partial class MainWindow : Window
     private async Task RunCommandAsync(string command)
     {
         var plan = DesktopTaskPlanner.CreatePlan(command);
-        PlanText.Text = plan.Summary;
-
-        if (!plan.IsValid)
-        {
-            TaskOutputText.Text = plan.Error ?? "AURIX could not create a safe local plan for that request.";
-            return;
-        }
 
         _taskCancellation?.Cancel();
         _taskCancellation?.Dispose();
@@ -234,10 +379,75 @@ public partial class MainWindow : Window
 
         RunTaskButton.IsEnabled = false;
         EmergencyStopButton.IsEnabled = true;
-        TaskOutputText.Text = "Working…";
+        TaskOutputText.Text = "Preparing your request…";
 
         try
         {
+            var aiProposedPlan = false;
+            if (!plan.IsValid)
+            {
+                if (_localCodexClient is null)
+                {
+                    if (!TryLoadSavedCodexClient(out var savedClient, out var pairingError) || savedClient is null)
+                    {
+                        TaskOutputText.Text = plan.Error ??
+                            "AURIX could not create a safe local plan. Pair the local Codex companion to interpret natural-language instructions.";
+                        if (!string.IsNullOrWhiteSpace(pairingError))
+                            LocalCodexStatusText.Text = pairingError;
+                        return;
+                    }
+                    _localCodexClient = savedClient;
+                }
+
+                TaskOutputText.Text = "Checking local Codex readiness…";
+                var health = await _localCodexClient.CheckHealthAsync(token);
+                var status = await _localCodexClient.GetCodexStatusAsync(token);
+                if (!health.Capabilities.Contains("cli.codex.chat", StringComparer.Ordinal) ||
+                    !status.Installed || !status.SignedIn || !status.SandboxVerified)
+                {
+                    LocalCodexStatusText.Text = status.Message +
+                        (status.SignedIn && !status.SandboxVerified
+                            ? " Run Prepare / verify Codex before using AI reasoning."
+                            : " Complete local Codex setup in the connection panel.");
+                    throw new InvalidOperationException("Local Codex is not ready. No desktop action was proposed or executed.");
+                }
+
+                TaskOutputText.Text = "Asking local Codex to interpret your instruction…";
+                var response = await _localCodexClient.InterpretDesktopInstructionAsync(command, token);
+                var interpretation = AiDesktopCommandParser.Parse(response);
+                if (!interpretation.IsPlan || interpretation.Plan is null)
+                {
+                    PlanText.Text = "No desktop action proposed.";
+                    TaskOutputText.Text = interpretation.Message;
+                    ListeningStatusText.Text = "AURIX received a local Codex response. Say “AURIX” for another instruction.";
+                    return;
+                }
+
+                plan = interpretation.Plan;
+                aiProposedPlan = true;
+            }
+
+            PlanText.Text = plan.Summary;
+            if (!plan.IsValid || plan.Steps.Count == 0)
+                throw new InvalidOperationException("AURIX refused an empty or invalid desktop plan.");
+
+            if (aiProposedPlan)
+            {
+                var approval = System.Windows.MessageBox.Show(
+                    "Review the exact actions proposed by local Codex:\n\n" + plan.Summary +
+                    "\n\nAURIX will run only these listed allowlisted actions. Individual UI changes still require their own approval.",
+                    "Approve AI-proposed desktop plan",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+                if (approval != System.Windows.MessageBoxResult.Yes)
+                {
+                    TaskOutputText.Text = "AI-proposed plan declined. No desktop action was taken.";
+                    ListeningStatusText.Text = "Plan declined.";
+                    return;
+                }
+            }
+
+            TaskOutputText.Text = aiProposedPlan ? "Running your approved AI-proposed plan…" : "Working…";
             var result = await Task.Run(() => DesktopTaskRunner.Execute(
                 plan,
                 token,
@@ -261,6 +471,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             TaskOutputText.Text = $"Task failed safely: {ex.Message}";
+            ListeningStatusText.Text = "Task finished with an issue. Say “AURIX” when ready.";
         }
         finally
         {
