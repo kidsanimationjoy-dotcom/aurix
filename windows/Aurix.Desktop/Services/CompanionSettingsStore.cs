@@ -27,7 +27,14 @@ public static class CompanionSettingsStore
 
             var encrypted = File.ReadAllBytes(TokenPath);
             var clear = ProtectedData.Unprotect(encrypted, optionalEntropy: null, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(clear);
+            try
+            {
+                return Encoding.UTF8.GetString(clear);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(clear);
+            }
         }
         catch (CryptographicException)
         {
