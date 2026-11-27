@@ -362,6 +362,14 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     }
 
 
+    if (req.method === 'POST' && url.pathname === '/v1/higgsfield/login') {
+      try {
+        return send(202, { ok: true, result: await higgsfield.login() });
+      } catch (error) {
+        return send(409, { ok: false, error: 'HIGGSFIELD_LOGIN_FAILED', message: error instanceof Error ? error.message.slice(0, 800) : 'Could not start Higgsfield sign-in.' });
+      }
+    }
+
     if (req.method === 'GET' && url.pathname === '/v1/higgsfield/status') {
       return send(200, { ok: true, result: await higgsfield.status() });
     }
