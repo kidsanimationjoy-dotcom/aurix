@@ -671,6 +671,9 @@ export class TaskEngine {
       errorMessage: message,
       finishedAt: null,
       selectedProviderId: providerId,
+      approvalStatus: 'not_required',
+      approvedAt: null,
+      pendingActionApproval: null,
     });
     await this.event(taskId, eventType, message.slice(0, 500), providerId);
   }
