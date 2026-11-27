@@ -86,7 +86,12 @@ public static class AiDesktopCommandParser
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
-        return ContainsExactTargetLabel(button, userPrompt, @"(?:button|in|on|within|at)");
+        var escapedButton = Regex.Escape(button.Trim());
+        var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}(?<![\p{L}\p{N}_])" +
+            escapedButton +
+            @"(?=(?:[""']?\s*(?:button|in|on|within|at)\b|[""']?\s*(?:[.,!?;:]|$)))";
+        return Regex.IsMatch(userPrompt, pattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
 
@@ -112,7 +117,6 @@ public static class AiDesktopCommandParser
     private static bool ExplicitlyRequestedTextEntry(string control, string text, string userPrompt)
     {
         if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase) ||
-            !ContainsExactTargetLabel(control, userPrompt, @"(?:field|control|box|in|on|within|at)") ||
             !ContainsExactTextValue(text, userPrompt))
             return false;
 
@@ -121,8 +125,35 @@ public static class AiDesktopCommandParser
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
-        return Regex.IsMatch(userPrompt,
-            @"\b(?:type|enter|write|paste|fill|put|insert|replace)\b",
+        // Require one explicit instruction in which the requested value is
+        // the thing being entered into the named Notepad field.
+        var valueStart = userPrompt.IndexOf(text, StringComparison.Ordinal);
+        if (valueStart < 0)
+            return false;
+
+        var beforeValue = userPrompt[..valueStart];
+        if (!Regex.IsMatch(beforeValue,
+            @"\b(?:type|enter|write|paste|fill|put|insert|replace)\b[\s\S]{0,80}$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return false;
+
+        var afterValue = userPrompt[(valueStart + text.Length)..];
+        if (!Regex.IsMatch(afterValue,
+            @"^\s*[""']?\s*(?:into|in|to|inside|within)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return false;
+
+        var escapedControl = Regex.Escape(control.Trim());
+        var controlPattern = @"(?<![\p{L}\p{N}_])" + escapedControl +
+            @"(?=(?:[""']?\s*(?:field|control|box|in|on|within|at)\b|[""']?\s*(?:[.,!?;:]|$)))";
+        var controlMatch = Regex.Match(afterValue, controlPattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!controlMatch.Success || controlMatch.Index > 48)
+            return false;
+
+        var afterControl = afterValue[(controlMatch.Index + controlMatch.Length)..];
+        return Regex.IsMatch(afterControl,
+            @"^\s*[""']?\s*in\b[\s\S]{0,30}\bNotepad\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
