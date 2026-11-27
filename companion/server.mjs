@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { analyzeReaTarget, reaStatus } from './rea.mjs';
+import { analyzeReaTarget, inspectReaBrowserTarget, listReaBrowserTargets, reaStatus } from './rea.mjs';
 import { runCodexReadOnlyChat } from './codex-chat.mjs';
 import { createCodexAgentManager } from './codex-agent.mjs';
 import {
@@ -234,7 +234,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect'],
         grantedRoots: [],
         codexApprovedRootCount: codexRoots.length,
       });
@@ -309,6 +309,54 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     if (req.method === 'GET' && url.pathname === '/v1/rea/status') {
       const status = await reaStatus({ command: reaCommand });
       return send(200, { ...status, approvedRootCount: reaRoots.length });
+    }
+
+
+    if (req.method === 'POST' && url.pathname === '/v1/rea/browser/targets') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, { ok: false, error: 'INVALID_REQUEST', message: status === 413 ? 'Browser inspection request is too large.' : 'Browser inspection request must contain valid JSON.' });
+      }
+      const authorization = body.authorization;
+      if (!authorization || typeof authorization.statement !== 'string' ||
+          !authorization.statement.trim() || authorization.statement.length > 500 ||
+          !Number.isFinite(authorization.confirmedAt) || authorization.confirmedAt <= 0) {
+        return send(403, { ok: false, error: 'AUTHORIZATION_REQUIRED', message: 'Confirm that you own or are authorised to inspect this local browser session.' });
+      }
+      try {
+        const result = await listReaBrowserTargets({ endpoint: body.endpoint, command: reaCommand });
+        return send(200, { ok: true, result });
+      } catch (error) {
+        return send(400, { ok: false, error: 'REA_BROWSER_DISCOVERY_FAILED', message: error instanceof Error ? error.message.slice(0, 1000) : 'Could not list local browser tabs.' });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/rea/browser/inspect') {
+      let body;
+      try { body = await readJson(req, 4096); }
+      catch (error) {
+        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+        return send(status >= 400 && status < 500 ? status : 400, { ok: false, error: 'INVALID_REQUEST', message: status === 413 ? 'Browser inspection request is too large.' : 'Browser inspection request must contain valid JSON.' });
+      }
+      const authorization = body.authorization;
+      if (!authorization || typeof authorization.statement !== 'string' ||
+          !authorization.statement.trim() || authorization.statement.length > 500 ||
+          !Number.isFinite(authorization.confirmedAt) || authorization.confirmedAt <= 0) {
+        return send(403, { ok: false, error: 'AUTHORIZATION_REQUIRED', message: 'Confirm that you own or are authorised to inspect this local browser session.' });
+      }
+      try {
+        const result = await inspectReaBrowserTarget({
+          endpoint: body.endpoint,
+          targetId: body.targetId,
+          kind: body.kind === 'bundle' ? 'bundle' : 'page',
+          command: reaCommand,
+        });
+        return send(200, { ok: true, result });
+      } catch (error) {
+        return send(400, { ok: false, error: 'REA_BROWSER_INSPECTION_FAILED', message: error instanceof Error ? error.message.slice(0, 1000) : 'Could not inspect this local browser tab.' });
+      }
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/rea/analyze') {
