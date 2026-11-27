@@ -75,6 +75,15 @@ A recognised certificate authority may issue an organization-validated code-sign
 - The latest Windows x64 and MSIX validation artifact IDs and digests above remain the PR #43 build evidence; both packages remain unsigned.
 - These CI results confirm build and test behavior, not publisher identity or trusted signing. The portable ZIP and MSIX validation package remain unsigned. No SmartScreen or Defender bypass is permitted.
 
+## Latest verified Windows preview (November 27, 2026)
+
+- PR [#49](https://github.com/kidsanimationjoy-dotcom/aurix/pull/49) added a release-package integrity gate and was merged into `main` as `7ebd83d2bacff89738800d18f00c2337f6810e3f`.
+- The Windows workflow [run 46038661597](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46038661597) built the reviewed PR source tree immediately before merge; all 13 steps passed.
+- Portable ZIP artifact ID `15219442256`, ZIP digest `sha256:e17a87700fb5776f6e7215c275a8e248e91b9fca31264ce2ecbd8449ffe4915c`.
+- Unsigned MSIX validation artifact ID `15219392178`, ZIP digest `sha256:950115ff80c390db74dca413ab4d8c6ecc61e6821b19c678cffec0b149ae8d1c`.
+- CI verified required package files and checked that the executable checksum matches `SHA256SUMS.txt`. The workflow also confirms the package still clearly says UNSIGNED and the launcher does not bypass PowerShell execution policy.
+- These are temporary artifacts retained until December 11, 2026. Their digests are archive-integrity metadata only; neither archive nor embedded executable has a trusted publisher signature. The MSIX manifest still uses the deliberate placeholder `CN=UNCONFIGURED-PUBLISHER`. No Store submission or certification has occurred.
+
 ## Signing controls
 
 - Sign only reviewed release binaries produced from the repository's verified source/build.
