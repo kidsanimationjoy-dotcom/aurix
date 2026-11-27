@@ -313,7 +313,7 @@ public partial class MainWindow : Window
         try
         {
             AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync();
-            AiProviderCombo.SelectedIndex = 1;
+            AiProviderCombo.SelectedIndex = 0;
         }
         catch (Exception ex)
         {
@@ -611,12 +611,9 @@ public partial class MainWindow : Window
 
     private async Task RunAiChatAsync(string prompt)
     {
-        if (AiProviderCombo.SelectedIndex == 1)
-        {
-            await RunOpenJarvisChatAsync(prompt);
-            return;
-        }
-        var token = CurrentCompanionToken();
+        var useOpenJarvis = AiProviderCombo.SelectedIndex == 0;
+        var providerName = useOpenJarvis ? "Stanford OpenJarvis" : "Codex";
+        var token = useOpenJarvis ? string.Empty : CurrentCompanionToken();
         const string actionContract = """
 You are translating a user's voice request into either an answer or a proposed AURIX desktop plan.
 Return exactly one raw JSON object. Do not use Markdown or code fences.
@@ -641,7 +638,7 @@ Do not propose shell commands, scripts, arbitrary file access, network access, b
 AURIX will independently validate your JSON, display the exact plan, ask the user to approve it, and retain its own per-action approval gates. You cannot authorise or execute an action yourself. Never claim that a proposed action has already happened.
 """;
 
-        PlanText.Text = "LOCAL AI REASONING\nCodex may answer normally or propose only supported, approval-gated AURIX desktop actions.";
+        PlanText.Text = $"LOCAL AI REASONING\n{providerName} may answer normally or propose only supported, approval-gated AURIX desktop actions.";
         var taskRun = _taskRuns.BeginRun();
         var cancellationToken = taskRun.Token;
         RunTaskButton.IsEnabled = false;
@@ -650,21 +647,28 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 
         try
         {
-            if (string.IsNullOrWhiteSpace(token))
+            if (useOpenJarvis)
             {
-                TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI reasoning. Typed local commands remain available without AI.";
-                return;
+                AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(cancellationToken);
             }
-
-            var status = await _localCodexChat.CheckAsync(token, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_taskRuns.IsCurrent(taskRun))
-                return;
-            UpdateCodexStatus(status);
-            if (!status.CanChat)
+            else
             {
-                TaskOutputText.Text = "AI reasoning is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
-                return;
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using the backup AI provider. Typed local commands remain available without AI.";
+                    return;
+                }
+
+                var status = await _localCodexChat.CheckAsync(token, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!_taskRuns.IsCurrent(taskRun))
+                    return;
+                UpdateCodexStatus(status);
+                if (!status.CanChat)
+                {
+                    TaskOutputText.Text = "Codex backup is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
+                    return;
+                }
             }
 
             var messages = new List<LocalCodexMessage>
@@ -674,8 +678,10 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             messages.AddRange(_voiceConversation.TakeLast(8));
             messages.Add(new LocalCodexMessage("user", prompt));
 
-            TaskOutputText.Text = "AURIX is asking local Codex to understand your request…";
-            var rawResponse = await _localCodexChat.ChatAsync(token, messages, cancellationToken);
+            TaskOutputText.Text = $"AURIX is asking local {providerName} to understand your request…";
+            var rawResponse = useOpenJarvis
+                ? await _localOpenJarvisChat.ChatAsync(messages, cancellationToken)
+                : await _localCodexChat.ChatAsync(token, messages, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!_taskRuns.IsCurrent(taskRun))
                 return;
@@ -696,7 +702,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 
             PlanText.Text = plan.Summary;
             var approval = System.Windows.MessageBox.Show(
-                "Review the exact desktop actions proposed by local Codex:\n\n" + plan.Summary +
+                "Review the exact desktop actions proposed by local " + providerName + ":\n\n" + plan.Summary +
                 "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text will still require separate approval.",
                 "Approve AI-proposed desktop plan",
                 System.Windows.MessageBoxButton.YesNo,
@@ -757,58 +763,6 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             {
                 TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
                 ListeningStatusText.Text = "AI request finished with an issue.";
-            }
-        }
-        finally
-        {
-            FinishTaskRun(taskRun);
-        }
-    }
-
-    private async Task RunOpenJarvisChatAsync(string prompt)
-    {
-        var taskRun = _taskRuns.BeginRun();
-        var cancellationToken = taskRun.Token;
-        RunTaskButton.IsEnabled = false;
-        EmergencyStopButton.IsEnabled = true;
-        PlanText.Text = "STANFORD OPENJARVIS — LOCAL CHAT ONLY\nOpenJarvis can answer questions, but it has no direct desktop-control tools in this integration.";
-        TaskOutputText.Text = "Checking the local OpenJarvis model…";
-
-        try
-        {
-            var status = await _localOpenJarvisChat.CheckAsync(cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_taskRuns.IsCurrent(taskRun))
-                return;
-
-            AiConnectionStatusText.Text = status;
-            var messages = _voiceConversation.TakeLast(8).ToList();
-            messages.Add(new LocalCodexMessage("user", prompt));
-            TaskOutputText.Text = "AURIX is asking the local OpenJarvis model…";
-            var answer = await _localOpenJarvisChat.ChatAsync(messages, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_taskRuns.IsCurrent(taskRun))
-                return;
-
-            AddVoiceConversationTurn(prompt, answer);
-            TaskOutputText.Text = answer;
-            ListeningStatusText.Text = "OpenJarvis answer ready. Computer actions remain under AURIX's separate approval controls.";
-            SpeakAnswer(answer);
-        }
-        catch (OperationCanceledException)
-        {
-            if (_taskRuns.IsCurrent(taskRun))
-            {
-                TaskOutputText.Text = "OpenJarvis request stopped.";
-                ListeningStatusText.Text = "Emergency stop activated.";
-            }
-        }
-        catch (Exception ex)
-        {
-            if (_taskRuns.IsCurrent(taskRun))
-            {
-                TaskOutputText.Text = "OpenJarvis could not answer: " + ex.Message;
-                ListeningStatusText.Text = "OpenJarvis request finished with an issue.";
             }
         }
         finally
