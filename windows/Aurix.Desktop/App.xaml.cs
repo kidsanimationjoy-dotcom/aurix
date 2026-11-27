@@ -14,6 +14,77 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // This native read-only check avoids relying on an unsigned downloaded
+        // PowerShell script, which RemoteSigned policy can block.
+        if (e.Args.Any(argument =>
+            argument.Equals("--readiness-check", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                System.Windows.MessageBox.Show(
+                    Aurix.Desktop.Services.WindowsReadinessDiagnostic.CreateReport(),
+                    "AURIX Windows Readiness Check",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Environment.ExitCode = 1;
+                System.Windows.MessageBox.Show(
+                    "The readiness check could not complete (" + ex.GetType().Name + "). Review Windows Settings > System > Sound > Input.",
+                    "AURIX Windows Readiness Check",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                Shutdown(1);
+                return;
+            }
+
+            Shutdown(0);
+            return;
+        }
+
+        // CI startup validation constructs the real WPF window without showing it,
+        // starting the tray listener, reading the saved wake-word opt-in, or touching
+        // the microphone. This verifies the published single-file app can initialise.
+        if (e.Args.Any(argument =>
+            argument.Equals("--self-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            var exitCode = 0;
+            try
+            {
+                _aurixWindow = new MainWindow();
+                MainWindow = _aurixWindow;
+
+                if (!_aurixWindow.HasRequiredStartupControls(out var missingControls))
+                {
+                    Console.Error.WriteLine("AURIX startup self-test failed. Missing controls: " + missingControls);
+                    exitCode = 2;
+                }
+                else
+                {
+                    var readinessReport = Aurix.Desktop.Services.WindowsReadinessDiagnostic.CreateReport();
+                    if (!readinessReport.Contains("AURIX WINDOWS READINESS CHECK", StringComparison.Ordinal))
+                    {
+                        Console.Error.WriteLine("AURIX startup self-test failed. Readiness report header was missing.");
+                        exitCode = 3;
+                    }
+                    else
+                    {
+                        Console.WriteLine("AURIX startup self-test passed. WPF window, required controls and native readiness diagnostic initialised; microphone was not started.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("AURIX startup self-test failed: " + ex.GetType().Name);
+                exitCode = 1;
+            }
+
+            Environment.ExitCode = exitCode;
+            Shutdown(exitCode);
+            return;
+        }
+
         _aurixWindow = new MainWindow();
         MainWindow = _aurixWindow;
 

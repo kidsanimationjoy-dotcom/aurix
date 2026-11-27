@@ -49,6 +49,21 @@ jobs:
       - name: Publish self-contained Windows x64 application
         run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"
 
+      - name: Smoke-test published Windows desktop startup
+        shell: pwsh
+        run: |
+          $exe = Join-Path "$env:RUNNER_TEMP\aurix-publish" "Aurix.Desktop.exe"
+          if (!(Test-Path -LiteralPath $exe)) { throw "Published executable was not found for startup smoke test." }
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -PassThru
+          if (!$process.WaitForExit(20000)) {
+            try { $process.Kill() } catch {}
+            throw "AURIX did not complete its startup self-test within 20 seconds."
+          }
+          $process.Refresh()
+          if ($process.ExitCode -ne 0) {
+            throw "AURIX startup self-test failed with exit code $($process.ExitCode)."
+          }
+
       - name: Add release instructions and executable checksum
         shell: pwsh
         run: |

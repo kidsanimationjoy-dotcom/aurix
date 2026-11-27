@@ -52,11 +52,11 @@ foreach ($requiredPhrase in @(
 }
 
 $launcher = Get-Content -LiteralPath (Join-Path $root 'Run-AURIX-Readiness.cmd') -Raw
-if ($launcher -notmatch '(?i)Test-AurixReadiness\.ps1' -or $launcher -notmatch '(?i)-NoProfile') {
-    throw 'The one-click readiness launcher must call the bundled diagnostic with -NoProfile.'
+if ($launcher -notmatch '(?i)Aurix\.Desktop\.exe' -or $launcher -notmatch '(?i)--readiness-check') {
+    throw 'The one-click readiness launcher must start the native AURIX executable in readiness-check mode.'
 }
-if ($launcher -match '(?i)-ExecutionPolicy\s+Bypass') {
-    throw 'The readiness launcher must not bypass PowerShell execution policy.'
+if ($launcher -match '(?i)powershell\.exe|ExecutionPolicy') {
+    throw 'The one-click readiness launcher must not depend on PowerShell or alter script execution policy.'
 }
 
 Write-Host 'AURIX portable release package validation passed.'

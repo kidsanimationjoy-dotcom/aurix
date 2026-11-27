@@ -88,9 +88,9 @@ try {
     $policy = Get-ItemProperty -Path $policyPath -ErrorAction SilentlyContinue
     if ($null -ne $policy -and $null -ne $policy.LetAppsAccessMicrophone) {
         switch ([int]$policy.LetAppsAccessMicrophone) {
-            0 { Add-Check 'Microphone privacy policy' 'WARN' 'A device policy denies microphone access to apps. Ask the device administrator to review it.' }
-            1 { Add-Check 'Microphone privacy policy' 'INFO' 'A device policy allows microphone access to apps. Per-app and desktop-app settings may still apply.' }
-            2 { Add-Check 'Microphone privacy policy' 'WARN' 'A device policy forces microphone access off for apps.' }
+            0 { Add-Check 'Microphone privacy policy' 'INFO' 'The policy is User in control. Review Windows Settings > Privacy & security > Microphone.' }
+            1 { Add-Check 'Microphone privacy policy' 'INFO' 'The policy is Force Allow for Windows apps. Per-app and desktop-app settings may still apply.' }
+            2 { Add-Check 'Microphone privacy policy' 'WARN' 'The policy is Force Deny for Windows apps. Ask the device administrator to review it.' }
             default { Add-Check 'Microphone privacy policy' 'INFO' "Unrecognised policy value: $($policy.LetAppsAccessMicrophone)" }
         }
     } else {
