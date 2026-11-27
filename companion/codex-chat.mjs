@@ -87,9 +87,9 @@ export function runCodexReadOnlyChat({
       if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       fn(value);
     };
-    const terminateChild = () => new Promise<void>((resolve) => {
+    const terminateChild = () => new Promise((resolve) => {
       let completed = false;
-      let hardKillTimer: NodeJS.Timeout | undefined;
+      let hardKillTimer;
       const complete = () => {
         if (completed) return;
         completed = true;
