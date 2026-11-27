@@ -121,6 +121,26 @@ export class TaskEngine {
     return this.processTask(taskId);
   }
 
+
+  private async taskReadiness(
+    adapter: ProviderAdapter & TaskExecutionAdapter,
+    task: TaskRecord,
+  ): Promise<string | null> {
+    if (!adapter.checkTaskReadiness) return null;
+    const request: TaskExecutionRequest = {
+      taskId: task.id,
+      projectId: task.projectId,
+      prompt: task.prompt,
+      intent: task.intent,
+      plan: task.plan,
+    };
+    try {
+      return await adapter.checkTaskReadiness(request);
+    } catch (error) {
+      return error instanceof Error ? error.message : 'The selected provider could not verify this task is ready.';
+    }
+  }
+
   private async processTask(taskId: string): Promise<TaskRecord> {
     const task = this.db.get('tasks', taskId);
     if (!task) throw new Error(`Task ${taskId} not found.`);
@@ -188,6 +208,19 @@ export class TaskEngine {
       return this.db.get('tasks', taskId)!;
     }
 
+    const readinessMessage = await this.taskReadiness(adapter, { ...task, selectedProviderId: decision.providerId });
+    if (readinessMessage) {
+      await this.finishWithoutExecution(
+        taskId,
+        'waiting_for_provider',
+        'TASK_NOT_READY',
+        readinessMessage,
+        'task.waiting_for_provider',
+        decision.providerId,
+      );
+      return this.db.get('tasks', taskId)!;
+    }
+
     // A real adapter may be available, but AURIX must show the selected provider
     // and the complete plan before it dispatches any task to that adapter.
     await this.db.update('tasks', taskId, {
@@ -249,6 +282,15 @@ export class TaskEngine {
           taskId, 'waiting_for_provider', 'EXECUTOR_NOT_IMPLEMENTED',
           'The selected provider no longer exposes a real AURIX task executor. No work was sent.',
           'task.waiting_for_provider', providerId,
+        );
+        return this.db.get('tasks', taskId) ?? null;
+      }
+
+      const readinessMessage = await this.taskReadiness(adapter, task);
+      if (readinessMessage) {
+        await this.finishWithoutExecution(
+          taskId, 'waiting_for_provider', 'TASK_NOT_READY',
+          readinessMessage, 'task.waiting_for_provider', providerId,
         );
         return this.db.get('tasks', taskId) ?? null;
       }
