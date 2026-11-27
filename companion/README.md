@@ -67,6 +67,12 @@ After the task starts, Codex's command, file-change and filesystem permission re
 
 Task Center status and output are stored in the local AURIX workspace. The Task Center does not make a direct API request to OpenAI, does not copy the user's Codex credentials, and does not give Codex access beyond the managed read-only profile and the per-task permissions approved by the user.
 
+## Specialist Agents
+
+The Agents page now launches saved agent profiles as real Task Center tasks. Each run snapshots the agent name, role, summary, instructions and permission choices into the task record so later edits to the definition do not silently change an active task. Choose read-only chat or project coding when launching an agent. Chat uses the AURIX Codex read-only workspace; coding requires an active project whose linked folder has passed the local `AURIX_CODEX_ROOTS` preflight.
+
+The agent's file-change and command settings are enforced at the Codex approval boundary. `deny` causes the matching action to be declined automatically; `ask` places it in Task Center for an individual approval. Network access is always denied by the AURIX platform, even when a saved older agent definition requested "ask". Agents cannot grant themselves extra access, reuse a previous approval, or restore a pending permission request after reload.
+
 ## Higgsfield video generation
 
 Install the official CLI locally with `npm install -g @higgsfield/cli`, then use **Media Studio → Sign in with Higgsfield**. The local companion starts the CLI's official browser OAuth flow in its terminal. AURIX never reads, returns, or asks the user to paste Higgsfield OAuth credentials or API keys. The supported workflows currently enable Seedance 2.0 text-to-video and GPT Image 2.5 text-to-image only when the live model catalog reports them. The prompt and model-specific duration, resolution, aspect ratio, mode, quality and variant are validated against the published CLI schema before asking the CLI for a cost estimate. Reference-image editing is not included in this initial integration.
