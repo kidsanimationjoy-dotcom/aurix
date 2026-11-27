@@ -16,6 +16,7 @@ public static class CompanionSettingsStore
         "Desktop");
 
     private static readonly string TokenPath = Path.Combine(SettingsDirectory, "companion-token.bin");
+    private static readonly string TemporaryTokenPath = TokenPath + ".tmp";
 
     public static string LoadToken()
     {
@@ -26,7 +27,14 @@ public static class CompanionSettingsStore
 
             var encrypted = File.ReadAllBytes(TokenPath);
             var clear = ProtectedData.Unprotect(encrypted, optionalEntropy: null, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(clear);
+            try
+            {
+                return Encoding.UTF8.GetString(clear);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(clear);
+            }
         }
         catch (CryptographicException)
         {
@@ -49,27 +57,36 @@ public static class CompanionSettingsStore
 
         Directory.CreateDirectory(SettingsDirectory);
         var clear = Encoding.UTF8.GetBytes(token.Trim());
-        var encrypted = ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.CurrentUser);
-        var temporaryPath = TokenPath + ".tmp";
-        File.WriteAllBytes(temporaryPath, encrypted);
-        File.Move(temporaryPath, TokenPath, overwrite: true);
-        CryptographicOperations.ZeroMemory(clear);
+        try
+        {
+            var encrypted = ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.CurrentUser);
+            File.WriteAllBytes(TemporaryTokenPath, encrypted);
+            File.Move(TemporaryTokenPath, TokenPath, overwrite: true);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+        }
     }
 
-    public static void ClearToken()
+    public static bool ClearToken()
     {
         try
         {
             if (File.Exists(TokenPath))
                 File.Delete(TokenPath);
+            if (File.Exists(TemporaryTokenPath))
+                File.Delete(TemporaryTokenPath);
+
+            return !File.Exists(TokenPath) && !File.Exists(TemporaryTokenPath);
         }
         catch (IOException)
         {
-            // A failed clear is surfaced by the caller when a new token is saved.
+            return false;
         }
         catch (UnauthorizedAccessException)
         {
-            // Do not expose the previous token in UI or logs.
+            return false;
         }
     }
 }

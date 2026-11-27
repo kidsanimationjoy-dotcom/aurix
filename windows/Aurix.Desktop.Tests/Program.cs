@@ -178,6 +178,27 @@ Check("emergency stop cancels the active task", secondRun.IsCancellationRequeste
 taskRuns.CompleteRun(secondRun);
 Check("completed desktop task is no longer active", !taskRuns.IsCurrent(secondRun));
 
+var testPairingToken = "aurix-test-" + Guid.NewGuid().ToString("N");
+try
+{
+    CompanionSettingsStore.SaveToken(testPairingToken);
+    Check("pairing token is stored for the current Windows user",
+        CompanionSettingsStore.LoadToken() == testPairingToken);
+    Check("disconnect removes the saved pairing token",
+        CompanionSettingsStore.ClearToken());
+    Check("disconnected pairing token can no longer be loaded",
+        string.IsNullOrEmpty(CompanionSettingsStore.LoadToken()));
+}
+catch (Exception ex)
+{
+    Check("pairing token save/disconnect round-trip", false);
+    Console.Error.WriteLine("Pairing token persistence test error: " + ex.GetType().Name);
+}
+finally
+{
+    _ = CompanionSettingsStore.ClearToken();
+}
+
 if (failed > 0)
 {
     Console.Error.WriteLine($"{failed} of {passed + failed} proposal-policy checks failed.");

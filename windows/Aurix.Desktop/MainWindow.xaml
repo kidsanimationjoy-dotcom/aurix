@@ -119,6 +119,8 @@
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <Button x:Name="PairCompanionButton" Content="Connect" Click="PairCompanionButton_Click"
                       Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
+              <Button x:Name="DisconnectCompanionButton" Content="Disconnect" Click="DisconnectCompanionButton_Click"
+                      Background="#48232D" BorderBrush="#87404D"/>
               <Button x:Name="PrepareCodexButton" Content="Verify AI sandbox" Click="PrepareCodexButton_Click"/>
               <Button x:Name="CodexLoginButton" Content="Sign in to Codex" Click="CodexLoginButton_Click"/>
               <Button x:Name="ClearVoiceChatButton" Content="Clear conversation" Click="ClearVoiceChatButton_Click" Margin="0"/>

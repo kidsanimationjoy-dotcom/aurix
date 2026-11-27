@@ -66,7 +66,7 @@ public partial class MainWindow : Window
     private async void PairCompanionButton_Click(object sender, RoutedEventArgs e)
     {
         var token = CurrentCompanionToken();
-        PairCompanionButton.IsEnabled = false;
+        SetCompanionActionsEnabled(false);
         AiConnectionStatusText.Text = "Checking the authenticated local AURIX companion…";
         try
         {
@@ -82,14 +82,14 @@ public partial class MainWindow : Window
         }
         finally
         {
-            PairCompanionButton.IsEnabled = true;
+            SetCompanionActionsEnabled(true);
         }
     }
 
     private async void PrepareCodexButton_Click(object sender, RoutedEventArgs e)
     {
         var token = CurrentCompanionToken();
-        PrepareCodexButton.IsEnabled = false;
+        SetCompanionActionsEnabled(false);
         AiConnectionStatusText.Text = "Preparing the separate AURIX Codex profile and verifying its OS sandbox…";
         try
         {
@@ -105,14 +105,14 @@ public partial class MainWindow : Window
         }
         finally
         {
-            PrepareCodexButton.IsEnabled = true;
+            SetCompanionActionsEnabled(true);
         }
     }
 
     private async void CodexLoginButton_Click(object sender, RoutedEventArgs e)
     {
         var token = CurrentCompanionToken();
-        CodexLoginButton.IsEnabled = false;
+        SetCompanionActionsEnabled(false);
         try
         {
             var message = await _localCodexChat.StartLoginAsync(token);
@@ -124,8 +124,42 @@ public partial class MainWindow : Window
         }
         finally
         {
-            CodexLoginButton.IsEnabled = true;
+            SetCompanionActionsEnabled(true);
         }
+    }
+
+    private void SetCompanionActionsEnabled(bool enabled)
+    {
+        PairCompanionButton.IsEnabled = enabled;
+        PrepareCodexButton.IsEnabled = enabled;
+        CodexLoginButton.IsEnabled = enabled;
+        DisconnectCompanionButton.IsEnabled = enabled;
+    }
+
+    private void DisconnectCompanionButton_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmation = System.Windows.MessageBox.Show(
+            "Remove the saved AURIX pairing token from this Windows account? This clears the local credential only; it does not stop or rotate a running companion's token.",
+            "Disconnect local AI pairing",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+
+        if (confirmation != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        _taskRuns.CancelCurrent();
+        _companionToken = string.Empty;
+        CompanionTokenBox.Clear();
+        _codexReady = false;
+
+        if (!CompanionSettingsStore.ClearToken())
+        {
+            AiConnectionStatusText.Text = "AURIX cleared the token from memory, but Windows could not remove every saved token file. Check the local AURIX Desktop settings folder.";
+            return;
+        }
+
+        AiConnectionStatusText.Text = "Local AI pairing removed. Hands-free wake listening and supported local commands remain available.";
+        TaskOutputText.Text = "The saved companion credential has been removed from this Windows account.";
     }
 
     private void ClearVoiceChatButton_Click(object sender, RoutedEventArgs e)
