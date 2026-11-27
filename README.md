@@ -60,6 +60,8 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Current status
 
+**Windows desktop preview (November 27, 2026):** the latest main-branch Windows x64 package was built successfully in [workflow run 46033957912](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46033957912). It includes the read-only laptop microphone/speech-recognizer preflight. [Download the `AURIX-Windows-x64` preview artifact](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46033957912/artifacts/15215936317). **This package is unsigned, is not an installer, and is not approved for public launch. Do not disable SmartScreen or Microsoft Defender to run it.** See [launch readiness](docs/LAUNCH_READINESS.md) and [code-signing policy](docs/CODE_SIGNING_POLICY.md).
+
 The Phase 0–1 application source is tracked and its clean-source CI verifies dependency installation, TypeScript checks, unit tests, production build and browser smoke tests.
 
 The local Task Center supports project-scoped Codex coding tasks through the official Codex CLI when the companion is paired, the user has signed in, the selected project folder passes local preflight validation, and AURIX has passed a fresh OS sandbox verification. Codex command and file-change requests pause for one-time approval cards showing the exact command, working folder and proposed changes. Network access and persistent folder-root grants are refused. Pending approval requests expire and are declined automatically. Specialist agent profiles support user-defined instructions and per-agent terminal/file-write restrictions; each task uses a saved profile snapshot. These policies do not permit network access.
