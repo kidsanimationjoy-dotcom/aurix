@@ -94,6 +94,7 @@ export function runCodexReadOnlyChat({
     };
 
     child.stdout.on('data', (chunk) => {
+      if (settled) return;
       stdout += chunk.toString('utf8');
       if (stdout.length > MAX_STDOUT_CHARS) {
         child.kill();
@@ -101,10 +102,12 @@ export function runCodexReadOnlyChat({
       }
     });
     child.stderr.on('data', (chunk) => {
+      if (settled) return;
       if (stderr.length < MAX_STDERR_CHARS) stderr += chunk.toString('utf8').slice(0, MAX_STDERR_CHARS - stderr.length);
     });
     child.once('error', (error) => finish(reject, error));
     child.once('close', (code) => {
+      if (settled) return;
       if (code !== 0) {
         finish(reject, new Error('Codex exited with code ' + String(code) + '. Check the local companion terminal for diagnostics.'));
         return;
