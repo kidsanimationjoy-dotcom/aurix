@@ -195,6 +195,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
   // The companion process must re-prove the OS sandbox after every restart.
   let sandboxVerified = false;
   let codexAgentManager = null;
+  const activeChatRequests = new Set();
   const higgsfield = createHiggsfieldManager({ command: higgsfieldCommand });
   const paths = codexPaths ?? resolveCodexPaths(process.env, process.platform);
   const server = http.createServer(async (req, res) => {
@@ -599,6 +600,10 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/chat') {
       const controller = new AbortController();
+      let finishActiveChat;
+      const finished = new Promise((resolve) => { finishActiveChat = resolve; });
+      const activeChatRequest = { controller, response: res, finished };
+      activeChatRequests.add(activeChatRequest);
       const abortOnRequest = () => controller.abort();
       const abortOnResponseClose = () => {
         if (!res.writableEnded)
@@ -665,6 +670,8 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
             : error instanceof Error ? error.message.slice(0, 600) : 'Codex chat failed.',
         });
       } finally {
+        activeChatRequests.delete(activeChatRequest);
+        finishActiveChat();
         req.off('aborted', abortOnRequest);
         res.off('close', abortOnResponseClose);
       }
@@ -676,6 +683,35 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     return send(501, { error: 'NOT_IMPLEMENTED', message: 'This companion build does not grant generic filesystem or terminal access.' });
   });
   server.once('close', () => { void codexAgentManager?.closeAll(); });
+
+  let closeCompanionPromise = null;
+  server.closeCompanion = () => {
+    if (closeCompanionPromise)
+      return closeCompanionPromise;
+
+    const activeChats = [...activeChatRequests];
+    for (const active of activeChats) {
+      active.controller.abort();
+      if (!active.response.writableEnded && !active.response.destroyed)
+        active.response.destroy();
+    }
+    const activeChatsClosed = Promise.all(activeChats.map((active) => active.finished));
+
+    if (loginChild) {
+      try { loginChild.kill(); } catch { /* The login process may already have exited. */ }
+      loginChild = null;
+    }
+
+    const serverClosed = !server.listening
+      ? Promise.resolve()
+      : new Promise((resolve, reject) => {
+          server.close((error) => error ? reject(error) : resolve());
+        });
+
+    closeCompanionPromise = Promise.all([activeChatsClosed, serverClosed]).then(() => undefined);
+    return closeCompanionPromise;
+  };
+
   return server;
 }
 
@@ -686,7 +722,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.AURIX_COMPANION_PORT || 4317);
   const reaRoots = (process.env.AURIX_REA_ROOTS || '').split(path.delimiter).filter(Boolean);
   const codexRoots = (process.env.AURIX_CODEX_ROOTS || '').split(path.delimiter).filter(Boolean);
-  createCompanionServer({ token, origin, reaRoots, codexRoots }).listen(port, '127.0.0.1', () => {
+  const server = createCompanionServer({ token, origin, reaRoots, codexRoots });
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown)
+      return;
+    shuttingDown = true;
+    console.log('Stopping AURIX companion and active Codex chat requests…');
+    void server.closeCompanion().catch((error) => {
+      console.error('AURIX companion shutdown failed:', error instanceof Error ? error.message : 'Unknown error');
+      process.exitCode = 1;
+    });
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+
+  server.listen(port, '127.0.0.1', () => {
     console.log(`AURIX companion ${VERSION} listening on http://127.0.0.1:${port}`);
     console.log(`Allowed origin: ${origin}`);
     console.log(`Pairing token:  ${token}`);
