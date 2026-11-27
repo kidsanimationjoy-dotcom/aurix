@@ -62,7 +62,7 @@ public partial class ActiveOrbWindow : Window
         };
         var amplitude = _state == "Thinking" ? 0.085 : 0.055;
         var pulse = 1.0 + Math.Sin(elapsed * speed * Math.PI * 2) * amplitude;
-        Core.RenderTransformOrigin = new Point(0.5, 0.5);
+        Core.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
         Core.RenderTransform = new ScaleTransform(pulse, pulse);
         OuterGlow.Opacity = 0.28 + (Math.Sin(elapsed * speed * Math.PI * 2) + 1) * 0.13;
         Ring.Opacity = 0.58 + (Math.Sin(elapsed * speed * Math.PI * 2 + 1) + 1) * 0.18;
