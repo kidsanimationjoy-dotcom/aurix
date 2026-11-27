@@ -28,6 +28,7 @@ export type CompanionCapability =
   | 'rea.android.inspect'
   | 'rea.browser.targets'
   | 'rea.browser.inspect'
+  | 'higgsfield.login'
   | 'higgsfield.status'
   | 'higgsfield.models'
   | 'higgsfield.quote'
