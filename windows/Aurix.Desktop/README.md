@@ -13,10 +13,11 @@ The report cannot prove that the microphone works, that Windows consent is enabl
 AURIX can stay in the Windows system tray with hands-free wake-word listening enabled:
 
 1. Enable **hands-free** once in the AURIX window.
-2. Say **“AURIX”** or **“Hey AURIX”**.
-3. Pause briefly while AURIX switches from its wake-word grammar to one-command dictation.
-4. Speak one instruction. AURIX sends the recognised text to its local task planner.
-5. After one command, AURIX returns to the wake-word-only grammar.
+2. Clap once. AURIX opens a short, local five-second wake window.
+3. Within that window, say **“AURIX”** or **“Hey AURIX”**.
+4. AURIX displays its compact multicolour orb at the centre of the primary display and says, **“What would you like me to do, boss?”**
+5. After the greeting finishes, speak one instruction. AURIX sends the recognised text to its local task planner.
+6. After one command, AURIX returns to clap-gated wake mode; the orb stays hidden while idle.
 
 You do not need to reopen the window or press a microphone button for each task. Closing the window hides it to the tray; it does not stop an enabled wake-word listener. The tray menu lets you pause or resume listening. The tray tooltip indicates whether the wake-word listener is active. **Exit AURIX** stops the process and releases the microphone.
 
@@ -38,7 +39,7 @@ Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles ord
 1. Open AURIX Desktop.
 2. Select **Start local server**. AURIX launches the installed OpenJarvis CLI with fixed arguments, using `uv run --project ... jarvis serve --host 127.0.0.1 --port 8000 --agent simple`.
 3. Wait for AURIX to confirm that the local health endpoint and model are ready.
-4. Say **“AURIX”** and speak one instruction, or type a request.
+4. Clap once, say **“AURIX”**, and answer the greeting, or type a request.
 5. Select **Stop local server** when finished. Exiting AURIX also stops a server process that AURIX itself started. Closing the main window to the system tray does not stop it.
 
 If an OpenJarvis server was started outside AURIX and is already responding on port 8000, AURIX detects it rather than starting a second copy. AURIX only offers its Stop button for a server process that it launched itself. It does not stop or alter an independently installed OpenJarvis scheduled task.
@@ -53,7 +54,7 @@ The last 12 user/assistant turns are kept in memory for the current desktop sess
 
 ## Voice privacy and requirements
 
-The hands-free service uses `System.Speech` and a locally installed English Windows speech recognizer. While waiting, it loads a narrow grammar containing only the AURIX wake phrase choices; it does not run general dictation in the background. Only after the wake phrase is recognised does it load a dictation grammar for one instruction. The dictation grammar is unloaded after that command and the wake-word grammar is restored.
+The hands-free service uses `System.Speech`, a locally installed English Windows speech recognizer, and NAudio shared-mode WASAPI capture for clap detection. The clap detector checks short audio buffers in memory for a sharp transient and opens a five-second, one-use wake window; it does not save or transmit audio. While waiting, the speech recognizer loads only the narrow AURIX wake phrase grammar and does not run general dictation. After both the clap gate and wake phrase are accepted, AURIX speaks its boss greeting; only when the greeting finishes does it load a one-command dictation grammar. The dictation grammar is unloaded after that command and the clap-gated wake grammar is restored.
 
 AURIX itself does not save microphone recordings or send room audio to an AURIX cloud service. The microphone remains active for local wake-word detection while hands-free is enabled. You can pause it from the main window or the tray menu, and exiting AURIX releases it. Windows microphone privacy settings still apply. If an English offline recognizer or microphone device is unavailable, AURIX reports the problem and typed commands remain available.
 

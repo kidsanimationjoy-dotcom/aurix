@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private SpeechSynthesizer? _speechSynthesizer;
     private ActiveOrbWindow? _activeOrb;
     private bool _microphoneTestRunning;
+    private bool _greetingPending;
     private string _companionToken = string.Empty;
     private bool _codexReady;
     private readonly List<LocalCodexMessage> _voiceConversation = new();
@@ -38,7 +39,20 @@ public partial class MainWindow : Window
         try
         {
             _speechSynthesizer = new SpeechSynthesizer();
-            _speechSynthesizer.SpeakCompleted += (_, _) => Dispatcher.BeginInvoke(new Action(HideActiveOrb));
+            _speechSynthesizer.SpeakCompleted += (_, args) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (args.Cancelled)
+                    return;
+
+                if (_greetingPending)
+                {
+                    _greetingPending = false;
+                    _handsFreeVoice?.BeginCommandListeningAfterGreeting();
+                    return;
+                }
+
+                HideActiveOrb();
+            }));
         }
         catch { _speechSynthesizer = null; }
         _activeOrb = new ActiveOrbWindow();
@@ -440,6 +454,7 @@ public partial class MainWindow : Window
         var voice = new HandsFreeVoiceService();
         voice.StatusChanged += HandsFreeVoice_StatusChanged;
         voice.CommandRecognized += HandsFreeVoice_CommandRecognized;
+        voice.WakePhraseAccepted += HandsFreeVoice_WakePhraseAccepted;
         _handsFreeVoice = voice;
 
         try
@@ -456,7 +471,7 @@ public partial class MainWindow : Window
 
             UpdateHandsFreeUi(
                 true,
-                "HANDS-FREE ACTIVE — say “AURIX”, pause briefly, then speak your instruction.");
+                "HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Listening stays local.");
         }
         catch (Exception ex)
         {
@@ -540,6 +555,35 @@ public partial class MainWindow : Window
                 ? System.Windows.Media.Brushes.LightGreen
                 : System.Windows.Media.Brushes.Orange;
             UpdateTrayWakeState?.Invoke(active);
+        }));
+    }
+
+    private void HandsFreeVoice_WakePhraseAccepted()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var voice = _handsFreeVoice;
+            if (voice?.IsRunning != true)
+                return;
+
+            ShowActiveOrb("Speaking", "What would you like me to do, boss?");
+            if (_speechSynthesizer is null)
+            {
+                voice.BeginCommandListeningAfterGreeting();
+                return;
+            }
+
+            try
+            {
+                _greetingPending = true;
+                _speechSynthesizer.SpeakAsyncCancelAll();
+                _speechSynthesizer.SpeakAsync("What would you like me to do, boss?");
+            }
+            catch
+            {
+                _greetingPending = false;
+                voice.BeginCommandListeningAfterGreeting();
+            }
         }));
     }
 
@@ -722,7 +766,7 @@ public partial class MainWindow : Window
         var providerName = useOpenJarvis ? "Stanford OpenJarvis" : "Codex";
         var token = useOpenJarvis ? string.Empty : CurrentCompanionToken();
         const string actionContract = """
-You are translating a user's voice request into either an answer or a proposed AURIX desktop plan.
+You are translating a user's voice request into either an answer or a proposed AURIX desktop plan. Address the user as “boss” when conversationally appropriate.
 Return exactly one raw JSON object. Do not use Markdown or code fences.
 
 Supported formats:

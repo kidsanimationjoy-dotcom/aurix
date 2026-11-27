@@ -46,9 +46,8 @@ public partial class ActiveOrbWindow : Window
 
     private void PositionOrb()
     {
-        var area = SystemParameters.WorkArea;
-        Left = area.Right - Width - 24;
-        Top = area.Bottom - Height - 24;
+        Left = Math.Max(0, (SystemParameters.PrimaryScreenWidth - Width) / 2);
+        Top = Math.Max(0, (SystemParameters.PrimaryScreenHeight - Height) / 2);
     }
 
     private void AnimateOrb(object? sender, EventArgs e)
@@ -66,5 +65,7 @@ public partial class ActiveOrbWindow : Window
         Core.RenderTransform = new ScaleTransform(pulse, pulse);
         OuterGlow.Opacity = 0.28 + (Math.Sin(elapsed * speed * Math.PI * 2) + 1) * 0.13;
         Ring.Opacity = 0.58 + (Math.Sin(elapsed * speed * Math.PI * 2 + 1) + 1) * 0.18;
+        Ring.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+        Ring.RenderTransform = new RotateTransform(elapsed * (_state == "Thinking" ? 36 : 18) % 360);
     }
 }
