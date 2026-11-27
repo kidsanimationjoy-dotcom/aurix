@@ -1,13 +1,16 @@
 # AURIX launch readiness
 
-**Decision: NOT READY for public launch.** Main now includes the merged Windows task-lifecycle and end-to-end Codex cancellation fixes (PRs #39–#41), and their relevant Windows, unit-test, production-build and browser-smoke CI checks passed before merge. The companion remains loopback-only and approval-bounded. Real-device acceptance, trusted publisher identity, Store certification, legal/privacy governance and broader provider acceptance remain open.
+**Decision: NOT READY for public launch.** Main now includes the Windows task-lifecycle, end-to-end Codex cancellation and confirmed local pairing-disconnect fixes (PRs #39–#43). The relevant Windows, unit-test, production-build and browser-smoke CI checks passed before merge. The companion remains loopback-only and approval-bounded. Real-device acceptance, trusted publisher identity, Store certification, legal/privacy governance and broader provider acceptance remain open.
 
 ## Latest main-branch Windows build evidence
 
-- Current main repository head after PR #41: `b800d10720ecd8df296beabac4612c79e209715c`. The latest Windows desktop source change is the task-run lifecycle fix from PR #39 (`61b13c25402fee17c9cf7fed57da24cb4c1afab4`); PRs #40 and #41 changed only the Node companion and its tests, so they did not change the Windows executable.
+- Current main repository head after PR #43: `ba476391a731570589d626ceaded44f918a1c8d1`. The latest Windows desktop source change is PR #43, which adds the confirmed local companion disconnect control; PRs #40 and #41 changed only the Node companion and tests.
 - Windows x64 compile, expanded AI-proposal policy tests, self-contained publish, release notice/checksum generation, portable preview upload and unsigned MSIX packaging/upload: [main run 45927632927](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45927632927) — passed.
 - Latest Windows rebuild after the native task-run coordinator change: PR [#39](https://github.com/kidsanimationjoy-dotcom/aurix/pull/39), [Windows workflow run 46014044710](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46014044710) — passed compile, desktop action-policy/lifecycle tests, self-contained publish, portable preview packaging and unsigned MSIX packaging.
 - PR [#39](https://github.com/kidsanimationjoy-dotcom/aurix/pull/39) application verification: [run 46014044575](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46014044575) — passed TypeScript, unit tests, production build and browser smoke tests.
+- Latest Windows rebuild with the local pairing-disconnect control: PR [#43](https://github.com/kidsanimationjoy-dotcom/aurix/pull/43), [Windows workflow run 46017864230](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46017864230) — passed native build, all 47 desktop policy/persistence checks, self-contained publishing, portable ZIP packaging and unsigned MSIX validation packaging.
+- PR #43 application verification: [run 46017864351](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46017864351) — passed TypeScript, unit tests, production build and browser smoke tests.
+- Latest Windows artifacts from run 46017864230: portable ZIP artifact 15206324568, GitHub digest sha256:560de6beb05b61e9f5fc65cb8507277a32c4b175602da1856c0eafb78b9d5484; unsigned MSIX validation ZIP artifact 15207670222, GitHub digest sha256:df00ca6a80e4a131e925b941f877fa35c028bfea6ca1d8d9df223114eb354beb. Both are temporary CI artifacts, not signed installers.
 - PR [#40](https://github.com/kidsanimationjoy-dotcom/aurix/pull/40) cancellation-propagation verification: [run 46015853751](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853751) and [AURIX CI run 46015853805](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853805) — both passed, including the end-to-end test that aborts an HTTP request and verifies the local Codex child exits.
 - PR [#41](https://github.com/kidsanimationjoy-dotcom/aurix/pull/41) hard-stop verification: [run 46016349854](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46016349854) — passed TypeScript, all unit tests, production build and browser smoke tests. Its test deliberately makes the fake Codex process ignore SIGTERM and verifies the hard-stop fallback terminates it.
 - TypeScript, unit tests, production build and browser smoke tests after the AI policy update: [main run 45927632906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45927632906) — passed.
@@ -45,6 +48,7 @@
 - Emergency stop for remaining task steps.
 - Bounded local task audit history that records action type, application, UTC time and outcome, but does not record dictated instructions, entered text, window titles or exception messages.
 - Reversible current-user startup registration.
+- Confirmed local AI disconnect control: cancels the active AURIX task, removes the DPAPI-protected pairing-token file and stale temporary token file, and clears the in-memory token. This removes AURIX's saved credential only; it does not stop or rotate a running companion's token.
 - Authenticated local Codex voice reasoning: Codex can answer ordinary questions or propose up to five supported desktop steps.
 - AI-proposed launches and read-only inspection use the supported application allowlist only when the user explicitly requested each step. AI-generated button clicks and text entry are restricted to Notepad and must match the exact user instruction; AURIX requires whole-plan approval and separate approval for each Notepad UI mutation.
 
@@ -59,12 +63,13 @@
 - AURIX displays the complete proposed plan and requires whole-plan approval. Each Notepad button click and text-entry action then requires its own approval. The deterministic local command grammar remains separately bounded and keeps its own per-action approval prompts.
 - The AI bridge does not add arbitrary shell execution, scripts, generic filesystem access, network actions, browser navigation or unrestricted keyboard/mouse control. It remains a bounded assistant, not a general-purpose autonomous desktop agent.
 
-## Latest runtime reliability fixes (PRs #39–#41)
+## Latest runtime reliability and account-control fixes (PRs #39–#43)
 
 - PR [#39](https://github.com/kidsanimationjoy-dotcom/aurix/pull/39) adds a single Windows task-run coordinator. Starting a newer task cancels the previous run; stale progress callbacks and completion handlers cannot overwrite the newer task's UI or clear its emergency-stop state. Regression checks cover task supersession, old-run cleanup, emergency stop and completion.
 - PR [#40](https://github.com/kidsanimationjoy-dotcom/aurix/pull/40) propagates an HTTP client disconnect to an AbortController in the local companion and passes its signal to the Codex chat runner. The active CLI child is terminated when the caller cancels or disconnects.
 - PR [#41](https://github.com/kidsanimationjoy-dotcom/aurix/pull/41) sends a graceful termination signal and escalates to a hard termination if the Codex child is still running after 750 ms. The escalation timer is cleared when the child exits.
 - These are cancellation and reliability improvements only. They do not expand the Codex read-only sandbox, add new desktop permissions, or remove existing user approvals.
+- PR [#43](https://github.com/kidsanimationjoy-dotcom/aurix/pull/43) adds a confirmed Disconnect action and serializes Connect, Verify, Login and Disconnect so an asynchronous pairing request cannot silently restore a token after the user disconnects. The DPAPI test verifies save, load, removal and failed reload; decrypted and newly entered cleartext token byte arrays are zeroed after use.
 - CI success does not replace real Windows laptop testing, microphone testing, or verification of the exact downloaded release artifacts.
 
 ## Remaining launch blockers
