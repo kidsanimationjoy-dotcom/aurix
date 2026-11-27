@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, chmod, mkdir, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -124,6 +124,70 @@ test('AURIX creates and validates an immutable dedicated Codex profile', async (
     assert.equal(result.ok, true);
     assert.equal(result.canaryRoot, profile.paths.canaryRoot);
     assert.equal((await validateCodexHome(profile.paths)).ok, true);
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+
+test('Codex profile gives read-only workspace access only to explicitly approved project roots', async () => {
+  const profile = await makeCodexProfile();
+  const approved = path.join(profile.root, 'approved-projects');
+  const privateFolder = path.join(profile.root, 'private');
+  try {
+    await mkdir(approved);
+    await mkdir(privateFolder);
+    await prepareCodexHome(profile.paths, { projectRoots: [approved] });
+    const config = await readFile(profile.paths.configPath, 'utf8');
+    assert.ok(config.includes(JSON.stringify(profile.paths.workspaceRoot) + ' = true'));
+    assert.ok(config.includes(JSON.stringify(approved) + ' = true'));
+    assert.ok(config.includes('". " = "read"') === false);
+    assert.ok(config.includes('"." = "read"'));
+    assert.equal(await validateCodexHome(profile.paths, { projectRoots: [approved] }).then((x) => x.ok), true);
+    await assert.rejects(() => validateCodexHome(profile.paths), /changed outside AURIX/);
+    assert.equal(config.includes(JSON.stringify(privateFolder) + ' = true'), false);
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('Codex project roots reject broad roots, AURIX internal folders and symbolic links', async () => {
+  const profile = await makeCodexProfile();
+  const approved = path.join(profile.root, 'approved-projects');
+  const alias = path.join(profile.root, 'project-alias');
+  try {
+    await mkdir(approved);
+    await symlink(approved, alias, 'dir');
+    await assert.rejects(
+      () => prepareCodexHome(profile.paths, { projectRoots: [profile.root] }),
+      /cannot contain or be inside AURIX profile/,
+    );
+    await assert.rejects(
+      () => prepareCodexHome(profile.paths, { projectRoots: [path.parse(profile.root).root] }),
+      /filesystem root/,
+    );
+    await assert.rejects(
+      () => prepareCodexHome(profile.paths, { projectRoots: [alias] }),
+      /symbolic link/,
+    );
+  } finally {
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
+test('Codex upgrades only the exact previous managed profile to the root-scoped v4 profile', async () => {
+  const profile = await makeCodexProfile();
+  const approved = path.join(profile.root, 'approved-projects');
+  try {
+    await mkdir(approved);
+    await prepareCodexHome(profile.paths);
+    const previous = await readFile(profile.paths.configPath, 'utf8');
+    assert.ok(previous.includes('AURIX isolated read-only chat profile'));
+    await prepareCodexHome(profile.paths, { projectRoots: [approved] });
+    const current = await readFile(profile.paths.configPath, 'utf8');
+    assert.ok(current.includes('AURIX isolated read-only workspace profile v4'));
+    assert.ok(current.includes(JSON.stringify(approved) + ' = true'));
+    assert.equal(await validateCodexHome(profile.paths, { projectRoots: [approved] }).then((x) => x.ok), true);
   } finally {
     await rm(profile.root, { recursive: true, force: true });
   }
