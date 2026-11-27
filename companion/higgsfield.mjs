@@ -150,12 +150,15 @@ function makeArgs(action, spec) {
   const duration = Number(spec.duration ?? 5);
   const resolution = String(spec.resolution ?? '720p');
   const aspectRatio = String(spec.aspectRatio ?? '16:9');
+  const mode = String(spec.mode ?? 'std');
   if (![5, 10].includes(duration)) throw new Error('Choose a supported 5- or 10-second duration.');
   if (!['480p', '720p', '1080p', '4k'].includes(resolution)) throw new Error('Choose 720p or 1080p resolution.');
   if (!['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'].includes(aspectRatio)) throw new Error('Choose a supported aspect ratio.');
+  if (!['std', 'fast'].includes(mode)) throw new Error('Choose standard or fast generation mode.');
+  if (mode === 'fast' && !['480p', '720p'].includes(resolution)) throw new Error('Fast mode supports only 480p or 720p. Choose standard mode for 1080p or 4K.');
   return [
     'generate', action, spec.modelId,
-    '--mode', 'std',
+    '--mode', mode,
     '--prompt', prompt,
     '--duration', String(duration),
     '--resolution', resolution,
@@ -256,7 +259,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
         expiresAt: Date.now() + QUOTE_TTL_MS,
         modelId: spec.modelId,
         prompt: spec.prompt.trim(),
-        settings: { duration: Number(spec.duration ?? 5), resolution: String(spec.resolution ?? '720p'), aspectRatio: String(spec.aspectRatio ?? '16:9') },
+        settings: { duration: Number(spec.duration ?? 5), resolution: String(spec.resolution ?? '720p'), aspectRatio: String(spec.aspectRatio ?? '16:9'), mode: String(spec.mode ?? 'std') },
         raw,
         pricing,
       };
