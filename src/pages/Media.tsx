@@ -16,7 +16,7 @@ function accountCredits(account: Record<string, unknown>): string | null {
 }
 
 export function Media() {
-  const { adapters, refreshStatuses } = useApp();
+  const { db, adapters, refreshStatuses } = useApp();
   const audit = useAudit();
   const status = useProviderStatus('higgsfield');
   const drafts = useCollection('mediaDrafts');
@@ -64,7 +64,7 @@ export function Media() {
     } finally {
       setLoading(false);
     }
-  }, [higgsfield, modelId, refreshStatuses]);
+  }, [higgsfield, modelId, refreshStatuses, status?.checkedAt]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -137,7 +137,6 @@ export function Media() {
   }
 
   async function saveDraft() {
-    const { db } = useApp();
     const d = await db.create('mediaDrafts', { kind: 'video', prompt: prompt.trim(), notes: '' });
     await audit({ action: 'media.draft.save', target: d.id, detail: 'video' });
     setPrompt('');
@@ -241,7 +240,7 @@ export function Media() {
             {[...drafts].reverse().map((d) => (
               <div className="item" key={d.id}>
                 <div><h3>{d.kind === 'video' ? 'Video' : 'Image'} draft</h3><p>{d.prompt}</p><small>{fmtTime(d.createdAt)}</small></div>
-                <ConfirmButton label="Delete" onConfirm={async () => { const { db } = useApp(); await db.remove('mediaDrafts', d.id); await audit({ action: 'media.draft.delete', target: d.id }); }} />
+                <ConfirmButton label="Delete" onConfirm={async () => { await db.remove('mediaDrafts', d.id); await audit({ action: 'media.draft.delete', target: d.id }); }} />
               </div>
             ))}
           </div>
