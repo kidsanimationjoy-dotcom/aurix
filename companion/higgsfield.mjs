@@ -55,7 +55,7 @@ function run(command, args, options = {}) {
       if (code !== 0) {
         const message = /not authenticated|session expired|unauthorized|please log in/i.test(stderr + stdout)
           ? 'Higgsfield is not signed in. Run the official "higgsfield auth login" command in your local terminal.'
-          : ('Higgsfield CLI exited with code ' + code + (stderr.trim() ? ': ' + stderr.trim().slice(0, 700) : '.'));
+          : ('Higgsfield CLI exited with code ' + code + '. Check the local CLI installation and run the official command in your terminal for details.');
         finish(reject, new Error(message));
         return;
       }
@@ -245,6 +245,8 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       }
       const args = makeArgs('cost', spec);
       const raw = parseJson(await cli(args, 60_000), 'generation cost estimate');
+      for (const [id, oldQuote] of quotes) if (oldQuote.expiresAt < Date.now()) quotes.delete(id);
+      while (quotes.size >= 50) quotes.delete(quotes.keys().next().value);
       const quoteId = randomUUID();
       const quote = {
         quoteId,
@@ -264,6 +266,8 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       const quote = quotes.get(quoteId);
       if (!quote || quote.expiresAt < Date.now()) throw new Error('The credit estimate expired. Request a new estimate before generation.');
       if (confirmed !== true) throw new Error('Generation requires a separate explicit confirmation after reviewing the credit estimate.');
+      // Consume immediately to prevent duplicate paid submissions, including concurrent retries.
+      quotes.delete(quoteId);
       const spec = { modelId: quote.modelId, prompt: quote.prompt, ...quote.settings };
       const fresh = parseJson(await cli(makeArgs('cost', spec), 60_000), 'fresh generation cost estimate');
       const pricing = stablePricing(fresh);
@@ -274,7 +278,6 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       const created = parseJson(await cli(makeArgs('create', spec), 90_000), 'generation job creation');
       const jobId = findJobId(created);
       if (!jobId) throw new Error('Higgsfield accepted a generation request but did not return a recognised job ID. Check the account job list before retrying to avoid duplicate charges.');
-      quotes.delete(quoteId);
       return { jobId, submittedAt: new Date().toISOString(), raw: created };
     },
 
