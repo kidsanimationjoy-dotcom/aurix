@@ -31,6 +31,7 @@ export type TaskActionApprovalKind = 'command' | 'file_change' | 'filesystem' | 
 export type TaskActionApprovalDecision = 'accept' | 'decline' | 'cancel';
 export interface TaskActionApproval {
   id: string;
+  expiresAt: number;
   kind: TaskActionApprovalKind;
   reason: string;
   command: string[];
