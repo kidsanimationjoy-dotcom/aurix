@@ -91,8 +91,11 @@
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="HandsFreeButton" Content="Enable hands-free" Click="HandsFreeButton_Click"
                   Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold" Padding="18,11"/>
-          <Button x:Name="VoiceDiagnosticsButton" Content="Check why voice is not working" Click="VoiceDiagnosticsButton_Click"
+          <Button x:Name="VoiceDiagnosticsButton" Content="Check voice setup" Click="VoiceDiagnosticsButton_Click"
                   Background="#243B59" BorderBrush="#52749A" Padding="12,9" Margin="0,0,8,0"/>
+          <Button x:Name="TestMicrophoneButton" Content="Test microphone (local)" Click="TestMicrophoneButton_Click"
+                  Background="#244C5A" BorderBrush="#4389A4" Padding="12,9" Margin="0,0,8,0"
+                  ToolTip="Runs a short microphone and speech test. Audio is processed locally and is not saved."/>
           <TextBlock x:Name="ListeningStatusText" Text="Hands-free is off. The microphone is not in use."
                      Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap"
                      VerticalAlignment="Center" Margin="8,0,0,0"/>
