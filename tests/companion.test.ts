@@ -162,9 +162,10 @@ test('aborting a Codex chat request terminates its active CLI process', async ()
     "  if (separator >= 0 && args[separator + 2] === 'exec') {",
     "    fs.writeFileSync(" + JSON.stringify(markerPath) + ", String(process.pid));",
     "    setInterval(() => {}, 1000);",
+    "  } else {",
+    "    console.log('AURIX_SANDBOX_CANARY_OK');",
+    "    process.exit(0);",
     "  }",
-    "  console.log('AURIX_SANDBOX_CANARY_OK');",
-    "  process.exit(0);",
     "}",
     "process.exit(2);",
   ].join('\n');
