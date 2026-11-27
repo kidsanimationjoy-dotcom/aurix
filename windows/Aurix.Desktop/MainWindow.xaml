@@ -111,6 +111,13 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
               <TextBlock Text="LOCAL AI CHAT" FontSize="11" FontWeight="Bold" Foreground="#70C7FF"/>
+              <TextBlock Text="AI provider" Foreground="#9CB0CC" FontSize="10" Margin="0,7,0,3"/>
+              <ComboBox x:Name="AiProviderCombo" SelectedIndex="0" Height="34" Margin="0,0,12,7"
+                        Background="#0A1728" Foreground="#F1F7FF" BorderBrush="#34516F"
+                        Padding="8,5">
+                <ComboBoxItem Content="AURIX + Codex (approval-gated desktop plans)"/>
+                <ComboBoxItem Content="Stanford OpenJarvis (local chat only)"/>
+              </ComboBox>
               <PasswordBox x:Name="CompanionTokenBox" Height="38" Margin="0,7,12,5"
                            Padding="10,7" Background="#0A1728" Foreground="#F1F7FF"
                            BorderBrush="#34516F" BorderThickness="1"
@@ -122,6 +129,8 @@
                          Foreground="#9CB0CC" FontSize="11" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <Button x:Name="CheckOpenJarvisButton" Content="Check OpenJarvis" Click="CheckOpenJarvisButton_Click"
+                      Background="#244C5A" BorderBrush="#4389A4"/>
               <Button x:Name="PairCompanionButton" Content="Connect" Click="PairCompanionButton_Click"
                       Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
               <Button x:Name="DisconnectCompanionButton" Content="Disconnect" Click="DisconnectCompanionButton_Click"
