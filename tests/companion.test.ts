@@ -45,6 +45,54 @@ async function makeFakeCodex(script: string): Promise<{ directory: string; comma
 
 
 
+
+test('Codex project preflight allows only folders inside roots configured before profile verification', async () => {
+  if (process.platform === 'win32') return;
+  const profile = await makeCodexProfile();
+  const approvedRoot = await mkdtemp(path.join(os.tmpdir(), 'aurix-approved-projects-'));
+  const project = path.join(approvedRoot, 'sample-project');
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'aurix-unapproved-project-'));
+  await mkdir(project);
+  const fake = await makeFakeCodex(`
+const args = process.argv.slice(2);
+if (args[0] === '--version') { console.log('codex 1.0.0'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in with ChatGPT'); process.exit(0); }
+if (args[0] === 'sandbox') { console.log('AURIX_SANDBOX_CANARY_OK'); process.exit(0); }
+process.exit(2);
+`);
+  try {
+    await withServer(async (url) => {
+      const headers = { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' };
+      const beforePrepare = await fetch(url + '/v1/codex/agent/validate', {
+        method: 'POST', headers, body: JSON.stringify({ target: project }),
+      });
+      assert.equal(beforePrepare.status, 409);
+      assert.equal((await beforePrepare.json()).error, 'CODEX_SANDBOX_NOT_VERIFIED');
+
+      const prepared = await fetch(url + '/v1/codex/prepare', { method: 'POST', headers, body: '{}' });
+      assert.equal(prepared.status, 200);
+      assert.equal((await prepared.json()).sandboxVerified, true);
+
+      const allowed = await fetch(url + '/v1/codex/agent/validate', {
+        method: 'POST', headers, body: JSON.stringify({ target: project }),
+      });
+      assert.equal(allowed.status, 200);
+      assert.deepEqual(await allowed.json(), { ok: true, valid: true });
+
+      const rejected = await fetch(url + '/v1/codex/agent/validate', {
+        method: 'POST', headers, body: JSON.stringify({ target: outside }),
+      });
+      assert.equal(rejected.status, 400);
+      assert.equal((await rejected.json()).error, 'CODEX_PROJECT_NOT_APPROVED');
+    }, { codexCommand: fake.command, codexPaths: profile.paths, codexRoots: [approvedRoot] });
+  } finally {
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(approvedRoot, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
 test('Codex chat requires a verified sandbox and runs only in read-only mode', async () => {
   if (process.platform === 'win32') return;
   const profile = await makeCodexProfile();
