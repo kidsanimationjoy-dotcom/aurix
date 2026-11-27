@@ -328,7 +328,7 @@ test('probe connects with the correct token and reports only implemented capabil
   await withServer(async (url) => {
     const status = await probeCompanion({ url, token: 'secret-token' });
     assert.equal(status.state, 'connected');
-    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect']);
+    assert.deepEqual(status.health?.capabilities, ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.login', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job']);
     assert.deepEqual(status.health?.grantedRoots, []);
   });
 });
