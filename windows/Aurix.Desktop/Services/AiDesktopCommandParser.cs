@@ -89,7 +89,7 @@ public static class AiDesktopCommandParser
         var escapedButton = Regex.Escape(button.Trim());
         var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}(?<![\p{L}\p{N}_])" +
             escapedButton +
-            @"(?=(?:[""']?\s*(?:button|in|on|within|at)\b|[""']?\s*(?:[.,!?;:]|$)))";
+            @"(?:[""']?\s*button)?\s+(?:in|on|within|inside)\s+(?:the\s+)?Notepad\b";
         return Regex.IsMatch(userPrompt, pattern,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }

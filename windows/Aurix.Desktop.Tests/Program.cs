@@ -105,6 +105,9 @@ Reject("button not explicitly named by user rejected", clickJson, "Open Notepad"
 Reject("mentioning a button without asking to click rejected",
     """{"type":"desktop_plan","summary":"Save a file","steps":[{"kind":"click_button","app":"Notepad","button":"Save"}]}""",
     "The Save button is visible in Notepad");
+Reject("click target must be Notepad in the same request clause",
+    """{"type":"desktop_plan","summary":"Open a website","steps":[{"kind":"click_button","app":"Notepad","button":"Open"}]}""",
+    "Click Open in Microsoft Edge. Notepad is open too");
 Reject("text not supplied by user rejected", typeJson, "Type text into Text Editor in Notepad");
 Reject("disconnected type verb and value rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
