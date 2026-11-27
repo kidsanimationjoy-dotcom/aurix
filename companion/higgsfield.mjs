@@ -141,28 +141,72 @@ function stablePricing(value) {
   return out;
 }
 
-function makeArgs(action, spec) {
-  if (spec.modelId !== 'seedance_2_0') {
-    throw new Error('AURIX currently enables generation only for the live Seedance 2.0 video model.');
-  }
+
+function normalizeSpec(spec) {
+  const modelId = typeof spec.modelId === 'string' ? spec.modelId : '';
   const prompt = typeof spec.prompt === 'string' ? spec.prompt.trim() : '';
   if (!prompt || prompt.length > 8000) throw new Error('Enter a prompt of 1–8,000 characters.');
-  const duration = Number(spec.duration ?? 5);
-  const resolution = String(spec.resolution ?? '720p');
-  const aspectRatio = String(spec.aspectRatio ?? '16:9');
-  const mode = String(spec.mode ?? 'std');
-  if (![5, 10].includes(duration)) throw new Error('Choose a supported 5- or 10-second duration.');
-  if (!['480p', '720p', '1080p', '4k'].includes(resolution)) throw new Error('Choose 720p or 1080p resolution.');
-  if (!['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'].includes(aspectRatio)) throw new Error('Choose a supported aspect ratio.');
-  if (!['std', 'fast'].includes(mode)) throw new Error('Choose standard or fast generation mode.');
-  if (mode === 'fast' && !['480p', '720p'].includes(resolution)) throw new Error('Fast mode supports only 480p or 720p. Choose standard mode for 1080p or 4K.');
+
+  if (modelId === 'seedance_2_0') {
+    const duration = Number(spec.duration ?? 5);
+    const resolution = String(spec.resolution ?? '720p');
+    const aspectRatio = String(spec.aspectRatio ?? '16:9');
+    const mode = String(spec.mode ?? 'std');
+    if (![5, 10].includes(duration)) throw new Error('Choose a supported 5- or 10-second duration.');
+    if (!['480p', '720p', '1080p', '4k'].includes(resolution)) throw new Error('Choose a supported Seedance resolution.');
+    if (!['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'].includes(aspectRatio)) throw new Error('Choose a supported Seedance aspect ratio.');
+    if (!['std', 'fast'].includes(mode)) throw new Error('Choose standard or fast generation mode.');
+    if (mode === 'fast' && !['480p', '720p'].includes(resolution)) throw new Error('Fast mode supports only 480p or 720p. Choose standard mode for 1080p or 4K.');
+    return {
+      kind: 'video',
+      modelId,
+      prompt,
+      settings: { duration, resolution, aspectRatio, mode },
+    };
+  }
+
+  if (modelId === 'gpt_image_2_5') {
+    const resolution = String(spec.resolution ?? '1k');
+    const aspectRatio = String(spec.aspectRatio ?? '1:1');
+    const quality = String(spec.quality ?? 'low');
+    const variant = String(spec.variant ?? 'flare');
+    if (!['1k', '2k', '4k'].includes(resolution)) throw new Error('Choose a supported GPT Image 2.5 resolution.');
+    if (!['auto', '1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16', '21:9', '27:16', '16:27', '9:8', '8:9', '4:5', '5:4'].includes(aspectRatio)) throw new Error('Choose a supported GPT Image 2.5 aspect ratio.');
+    if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(quality)) throw new Error('Choose a supported GPT Image 2.5 quality.');
+    if (!['flare', 'sunburst'].includes(variant)) throw new Error('Choose a supported GPT Image 2.5 variant.');
+    return {
+      kind: 'image',
+      modelId,
+      prompt,
+      settings: { resolution, aspectRatio, quality, variant },
+    };
+  }
+
+  throw new Error('AURIX currently enables only live Seedance 2.0 video and GPT Image 2.5 image models.');
+}
+
+function makeArgs(action, spec) {
+  const normalized = normalizeSpec(spec);
+  if (normalized.kind === 'video') {
+    const { duration, resolution, aspectRatio, mode } = normalized.settings;
+    return [
+      'generate', action, normalized.modelId,
+      '--mode', mode,
+      '--prompt', normalized.prompt,
+      '--duration', String(duration),
+      '--resolution', resolution,
+      '--aspect_ratio', aspectRatio,
+      '--json',
+    ];
+  }
+  const { resolution, aspectRatio, quality, variant } = normalized.settings;
   return [
-    'generate', action, spec.modelId,
-    '--mode', mode,
-    '--prompt', prompt,
-    '--duration', String(duration),
+    'generate', action, normalized.modelId,
+    '--prompt', normalized.prompt,
     '--resolution', resolution,
     '--aspect_ratio', aspectRatio,
+    '--quality', quality,
+    '--variant', variant,
     '--json',
   ];
 }
@@ -243,10 +287,11 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
 
     async quote(spec) {
       const catalog = await this.listModels();
-      if (!catalog.models.some((model) => model.id === spec.modelId && (model.kinds.length === 0 || model.kinds.some((kind) => /video/iu.test(String(kind)))))) {
-        throw new Error('The requested model is not present in the live Higgsfield video-model catalog.');
+      const normalized = normalizeSpec(spec);
+      if (!catalog.models.some((model) => model.id === normalized.modelId && (model.kinds.length === 0 || model.kinds.some((kind) => new RegExp(normalized.kind, 'iu').test(String(kind)))))) {
+        throw new Error('The requested model is not present in the live Higgsfield ' + normalized.kind + '-model catalog.');
       }
-      const args = makeArgs('cost', spec);
+      const args = makeArgs('cost', normalized);
       const raw = parseJson(await cli(args, 60_000), 'generation cost estimate');
       const pricing = stablePricing(raw);
       if (!Object.keys(pricing).length) throw new Error('Higgsfield returned no recognised numeric credit estimate. AURIX will not submit a generation without a verifiable cost field.');
@@ -257,9 +302,10 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
         quoteId,
         createdAt: Date.now(),
         expiresAt: Date.now() + QUOTE_TTL_MS,
-        modelId: spec.modelId,
-        prompt: spec.prompt.trim(),
-        settings: { duration: Number(spec.duration ?? 5), resolution: String(spec.resolution ?? '720p'), aspectRatio: String(spec.aspectRatio ?? '16:9'), mode: String(spec.mode ?? 'std') },
+        kind: normalized.kind,
+        modelId: normalized.modelId,
+        prompt: normalized.prompt,
+        settings: normalized.settings,
         raw,
         pricing,
       };
@@ -273,7 +319,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       if (confirmed !== true) throw new Error('Generation requires a separate explicit confirmation after reviewing the credit estimate.');
       // Consume immediately to prevent duplicate paid submissions, including concurrent retries.
       quotes.delete(quoteId);
-      const spec = { modelId: quote.modelId, prompt: quote.prompt, ...quote.settings };
+      const spec = { kind: quote.kind, modelId: quote.modelId, prompt: quote.prompt, ...quote.settings };
       const fresh = parseJson(await cli(makeArgs('cost', spec), 60_000), 'fresh generation cost estimate');
       const pricing = stablePricing(fresh);
       if (!Object.keys(pricing).length) throw new Error('Higgsfield returned no fresh credit estimate. The quote was consumed; request a new estimate before trying again.');
