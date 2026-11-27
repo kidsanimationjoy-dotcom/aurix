@@ -7,6 +7,11 @@ import { ConfirmButton, EmptyState, Field, Notice, PageHeader, Panel, StatusPill
 
 type Q = 'active' | 'completed' | 'failed';
 
+function readLastHiggsfieldJobId(): string {
+  try { return window.localStorage.getItem('aurix.higgsfield.lastJobId') ?? ''; }
+  catch { return ''; }
+}
+
 function accountCredits(account: Record<string, unknown>): string | null {
   for (const key of ['available_credits', 'credits', 'credit_balance', 'remaining_credits', 'balance']) {
     const value = account[key];
@@ -35,10 +40,11 @@ export function Media() {
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('16:9');
   const [quote, setQuote] = useState<HiggsfieldQuote | null>(null);
   const [confirmed, setConfirmed] = useState(false);
-  const [jobId, setJobId] = useState('');
+  const [jobId, setJobId] = useState(readLastHiggsfieldJobId);
   const [job, setJob] = useState<MediaJob | null>(null);
   const [jobError, setJobError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [clock, setClock] = useState(Date.now());
 
   const reload = useCallback(async () => {
     if (!higgsfield) return;
@@ -67,6 +73,12 @@ export function Media() {
   }, [higgsfield, modelId, refreshStatuses, status?.state]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  useEffect(() => {
+    if (!quote) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [quote?.quoteId]);
 
   useEffect(() => {
     if (!jobId || job?.status === 'completed' || job?.status === 'failed' || job?.status === 'cancelled') return;
@@ -126,6 +138,7 @@ export function Media() {
     const result = await higgsfield.confirmAndSubmitJob(quote.quoteId, true);
     if (result.ok) {
       setJobId(result.value.jobId);
+      try { window.localStorage.setItem('aurix.higgsfield.lastJobId', result.value.jobId); } catch { /* local job tracking remains session-only */ }
       setJob({ id: result.value.jobId, status: 'queued' });
       setQuote(null);
       setConfirmed(false);
@@ -142,7 +155,7 @@ export function Media() {
     setPrompt('');
   }
 
-  const quoteExpiry = quote ? Math.max(0, Math.ceil((quote.expiresAt - Date.now()) / 1000)) : 0;
+  const quoteExpiry = quote ? Math.max(0, Math.ceil((quote.expiresAt - clock) / 1000)) : 0;
 
   return (
     <>
@@ -205,6 +218,7 @@ export function Media() {
                   <p><b>Model:</b> {quote.modelId}</p>
                   <p><b>Settings:</b> {quote.settings.duration}s · {quote.settings.resolution} · {quote.settings.aspectRatio}</p>
                   <h3>Credit estimate returned by Higgsfield</h3>
+                  {Object.entries(quote.pricing).map(([key, value]) => <p key={key}><b>{key}:</b> {String(value)}</p>)}
                   <pre className="code-block">{JSON.stringify(quote.raw, null, 2)}</pre>
                   <label className="check">
                     <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
@@ -220,7 +234,7 @@ export function Media() {
         </>
       )}
       {loadError && account?.signedIn && <Notice tone="bad">{loadError}</Notice>}
-      <Panel title="Generation queue">
+      <Panel title="Latest generation job">
         <div className="tabs">{(['active', 'completed', 'failed'] as const).map((q) => <button key={q} className={`tab ${queue === q ? 'on' : ''}`} onClick={() => setQueue(q)}>{q[0]!.toUpperCase() + q.slice(1)} ({job && ((q === 'active' && (job.status === 'queued' || job.status === 'running')) || (q === 'completed' && job.status === 'completed') || (q === 'failed' && (job.status === 'failed' || job.status === 'cancelled'))) ? 1 : 0})</button>)}</div>
         {!job || (queue === 'active' && !['queued', 'running'].includes(job.status)) || (queue === 'completed' && job.status !== 'completed') || (queue === 'failed' && !['failed', 'cancelled'].includes(job.status)) ? (
           <EmptyState icon="list" title={`No ${queue} jobs`}>Jobs appear here after Higgsfield returns a job ID. A job is completed only when a result file is available.</EmptyState>
