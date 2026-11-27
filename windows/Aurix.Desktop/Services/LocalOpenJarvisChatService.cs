@@ -17,6 +17,38 @@ public sealed class LocalOpenJarvisChatService
     {
         Timeout = TimeSpan.FromSeconds(90)
     };
+    private static readonly HttpClient ProbeClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(3)
+    };
+
+    /// <summary>
+    /// Returns true when something is responding on the local OpenJarvis API
+    /// endpoint. Any HTTP response counts as a response; the full health and
+    /// model checks remain in CheckAsync.
+    /// </summary>
+    public async Task<bool> IsApiServerRespondingAsync(CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(BaseUri, "health"));
+        var apiKey = Environment.GetEnvironmentVariable("OPENJARVIS_API_KEY");
+        if (!string.IsNullOrWhiteSpace(apiKey) && apiKey.Length <= 512)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+
+        try
+        {
+            using var response = await ProbeClient.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
 
     public async Task<string> CheckAsync(CancellationToken cancellationToken = default)
     {
