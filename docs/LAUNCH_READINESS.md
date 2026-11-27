@@ -1,16 +1,26 @@
 # AURIX launch readiness
 
-**Decision: NOT READY for public launch.** The latest main-branch Windows compile, AI desktop-proposal policy tests, package generation, TypeScript checks, unit tests, production build and browser smoke tests have passed. Real-device acceptance, trusted publisher identity, Store certification, legal/privacy governance and broader provider acceptance remain open.
+**Decision: NOT READY for public launch.** The latest Windows desktop build and packaging passed, and the current main branch has passed TypeScript, unit tests, production build and browser smoke tests. Companion Host-header and bearer-token regression tests also passed. Real-device acceptance, trusted publisher identity, Store certification, legal/privacy governance and broader provider acceptance remain open.
 
 ## Latest main-branch Windows build evidence
 
-- Current main repository head: `b5a83eff5d89390926e29019dfcfe40a92ebc258`.
+- Current main repository head: `66b91787adeb2cf6616c1c49885511866b15cd0e`. The latest Windows executable was built from `b5a83eff5d89390926e29019dfcfe40a92ebc258`; PR #36 changed companion tests only, not Windows executable code.
 - Windows x64 compile, expanded AI-proposal policy tests, self-contained publish, release notice/checksum generation, portable preview upload and unsigned MSIX packaging/upload: [main run 45927632927](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45927632927) — passed.
-- TypeScript, unit tests, production build and browser smoke tests: [main run 45927632906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45927632906) — passed.
-- PR [#34](https://github.com/kidsanimationjoy-dotcom/aurix/pull/34) requires explicit user intent for every AI-proposed plan step: app launches, open-window inspection, and app-specific control inspection. Earlier PRs [#21](https://github.com/kidsanimationjoy-dotcom/aurix/pull/21)–[#30](https://github.com/kidsanimationjoy-dotcom/aurix/pull/30) introduced the approval-gated action path, Notepad-only AI UI mutations and increasingly strict matching of user instructions, exact labels/text, negation and app targeting.
+- TypeScript, unit tests, production build and browser smoke tests after the AI policy update: [main run 45927632906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45927632906) — passed.
+- Current-main application verification after the companion security tests: [main run 45928261880](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45928261880) — passed.
+- Current-main AURIX CI, including companion Host/token tests, TypeScript, unit tests, and build: [main run 45928261853](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45928261853) — passed.
+- PR [#34](https://github.com/kidsanimationjoy-dotcom/aurix/pull/34) requires explicit user intent for every AI-proposed plan step: app launches, open-window inspection, and app-specific control inspection. PR [#36](https://github.com/kidsanimationjoy-dotcom/aurix/pull/36) adds regression tests for Host-header spoofing and missing bearer tokens. Earlier PRs [#21](https://github.com/kidsanimationjoy-dotcom/aurix/pull/21)–[#30](https://github.com/kidsanimationjoy-dotcom/aurix/pull/30) introduced the approval-gated action path, Notepad-only AI UI mutations and increasingly strict matching of user instructions, exact labels/text, negation and app targeting.
 - Latest portable preview: artifact `AURIX-Windows-x64`, ID `15167525758`, GitHub digest `sha256:0a956aa26f5f60250c7602e8b22e27276867c989433cd9b36f48cf885553dd42`; retained until 2026-12-11.
 - Downloaded portable ZIP SHA-256 independently matches that GitHub digest. Executable SHA-256 is `329cb0beca9b5f0595cbff83fd8cf69ea9609924ee9c93de40b0e04927f1ec7e`, matching the included `SHA256SUMS.txt`.
 - The portable package contains `Aurix.Desktop.exe`, PDB, README, release-status notice and checksum manifest. It is explicitly **unsigned**, is a portable preview rather than an installer, and must not be run by bypassing SmartScreen or Microsoft Defender.
+
+## Local companion authentication and network boundary
+
+- The companion CLI binds its HTTP server explicitly to `127.0.0.1`; it does not listen on a LAN/public interface.
+- Each request must present the per-run bearer token. The server compares the supplied token using Node's timing-safe comparison.
+- The server rejects non-loopback Host headers and foreign Origin values. The allowed browser origin is configured explicitly; the native desktop client uses the loopback URL.
+- PR [#36](https://github.com/kidsanimationjoy-dotcom/aurix/pull/36) adds an integration test that sends a request to the loopback socket with `Host: evil.example` and expects `403 HOST_NOT_ALLOWED`, plus a missing-token request that expects `401`. These tests passed in main runs 45928261853 and 45928261880.
+- The companion deliberately disables generic filesystem and terminal routes (HTTP 501) and the generic Codex exec route (HTTP 405 for GET; unsupported methods do not execute). Project coding remains behind the separate Codex App Server permission/approval model.
 
 ## Latest MSIX packaging validation
 
