@@ -8,11 +8,11 @@ The Windows desktop companion is currently distributed as a portable GitHub Acti
 
 Microsoft's current Windows signing guidance says that when an app is submitted as an MSIX package through the Microsoft Store, Microsoft re-signs the package after certification. The publisher does not need to buy or manage a code-signing certificate for that Store package. Microsoft describes this route as worldwide and says Store MSIX installs do not show SmartScreen warnings.
 
-The repository currently produces a portable ZIP, **not an MSIX package**, so this route is not yet implemented. Before pursuing it, the project must:
-- create and test a valid MSIX package for the WPF app;
-- prepare correct package identity, publisher information, assets, capability declarations and Store listing;
-- pass Microsoft's app certification and Store policy checks;
-- test Store install, update and uninstall on supported Windows versions.
+The repository now produces a portable ZIP and an **unsigned MSIX validation package** in CI. The MSIX pipeline validates the package layout and packs it with the Windows SDK, but this is not a Store-ready package. Before pursuing the Store route, the project must:
+- replace `CN=UNCONFIGURED-PUBLISHER` with the correct, human-verified package publisher identity and matching Store identity;
+- review package assets, capabilities, manifest declarations and Store listing;
+- submit the correctly identified package and pass Microsoft's app certification and Store policy checks;
+- test Store installation, update and uninstall on supported Windows versions.
 
 A human legal owner must create and verify the Partner Center developer account, choose the correct legal account type, provide identity/business evidence and accept Microsoft's agreements. Individual accounts are intended for distribution not related to a business, trade or profession; distribution connected with a business requires the Company account type. Both account types currently have no registration fee in Microsoft's new onboarding flow, but verification is required. AI agents must not perform registration, identity/business verification or agreement acceptance.
 
@@ -38,7 +38,7 @@ A recognised certificate authority may issue an organization-validated code-sign
 
 ## Current build evidence
 
-- Current main source commit: `5f5f8fd81fe842eb87baa5aa4b2f8a1eb635ef99`.
+- Historical main source commit for the initial Windows preview evidence: `5f5f8fd81fe842eb87baa5aa4b2f8a1eb635ef99`. Current main is tracked separately below.
 - Windows x64 build: [main run 45921375421](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375421) — native compile, self-contained publish, release notice, executable checksum generation and artifact upload succeeded.
 - Application verification: [main run 45921375437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375437) — TypeScript, unit tests, production build and browser smoke tests passed.
 - Repository CI on the merged engineering revision: [run 45921098904](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098904) — passed.
@@ -47,7 +47,7 @@ A recognised certificate authority may issue an organization-validated code-sign
 - Executable SHA-256: `73609efb3279d6c94083bf52decb6f47cfc2316110335e450a931d1c926b2a5e`; verified against the included `SHA256SUMS.txt`.
 - The ZIP is a single portable Windows x64 package. PE inspection confirms the Authenticode certificate-table offset and size are zero. The executable has **no embedded Authenticode certificate**.
 - The packaged release notice explicitly labels the preview UNSIGNED and says not to disable SmartScreen or Microsoft Defender.
-- No trusted signing certificate, SignPath project/approval, Store developer account, MSIX package or production signing workflow is configured.
+- No trusted signing certificate, SignPath project/approval, Store developer account or production signing workflow is configured. CI can generate an unsigned MSIX validation package, but its publisher remains `CN=UNCONFIGURED-PUBLISHER` and it contains no signature file; it is not installable as an end-user release.
 
 
 ## Latest merged voice-enabled preview evidence
@@ -57,6 +57,15 @@ A recognised certificate authority may issue an organization-validated code-sign
 - Application verification: [run 45922086918](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086918) — passed.
 - Artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`.
 - The artifact digest is integrity metadata, not publisher identity or an Authenticode signature. The build remains unsigned.
+
+## Latest merged build and cancellation evidence (November 27, 2026)
+
+- Current main head after PR [#41](https://github.com/kidsanimationjoy-dotcom/aurix/pull/41): `b800d10720ecd8df296beabac4612c79e209715c`.
+- Latest Windows desktop source update is PR [#39](https://github.com/kidsanimationjoy-dotcom/aurix/pull/39). Its [Windows workflow run 46014044710](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46014044710) passed native compilation, desktop task-policy and lifecycle tests, self-contained publishing, portable ZIP packaging and unsigned MSIX validation packaging.
+- PR [#40](https://github.com/kidsanimationjoy-dotcom/aurix/pull/40) adds end-to-end client-disconnect cancellation for the local Codex chat process. [AURIX verification run 46015853751](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853751) and [AURIX CI run 46015853805](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46015853805) passed, including the child-process cancellation regression.
+- PR [#41](https://github.com/kidsanimationjoy-dotcom/aurix/pull/41) adds a graceful stop followed by a hard-stop fallback after 750 ms when the Codex child remains alive. [Verification run 46016349854](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46016349854) passed TypeScript, unit tests, production build and browser smoke tests. The regression test makes the fake Codex process ignore SIGTERM and checks that it exits after escalation.
+- PRs #40 and #41 changed companion code and tests only; they did not change the Windows executable built by PR #39.
+- These CI results confirm build and test behavior, not publisher identity or trusted signing. The portable ZIP and MSIX validation package remain unsigned. No SmartScreen or Defender bypass is permitted.
 
 ## Signing controls
 
