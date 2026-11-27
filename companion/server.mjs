@@ -157,7 +157,7 @@ async function prepareAndVerifyCodex({ command, paths, codexRoots = [] }) {
       };
     }
     const sandbox = await runCodexSandboxCanary({
-      paths, command, env, platform: process.platform, timeoutMs: 20000,
+      paths, command, env, platform: process.platform, projectRoots: codexRoots, timeoutMs: 20000,
     });
     return {
       profilePrepared: true, sandboxVerified: sandbox.ok, profileName: paths.profileName,
