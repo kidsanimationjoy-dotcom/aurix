@@ -48,9 +48,11 @@
 - Prepare a public download/release page, versioned release notes, supported Windows requirements, update/uninstall guidance, support contact and rollback plan.
 
 ### Full AURIX product scope
-- The repository README states that the real Codex, Claude, Grok, Higgsfield, REA and 21st.dev provider execution adapters are not yet connected and AURIX is not deployed.
-- The Windows companion currently uses a bounded local command planner. It is not yet a full general-purpose AI desktop agent.
-- A public launch of the complete multi-engine AURIX workspace requires these provider connections, end-to-end testing, production deployment and clear disconnected/planned states for unavailable features.
+- The main AURIX workspace now includes an optional local Codex read-only chat path. It requires the user's separate Codex CLI sign-in and a fresh successful operating-system sandbox verification in the local companion. This does not enable Codex coding-task execution.
+- The REA integration provides bounded local application/browser investigation workflows when the user has installed REA and explicitly approved the relevant target scope. Static analysis does not prove runtime behavior.
+- Other provider integrations (including Claude, Grok, Higgsfield and 21st.dev) must be evaluated by their current adapter status and real end-to-end tests. A registered provider or an advertised capability is not proof that a live account is connected or a workflow executes.
+- The Windows companion itself still uses a bounded local command planner; it is not yet a full general-purpose AI desktop agent.
+- The current workspace must complete provider-specific authentication, end-to-end testing, production deployment and clear disconnected/planned states before a complete multi-engine public launch.
 
 ## Release decision
 
