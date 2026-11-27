@@ -13,7 +13,7 @@ public partial class MainWindow : Window
     public bool AllowClose { get; set; }
 
     private HandsFreeVoiceService? _handsFreeVoice;
-    private CancellationTokenSource? _taskCancellation;
+    private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private SpeechSynthesizer? _speechSynthesizer;
     private string _companionToken = string.Empty;
@@ -324,11 +324,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _taskCancellation?.Cancel();
-        _taskCancellation?.Dispose();
-        _taskCancellation = new CancellationTokenSource();
-        var token = _taskCancellation.Token;
-
+        var taskRun = _taskRuns.BeginRun();
+        var cancellationToken = taskRun.Token;
         RunTaskButton.IsEnabled = false;
         EmergencyStopButton.IsEnabled = true;
         TaskOutputText.Text = "Working…";
@@ -337,13 +334,25 @@ public partial class MainWindow : Window
         {
             var result = await Task.Run(() => DesktopTaskRunner.Execute(
                 plan,
-                token,
-                message => Dispatcher.Invoke(() => TaskOutputText.Text = message),
-                prompt => Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
-                    prompt,
-                    "Approve AURIX action",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)), token);
+                cancellationToken,
+                message => Dispatcher.Invoke(() =>
+                {
+                    if (_taskRuns.IsCurrent(taskRun))
+                        TaskOutputText.Text = message;
+                }),
+                prompt => Dispatcher.Invoke(() =>
+                    _taskRuns.IsCurrent(taskRun) &&
+                    !cancellationToken.IsCancellationRequested &&
+                    System.Windows.MessageBox.Show(
+                        prompt,
+                        "Approve AURIX action",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)),
+                cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
 
             TaskOutputText.Text = result.Output;
             ListeningStatusText.Text = result.Cancelled
@@ -352,14 +361,29 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            TaskOutputText.Text = "Task stopped. Already completed actions are not undone.";
-            ListeningStatusText.Text = "Emergency stop activated.";
+            if (_taskRuns.IsCurrent(taskRun))
+            {
+                TaskOutputText.Text = "Task stopped. Already completed actions are not undone.";
+                ListeningStatusText.Text = "Emergency stop activated.";
+            }
         }
         catch (Exception ex)
         {
-            TaskOutputText.Text = $"Task failed safely: {ex.Message}";
+            if (_taskRuns.IsCurrent(taskRun))
+                TaskOutputText.Text = $"Task failed safely: {ex.Message}";
         }
         finally
+        {
+            FinishTaskRun(taskRun);
+        }
+    }
+
+    private void FinishTaskRun(CancellationTokenSource taskRun)
+    {
+        var wasCurrent = _taskRuns.IsCurrent(taskRun);
+        _taskRuns.CompleteRun(taskRun);
+
+        if (wasCurrent)
         {
             RunTaskButton.IsEnabled = true;
             EmergencyStopButton.IsEnabled = false;
@@ -394,23 +418,24 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 """;
 
         PlanText.Text = "LOCAL AI REASONING\nCodex may answer normally or propose only supported, approval-gated AURIX desktop actions.";
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI reasoning. Typed local commands remain available without AI.";
-            return;
-        }
-
-        _taskCancellation?.Cancel();
-        _taskCancellation?.Dispose();
-        _taskCancellation = new CancellationTokenSource();
-        var cancellationToken = _taskCancellation.Token;
+        var taskRun = _taskRuns.BeginRun();
+        var cancellationToken = taskRun.Token;
         RunTaskButton.IsEnabled = false;
         EmergencyStopButton.IsEnabled = true;
         TaskOutputText.Text = "Checking the local AI connection…";
 
         try
         {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI reasoning. Typed local commands remain available without AI.";
+                return;
+            }
+
             var status = await _localCodexChat.CheckAsync(token, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
             UpdateCodexStatus(status);
             if (!status.CanChat)
             {
@@ -427,6 +452,9 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 
             TaskOutputText.Text = "AURIX is asking local Codex to understand your request…";
             var rawResponse = await _localCodexChat.ChatAsync(token, messages, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
             var interpretation = AiDesktopCommandParser.Parse(rawResponse, prompt);
 
             if (!interpretation.IsPlan || interpretation.Plan is null)
@@ -450,6 +478,10 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning);
 
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
+
             if (approval != System.Windows.MessageBoxResult.Yes)
             {
                 AddVoiceConversationTurn(prompt, "You declined the proposed desktop plan. No desktop action was taken.");
@@ -462,12 +494,23 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             var result = await Task.Run(() => DesktopTaskRunner.Execute(
                 plan,
                 cancellationToken,
-                message => Dispatcher.Invoke(() => TaskOutputText.Text = message),
-                promptText => Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
-                    promptText,
-                    "Approve AURIX action",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)), cancellationToken);
+                message => Dispatcher.Invoke(() =>
+                {
+                    if (_taskRuns.IsCurrent(taskRun))
+                        TaskOutputText.Text = message;
+                }),
+                promptText => Dispatcher.Invoke(() =>
+                    _taskRuns.IsCurrent(taskRun) &&
+                    !cancellationToken.IsCancellationRequested &&
+                    System.Windows.MessageBox.Show(
+                        promptText,
+                        "Approve AURIX action",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)), cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
 
             AddVoiceConversationTurn(prompt, "Approved plan:\n" + plan.Summary + "\nExecution result:\n" + result.Output);
             TaskOutputText.Text = result.Output;
@@ -478,20 +521,23 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         }
         catch (OperationCanceledException)
         {
-            TaskOutputText.Text = "AI request or desktop task stopped. Already completed actions are not undone.";
-            ListeningStatusText.Text = "Emergency stop activated.";
+            if (_taskRuns.IsCurrent(taskRun))
+            {
+                TaskOutputText.Text = "AI request or desktop task stopped. Already completed actions are not undone.";
+                ListeningStatusText.Text = "Emergency stop activated.";
+            }
         }
         catch (Exception ex)
         {
-            TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
-            ListeningStatusText.Text = "AI request finished with an issue.";
+            if (_taskRuns.IsCurrent(taskRun))
+            {
+                TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
+                ListeningStatusText.Text = "AI request finished with an issue.";
+            }
         }
         finally
         {
-            RunTaskButton.IsEnabled = true;
-            EmergencyStopButton.IsEnabled = false;
-            _taskCancellation?.Dispose();
-            _taskCancellation = null;
+            FinishTaskRun(taskRun);
         }
     }
 
@@ -524,7 +570,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
 
     private void EmergencyStopButton_Click(object sender, RoutedEventArgs e)
     {
-        _taskCancellation?.Cancel();
+        _taskRuns.CancelCurrent();
         _speechSynthesizer?.SpeakAsyncCancelAll();
         TaskOutputText.Text = "Stopping remaining task steps…";
         ListeningStatusText.Text = "Emergency stop requested.";
@@ -577,16 +623,14 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
     {
         if (!AllowClose)
         {
-            _taskCancellation?.Cancel();
+            _taskRuns.CancelCurrent();
             e.Cancel = true;
             Hide();
             return;
         }
 
         ShutdownHandsFree();
-        _taskCancellation?.Cancel();
-        _taskCancellation?.Dispose();
-        _taskCancellation = null;
+        _taskRuns.CancelCurrent();
         _speechSynthesizer?.SpeakAsyncCancelAll();
         _speechSynthesizer?.Dispose();
         _speechSynthesizer = null;
