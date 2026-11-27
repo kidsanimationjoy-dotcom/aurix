@@ -288,7 +288,7 @@ test('companion shutdown aborts active Codex chat and closes the response', asyn
 
     const closeCompanion = (server as unknown as { closeCompanion: () => Promise<void> }).closeCompanion;
     await closeCompanion();
-    await assert.rejects(request, 'companion shutdown should close the active HTTP response');
+    await assert.rejects(request);
 
     let exited = false;
     for (let attempt = 0; attempt < 120; attempt++) {
