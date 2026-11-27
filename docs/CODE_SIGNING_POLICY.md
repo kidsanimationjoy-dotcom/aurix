@@ -38,18 +38,15 @@ A recognised certificate authority may issue an organization-validated code-sign
 
 ## Current build evidence
 
-- Current main base: `859bed74bdf842b471b1c1f8b7f70dd71fff184b`.
-- PR source head: `3880ca2d38756728de558f084cd9f15eeb0b36bf`.
-- Windows x64 build: [GitHub Actions run 45920383886](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383886) — native compile, self-contained publish, release notice, checksum generation and artifact upload succeeded.
-- Application verification: [run 45920383862](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383862) — TypeScript, unit tests, production build and browser smoke tests passed.
-- Repository CI: [run 45920383906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383906) — install, typecheck, unit tests, production build and browser smoke tests passed.
-- Artifact ID: `15164501756`; ZIP SHA-256: `ac7029046bfa09f5217a346be004c0deb2c39fdcb541fa10b92afdff8e6408fd`.
-- Executable SHA-256: `e163fdd460325fa1b0f2c83292d008fff030c00d7f522c444647939be3109cdb`; checked against the included `SHA256SUMS.txt`.
-- The ZIP is a single portable Windows x64 package containing the executable, PDB, README, release-status notice and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are zero. The executable has **no embedded Authenticode certificate**.
-- The package's release notice explicitly labels it UNSIGNED and says not to disable SmartScreen or Microsoft Defender.
-- No SignPath application, approved project, certificate, trusted signing workflow, production token, Store developer account, MSIX package or signing approval is configured.
-
+- Main merge commit: [`2cae59ab4c865aca4b52700828c41b197bc99f50`](https://github.com/kidsanimationjoy-dotcom/aurix/commit/2cae59ab4c865aca4b52700828c41b197bc99f50).
+- PR source head: `bfe5b33c67a82f8f36c7b88c6e793a2a7e7b50fc`; PR [#19](https://github.com/kidsanimationjoy-dotcom/aurix/pull/19) is merged.
+- Windows x64 compile, self-contained publish, release notice, checksum generation and artifact upload: [run 45920986046](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986046) — passed.
+- Application TypeScript, unit tests, production build and browser smoke tests: [run 45920986048](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986048) — passed.
+- Repository CI: [run 45920986069](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986069) — passed.
+- Artifact: `AURIX-Windows-x64`, artifact ID `15163894688`, GitHub artifact digest `sha256:b0e92d73b4194a7b2dbfcddcf2e6c871b19ccc7e452e5b974de65815ecb319d4`; retained until 2026-12-11.
+- The Windows workflow's release notice explicitly labels the preview UNSIGNED and warns users not to disable SmartScreen or Microsoft Defender.
+- This artifact digest is GitHub's artifact integrity metadata. It is not a publisher identity or Authenticode signature.
+- No trusted signing certificate, SignPath project/approval, Store developer account, MSIX package or production signing workflow is configured.
 
 ## Signing controls
 
