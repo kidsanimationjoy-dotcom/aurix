@@ -1,6 +1,6 @@
 namespace Aurix.Desktop.Services;
 
-internal enum VoiceOrbDisposition
+public enum VoiceOrbDisposition
 {
     None,
     Listening,
@@ -12,7 +12,7 @@ internal enum VoiceOrbDisposition
 /// Maps local voice-recognition status messages to the visible orb state.
 /// Timeout and no-speech messages always close the orb.
 /// </summary>
-internal static class VoiceOrbStatusPolicy
+public static class VoiceOrbStatusPolicy
 {
     public static VoiceOrbDisposition Classify(string message)
     {
