@@ -28,4 +28,4 @@ export function validateCodexHome(paths: CodexProfilePaths, options?: Pick<Codex
 export function checkLegacySystemConfig(paths: CodexProfilePaths, env?: NodeJS.ProcessEnv, platform?: NodeJS.Platform, systemPaths?: string[]): Promise<{ ok: boolean; code?: string; message: string }>;
 export function resolveNativeCodexCommand(command?: string, env?: NodeJS.ProcessEnv, platform?: NodeJS.Platform): Promise<string>;
 export function buildCodexSandboxArgs(options: { platform: NodeJS.Platform; profileName: string; workspaceRoot: string; executable: string; executableArgs?: string[] }): string[];
-export function runCodexSandboxCanary(options: { paths: CodexProfilePaths; command?: string; env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; timeoutMs?: number }): Promise<CodexSandboxResult>;
+export function runCodexSandboxCanary(options: { paths: CodexProfilePaths; command?: string; env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; projectRoots?: string[]; timeoutMs?: number }): Promise<CodexSandboxResult>;
