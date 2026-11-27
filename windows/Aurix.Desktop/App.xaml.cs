@@ -62,7 +62,16 @@ public partial class App : System.Windows.Application
                 }
                 else
                 {
-                    Console.WriteLine("AURIX startup self-test passed. WPF window and required controls initialised; microphone was not started.");
+                    var readinessReport = Aurix.Desktop.Services.WindowsReadinessDiagnostic.CreateReport();
+                    if (!readinessReport.Contains("AURIX WINDOWS READINESS CHECK", StringComparison.Ordinal))
+                    {
+                        Console.Error.WriteLine("AURIX startup self-test failed. Readiness report header was missing.");
+                        exitCode = 3;
+                    }
+                    else
+                    {
+                        Console.WriteLine("AURIX startup self-test passed. WPF window, required controls and native readiness diagnostic initialised; microphone was not started.");
+                    }
                 }
             }
             catch (Exception ex)
