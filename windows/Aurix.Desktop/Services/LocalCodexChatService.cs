@@ -6,6 +6,8 @@ using System.Text.Json;
 
 namespace Aurix.Desktop.Services;
 
+public sealed record LocalCodexMessage(string Role, string Content);
+
 public sealed record LocalCodexStatus(
     bool CompanionConnected,
     bool Installed,
@@ -75,18 +77,30 @@ public sealed class LocalCodexChatService
         return ReadString(document.RootElement, "message") ?? "Complete the official Codex sign-in in the local companion terminal.";
     }
 
-    public async Task<string> ChatAsync(string token, string prompt, CancellationToken cancellationToken = default)
+    public async Task<string> ChatAsync(string token, IReadOnlyList<LocalCodexMessage> messages, CancellationToken cancellationToken = default)
     {
         ValidateToken(token);
-        var boundedPrompt = prompt.Trim();
-        if (boundedPrompt.Length == 0 || boundedPrompt.Length > 10_000)
-            throw new ArgumentException("A voice chat message must contain between 1 and 10,000 characters.", nameof(prompt));
+        if (messages.Count == 0)
+            throw new ArgumentException("Add a voice chat message before sending.", nameof(messages));
+
+        var bounded = messages.TakeLast(12)
+            .Where(message => message.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(message.Content))
+            .Select(message => new LocalCodexMessage(message.Role, message.Content.Trim()))
+            .ToList();
+        var totalCharacters = bounded.Sum(message => message.Content.Length);
+        while (bounded.Count > 1 && totalCharacters > 5_000)
+        {
+            totalCharacters -= bounded[0].Content.Length;
+            bounded.RemoveAt(0);
+        }
+        if (bounded.Count == 0 || bounded[^1].Content.Length > 5_000)
+            throw new ArgumentException("A voice chat message must contain between 1 and 5,000 characters.", nameof(messages));
 
         using var response = await SendAsync(
             HttpMethod.Post,
             "/v1/codex/chat",
             token,
-            new { messages = new[] { new { role = "user", content = boundedPrompt } } },
+            new { messages = bounded.Select(message => new { role = message.Role, content = message.Content }).ToArray() },
             cancellationToken,
             timeout: TimeSpan.FromSeconds(130));
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
