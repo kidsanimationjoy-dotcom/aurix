@@ -7,7 +7,7 @@ A browser cannot directly run or safely inspect software on the user's computer.
 - Binds to `127.0.0.1` only.
 - Checks the request Origin and Host, and compares the bearer token using a timing-safe comparison.
 - Implements authenticated health, Codex status and sign-in, read-only Codex chat, and project-scoped Codex App Server sessions.
-- Runs the official local REA CLI's documented JavaScript/Electron application analyzer through authenticated `/v1/rea/*` endpoints, without API keys.
+- Runs the official local REA CLI's documented JavaScript/Electron, desktop, Android APK, and passive browser-inspection workflows through authenticated `/v1/rea/*` endpoints, without API keys.
 - Creates a dedicated AURIX-owned Codex home. It does not read, edit, or reuse the user's normal `~/.codex` profile.
 - Creates a strict read-only permission profile for a dedicated empty AURIX chat workspace.
 - Runs AURIX chat through the documented `codex sandbox` wrapper with the named `aurix-chat-readonly` profile and managed configuration; the profile, not a generic `--sandbox` override, supplies the read-only workspace and denied-root/network policy.
@@ -104,3 +104,8 @@ The paired companion supports fixed REA operations within folders explicitly app
 
 
 Android APK inspection is also available with the fixed `inspect-android-package` CLI operation. Select an APK file under an approved `AURIX_REA_ROOTS` directory; AURIX canonicalizes the file path and checks that it remains inside an approved root. The operation is static JADX-backed analysis and does not install or execute the APK.
+
+
+### Passive browser inspection
+
+AURIX can list eligible tabs and request a passive page inspection or static JavaScript bundle analysis through REA. Enter only an explicit-port `http://127.0.0.1:PORT` DevTools endpoint; other hosts and protocols are rejected. The browser endpoint is local to the computer running the companion and the user must affirm they own or are authorised to inspect that browser session. REA rechecks the selected target and origin and captures the selected tab without navigating, clicking, evaluating page JavaScript or mutating it. Page captures use conservative defaults; bundle analysis parses captured application scripts as source and does not execute them. These operations are not general browser automation or remote-control access.
