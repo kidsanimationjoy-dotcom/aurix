@@ -24,26 +24,33 @@ Hands-free opt-in is saved for the current Windows user. If you also press **Ena
 
 ## Local AI conversation
 
-Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles both ordinary questions and the reasoning that proposes supported desktop tasks. AURIX—not OpenJarvis—validates any proposed desktop plan and controls whether an action can run.
+Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles ordinary questions and proposes supported desktop tasks. AURIX—not OpenJarvis—validates any plan and controls whether an action can run.
 
-1. Install Stanford OpenJarvis using its official Windows release or documented CLI setup.
-2. Start its local API server on this same PC at `127.0.0.1:8000`. For the CLI, use:
+### One-time OpenJarvis setup
 
-   ```powershell
-   jarvis serve --host 127.0.0.1 --port 8000 --agent simple
-   ```
+1. Select **OpenJarvis setup guide** in AURIX. This opens Stanford's official [native Windows installation guide](https://open-jarvis.github.io/OpenJarvis/getting-started/windows-native/).
+2. Check the prerequisites listed there: Windows 10 1809 or newer, Python 3.11–3.13, Git, MSVC build tools, and roughly 5 GB free disk space.
+3. Complete the official installation. The native installer places the source under `%LOCALAPPDATA%\OpenJarvis\src` by default and prepares the `uv` environment. If asked about registering OpenJarvis as a separate scheduled task, choose **No** when you want AURIX to manage the server for the current AURIX session.
+4. Close and reopen AURIX after installation so Windows PATH changes are visible to the app.
 
-   When installing the CLI from source, install its API dependencies with `uv sync --extra server`.
-3. Open AURIX Desktop. **Stanford OpenJarvis** is selected by default. Select **Check OpenJarvis** and confirm that a local model is ready.
-4. Say **“AURIX”** and speak one instruction, or enter a request in the task box.
+### Daily use
 
-AURIX sends recognised speech as text to the local OpenJarvis service; microphone audio stays on this PC. OpenJarvis returns a JSON answer or a proposed plan. AURIX independently validates the response against the strict action schema, supported application allowlist, and the user's latest instruction. AURIX displays a proposed plan and asks for approval before execution. AI-proposed button clicks and text entry remain restricted to Notepad, and each UI change has its own approval prompt. The emergency stop cancels the active AI request or remaining task steps.
+1. Open AURIX Desktop.
+2. Select **Start local server**. AURIX launches the installed OpenJarvis CLI with fixed arguments, using `uv run --project ... jarvis serve --host 127.0.0.1 --port 8000 --agent simple`.
+3. Wait for AURIX to confirm that the local health endpoint and model are ready.
+4. Say **“AURIX”** and speak one instruction, or type a request.
+5. Select **Stop local server** when finished. Exiting AURIX also stops a server process that AURIX itself started. Closing the main window to the system tray does not stop it.
 
-OpenJarvis is not given direct desktop-control tools, shell access, arbitrary script execution, unrestricted file access, browser navigation, or general keyboard/mouse control. The API must remain bound to `127.0.0.1`; do not expose it to a public or untrusted network. The integration does not automatically install OpenJarvis or download/bundle model weights.
+If an OpenJarvis server was started outside AURIX and is already responding on port 8000, AURIX detects it rather than starting a second copy. AURIX only offers its Stop button for a server process that it launched itself. It does not stop or alter an independently installed OpenJarvis scheduled task.
 
-**Codex remains as an optional backup provider.** Select **Codex (backup AI provider)** in the AI provider menu, connect the local AURIX companion, verify its operating-system sandbox, and complete the official Codex sign-in if required. The backup continues to use the existing authenticated loopback companion and approval-gated AURIX planner.
+AURIX sends recognised speech as text to the local OpenJarvis service; microphone audio stays on this PC. OpenJarvis returns a JSON answer or proposed plan. AURIX independently validates the response against its strict action schema, supported application allowlist, and the user's latest instruction. AURIX displays a proposed plan and asks for approval before execution. AI-proposed button clicks and text entry remain restricted to Notepad, and each UI change has its own approval prompt. The emergency stop cancels the active AI request or remaining approved task steps.
+
+OpenJarvis is not given direct desktop-control tools, shell access, arbitrary script execution, unrestricted file access, browser navigation, or general keyboard/mouse control. The API remains bound to `127.0.0.1`; do not expose it to a public or untrusted network. AURIX does not automatically install OpenJarvis or download/bundle model weights.
+
+**Codex remains as an optional backup provider.** Select **Codex (backup AI provider)** in the AI provider menu, connect the local AURIX companion, verify its operating-system sandbox, and complete the official Codex sign-in if required.
 
 The last 12 user/assistant turns are kept in memory for the current desktop session only; use **Clear conversation** to erase this in-memory context. AURIX's audit log records bounded task metadata rather than dictated instructions or entered text.
+
 ## Voice privacy and requirements
 
 The hands-free service uses `System.Speech` and a locally installed English Windows speech recognizer. While waiting, it loads a narrow grammar containing only the AURIX wake phrase choices; it does not run general dictation in the background. Only after the wake phrase is recognised does it load a dictation grammar for one instruction. The dictation grammar is unloaded after that command and the wake-word grammar is restored.
