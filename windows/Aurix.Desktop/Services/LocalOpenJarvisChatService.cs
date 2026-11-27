@@ -44,16 +44,24 @@ public sealed class LocalOpenJarvisChatService
         IReadOnlyList<LocalCodexMessage> messages,
         CancellationToken cancellationToken = default)
     {
+        var systemContext = messages
+            .Where(message => message.Role == "system" && !string.IsNullOrWhiteSpace(message.Content))
+            .TakeLast(1)
+            .Select(message => new { role = message.Role, content = message.Content.Trim() })
+            .ToArray();
         var dialogue = messages
             .Where(message => (message.Role == "user" || message.Role == "assistant") &&
                               !string.IsNullOrWhiteSpace(message.Content))
-            .TakeLast(10)
+            .TakeLast(9)
             .Select(message => new { role = message.Role, content = message.Content.Trim() })
             .ToArray();
 
-        var total = dialogue.Sum(message => message.content.Length);
-        if (dialogue.Length == 0 || dialogue[^1].role != "user" || total > 6_000)
-            throw new ArgumentException("OpenJarvis chat requires a final user message and no more than 6,000 characters of recent conversation.");
+        var total = systemContext.Sum(message => message.content.Length) +
+                    dialogue.Sum(message => message.content.Length);
+        if (systemContext.Length != 1 || dialogue.Length == 0 ||
+            dialogue[^1].role != "user" || total > 8_000)
+            throw new ArgumentException(
+                "OpenJarvis requires AURIX's system contract, a final user message, and no more than 8,000 characters of recent context.");
 
         using var models = await SendAsync(HttpMethod.Get, "v1/models", null, cancellationToken);
         using var modelsDoc = await JsonDocument.ParseAsync(
@@ -71,13 +79,12 @@ public sealed class LocalOpenJarvisChatService
                 new
                 {
                     role = "system",
-                    content = "You are AURIX's local conversational assistant powered by Stanford OpenJarvis. Answer questions helpfully. You are chat-only: do not claim to control the computer, do not issue commands, and do not claim that any desktop action has happened. AURIX handles computer actions separately with its own validation and approval controls."
+                    content = "You are AURIX's primary local reasoning engine, powered by Stanford OpenJarvis. Follow the next AURIX system contract exactly. Return only the requested JSON object. Do not call tools, use built-in agent actions, execute commands, or claim that a desktop action has happened. AURIX independently parses and validates every proposal and asks the user before any supported computer action."
                 }
-            }.Concat(dialogue).ToArray(),
-            temperature = 0.2,
-            max_tokens = 700,
-            stream = false,
-            tools = (object?)null
+            }.Concat(systemContext).Concat(dialogue).ToArray(),
+            temperature = 0.1,
+            max_tokens = 1_000,
+            stream = false
         };
 
         using var response = await SendAsync(HttpMethod.Post, "v1/chat/completions", payload, cancellationToken);
