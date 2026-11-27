@@ -7,7 +7,7 @@ export const higgsfieldMeta: ProviderMeta = {
   name: 'Higgsfield',
   vendor: 'Higgsfield',
   role: 'AI video and image generation',
-  plannedCapabilities: ['media_video', 'model_discovery'],
+  plannedCapabilities: ['media_video', 'media_image', 'model_discovery'],
   authentication: 'Uses the official Higgsfield CLI browser OAuth flow on the local computer. No API key is used and AURIX never reads the CLI credential store.',
   references: [
     { label: 'Official Higgsfield CLI', url: 'https://github.com/higgsfield-ai/cli' },
@@ -42,6 +42,8 @@ function normaliseModels(value: Awaited<ReturnType<typeof listHiggsfieldModels>>
 export class HiggsfieldAdapter implements MediaAdapter {
   readonly meta = higgsfieldMeta;
   private getConfig: () => LocalCompanionConfig = () => ({ url: '', token: '' });
+  private readonly quoteKinds = new Map<string, 'video' | 'image'>();
+  private readonly jobKinds = new Map<string, 'video' | 'image'>();
 
   setCompanionConfigProvider(provider: () => LocalCompanionConfig): void {
     this.getConfig = provider;
@@ -98,8 +100,8 @@ export class HiggsfieldAdapter implements MediaAdapter {
       const models = normaliseModels(await listHiggsfieldModels(this.getConfig()));
       return [
         'model_discovery',
-        ...(models.some((model) => model.kinds.includes('video')) ? ['media_video' as const] : []),
-        // Image models may be visible in the live catalog, but this adapter does not yet submit image jobs.
+        ...(models.some((model) => model.id === 'seedance_2_0' && model.kinds.includes('video')) ? ['media_video' as const] : []),
+        ...(models.some((model) => model.id === 'gpt_image_2_5' && model.kinds.includes('image')) ? ['media_image' as const] : []),
       ];
     } catch {
       return [];
@@ -131,17 +133,40 @@ export class HiggsfieldAdapter implements MediaAdapter {
 
   async quoteJob(request: MediaJobRequest) {
     try {
-      if (request.kind !== 'video') throw new Error('AURIX has not enabled paid image generation in this initial Higgsfield workflow.');
-      const requestedMode = request.settings.mode;
-      if (requestedMode !== undefined && requestedMode !== 'std' && requestedMode !== 'fast') throw new Error('Choose a supported Seedance generation mode.');
-      const quote = await quoteHiggsfieldJob(this.getConfig(), {
+      const config = this.getConfig();
+      if (!config.url || !config.token) throw new Error('Pair the local AURIX companion before requesting a Higgsfield quote.');
+      if (request.kind === 'video') {
+        if (request.modelId !== 'seedance_2_0') throw new Error('AURIX currently supports Seedance 2.0 for paid video generation.');
+        const requestedMode = request.settings.mode;
+        if (requestedMode !== undefined && requestedMode !== 'std' && requestedMode !== 'fast') throw new Error('Choose a supported Seedance generation mode.');
+        const quote = await quoteHiggsfieldJob(config, {
+          kind: 'video',
+          modelId: request.modelId,
+          prompt: request.prompt,
+          duration: Number(request.settings.duration ?? 5),
+          resolution: String(request.settings.resolution ?? '720p'),
+          aspectRatio: String(request.settings.aspectRatio ?? '16:9'),
+          mode: requestedMode === 'fast' ? 'fast' : 'std',
+        });
+        this.quoteKinds.set(quote.quoteId, 'video');
+        return { ok: true as const, value: quote };
+      }
+
+      if (request.modelId !== 'gpt_image_2_5') throw new Error('AURIX currently supports GPT Image 2.5 for paid image generation.');
+      const quality = request.settings.quality;
+      const variant = request.settings.variant;
+      if (quality !== undefined && !['low', 'medium', 'high', 'xhigh', 'max'].includes(String(quality))) throw new Error('Choose a supported GPT Image 2.5 quality.');
+      if (variant !== undefined && !['flare', 'sunburst'].includes(String(variant))) throw new Error('Choose a supported GPT Image 2.5 variant.');
+      const quote = await quoteHiggsfieldJob(config, {
+        kind: 'image',
         modelId: request.modelId,
         prompt: request.prompt,
-        duration: Number(request.settings.duration ?? 5),
-        resolution: String(request.settings.resolution ?? '720p'),
-        aspectRatio: String(request.settings.aspectRatio ?? '16:9'),
-        mode: requestedMode === 'fast' ? 'fast' : 'std',
+        resolution: String(request.settings.resolution ?? '1k'),
+        aspectRatio: String(request.settings.aspectRatio ?? '1:1'),
+        quality: quality === undefined ? 'low' : String(quality),
+        variant: variant === undefined ? 'flare' : String(variant),
       });
+      this.quoteKinds.set(quote.quoteId, 'image');
       return { ok: true as const, value: quote };
     } catch (error) {
       return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'Could not estimate Higgsfield credits.' } };
@@ -150,36 +175,56 @@ export class HiggsfieldAdapter implements MediaAdapter {
 
   async confirmAndSubmitJob(quoteId: string, confirmed: boolean) {
     try {
+      const kind = this.quoteKinds.get(quoteId);
+      if (!kind) throw new Error('This Higgsfield quote is not available in the current AURIX session. Request a new estimate.');
       const result = await createHiggsfieldJob(this.getConfig(), quoteId, confirmed);
+      this.quoteKinds.delete(quoteId);
+      this.jobKinds.set(result.jobId, kind);
       return { ok: true as const, value: result };
     } catch (error) {
       return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'Higgsfield generation was not started.' } };
     }
   }
 
-  async getJob(id?: string): Promise<Result<MediaJob>> {
+  async getJob(id?: string, kindHint?: 'video' | 'image'): Promise<Result<MediaJob>> {
     if (!id) return { ok: false, error: { code: 'NOT_CONNECTED', message: 'Provide a Higgsfield job ID to look up.' } };
     try {
       const raw = await getHiggsfieldJob(this.getConfig(), id);
-      const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const root = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+      const value = root.job && typeof root.job === 'object'
+        ? root.job as Record<string, unknown>
+        : root.data && typeof root.data === 'object'
+          ? root.data as Record<string, unknown>
+          : root.result && typeof root.result === 'object'
+            ? root.result as Record<string, unknown>
+            : root;
       const statusText = String(value.status ?? '').toLowerCase();
-      const outputsRaw = Array.isArray(value.outputs) ? value.outputs : value.result_url ? [{ url: value.result_url }] : [];
-      const outputs = outputsRaw.flatMap((entry) => {
+      const inferredKind = kindHint ?? this.jobKinds.get(id) ?? (value.kind === 'image' || value.type === 'image' ? 'image' : 'video');
+      const candidates = Array.isArray(value.outputs)
+        ? value.outputs
+        : [value.result_url, value.output_url, value.video_url, value.image_url].filter((item) => typeof item === 'string').map((url) => ({ url }));
+      const outputs = candidates.flatMap((entry) => {
+        if (typeof entry === 'string') return [{ url: entry, mime: inferredKind === 'image' ? 'image/png' : 'video/mp4' }];
         if (!entry || typeof entry !== 'object') return [];
         const item = entry as Record<string, unknown>;
-        const url = typeof item.url === 'string' ? item.url : typeof item.result_url === 'string' ? item.result_url : null;
+        const url = typeof item.url === 'string' ? item.url
+          : typeof item.result_url === 'string' ? item.result_url
+            : typeof item.file_url === 'string' ? item.file_url : null;
         if (!url) return [];
-        return [{ url, mime: typeof item.mime_type === 'string' ? item.mime_type : 'video/mp4' }];
+        const mime = typeof item.mime_type === 'string' ? item.mime_type
+          : typeof item.content_type === 'string' ? item.content_type
+            : inferredKind === 'image' ? 'image/png' : 'video/mp4';
+        return [{ url, mime }];
       });
-      if (['completed', 'succeeded', 'success'].includes(statusText) && outputs.length) {
-        return { ok: true, value: { id, status: 'completed', outputs: outputs as [ { url: string; mime: string }, ...{ url: string; mime: string }[] ] } };
+      if (['completed', 'succeeded', 'success', 'done'].includes(statusText) && outputs.length) {
+        return { ok: true, value: { id, status: 'completed', outputs: outputs as [{ url: string; mime: string }, ...{ url: string; mime: string }[]] } };
       }
       if (['failed', 'error', 'cancelled', 'canceled'].includes(statusText)) {
         return { ok: true, value: { id, status: statusText.includes('cancel') ? 'cancelled' : 'failed', error: String(value.error ?? value.message ?? 'Higgsfield job failed.') } };
       }
-      return { ok: true, value: { id, status: statusText === 'running' || statusText === 'processing' ? 'running' : 'queued', progress: typeof value.progress === 'number' ? value.progress : undefined } };
+      return { ok: true, value: { id, status: statusText === 'running' || statusText === 'processing' || statusText === 'in_progress' ? 'running' : 'queued', progress: typeof value.progress === 'number' ? value.progress : undefined } };
     } catch (error) {
       return { ok: false, error: { code: 'PROVIDER_ERROR', message: error instanceof Error ? error.message : 'Could not retrieve Higgsfield job.' } };
     }
   }
-}
+}}
