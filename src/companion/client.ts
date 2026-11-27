@@ -229,6 +229,22 @@ async function codexAgentRequest<T>(
   }
 }
 
+
+export async function validateCodexAgentTarget(
+  config: LocalCompanionConfig,
+  target: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const body = await codexAgentRequest<{ ok?: boolean; valid?: boolean }>(
+    config,
+    '/v1/codex/agent/validate',
+    { method: 'POST', body: JSON.stringify({ target }) },
+    12_000,
+    fetchImpl,
+  );
+  if (body.ok !== true || body.valid !== true) throw new Error('The selected local project folder is not approved for Codex.');
+}
+
 export async function startCodexAgent(
   config: LocalCompanionConfig,
   target: string,
