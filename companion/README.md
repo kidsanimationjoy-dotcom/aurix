@@ -59,6 +59,14 @@ The Coding Studio starts a Codex App Server session with the selected project as
 
 The App Server process uses the separate AURIX Codex profile and an allowlisted environment without `OPENAI_API_KEY`. It does not use a general-purpose shell or expose arbitrary filesystem/terminal endpoints to the browser. The bridge additionally validates the selected project folder, command working directories, and every write-permission path; extra filesystem grants are restricted to exact paths inside the project and the current turn only. The base profile is still read-only, and no session-wide write grant is offered. This is a project coding integration, not broad desktop control.
 
+## Task Center with local Codex
+
+The Task Center uses the same local Codex App Server after its own provider-and-plan approval. Conversational tasks are sent through AURIX's read-only Codex chat workspace. Coding tasks require an active project with a linked local folder inside one of the explicit `AURIX_CODEX_ROOTS` directories. The provider readiness check is run before presenting the task approval and again when the user approves.
+
+After the task starts, Codex's command, file-change and filesystem permission requests are surfaced inside the Task Center. Each request has its own one-time decision; network access, session-wide root grants and file-change prompts without an exact path list are refused. Pending local action prompts automatically expire and are declined, and a browser reload marks an in-progress task as interrupted rather than restoring a stale approval. Cancelling the task interrupts and closes its local Codex session.
+
+Task Center status and output are stored in the local AURIX workspace. The Task Center does not make a direct API request to OpenAI, does not copy the user's Codex credentials, and does not give Codex access beyond the managed read-only profile and the per-task permissions approved by the user.
+
 ## Higgsfield video generation
 
 Install the official CLI locally with `npm install -g @higgsfield/cli`, then use **Media Studio → Sign in with Higgsfield**. The local companion starts the CLI's official browser OAuth flow in its terminal. AURIX never reads, returns, or asks the user to paste Higgsfield OAuth credentials or API keys. The supported workflows currently enable Seedance 2.0 text-to-video and GPT Image 2.5 text-to-image only when the live model catalog reports them. The prompt and model-specific duration, resolution, aspect ratio, mode, quality and variant are validated against the published CLI schema before asking the CLI for a cost estimate. Reference-image editing is not included in this initial integration.
