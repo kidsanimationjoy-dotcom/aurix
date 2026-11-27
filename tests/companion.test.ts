@@ -391,25 +391,34 @@ if (process.env.OPENAI_API_KEY || process.env.HIGGSFIELD_API_KEY || process.env.
 if (args[0] === 'version' && args.includes('--json')) { console.log(JSON.stringify({ version: '1.2.2' })); process.exit(0); }
 if (args[0] === 'account' && args[1] === 'status' && args.includes('--json')) { console.log(JSON.stringify({ email: 'user@example.test', plan: 'Creator', available_credits: 120 })); process.exit(0); }
 if (args[0] === 'model' && args[1] === 'list' && args.includes('--json')) {
-  console.log(JSON.stringify({ models: [{ job_set_type: 'seedance_2_0', name: 'Seedance 2.5', categories: ['video'] }] }));
+  console.log(JSON.stringify({ models: [{ job_set_type: 'seedance_2_0', name: 'Seedance 2.0', categories: ['video'] }, { job_set_type: 'gpt_image_2_5', name: 'GPT Image 2.5', categories: ['image'] }] }));
   process.exit(0);
 }
 if (args[0] === 'generate' && args[1] === 'cost') {
-  if (args[2] !== 'seedance_2_0' || !args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std') process.exit(91);
+  if (args[2] === 'seedance_2_0') {
+    if (!args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std') process.exit(91);
+  } else if (args[2] === 'gpt_image_2_5') {
+    if (!args.includes('--quality') || args[args.indexOf('--quality') + 1] !== 'high' || !args.includes('--variant') || args[args.indexOf('--variant') + 1] !== 'flare') process.exit(93);
+  } else process.exit(94);
   if (!args.includes('--json') || !args.includes('--prompt') || args.includes('--wait')) process.exit(91);
   log('cost');
-  console.log(JSON.stringify({ estimated_credits: 10 }));
+  console.log(JSON.stringify({ estimated_credits: args[2] === 'gpt_image_2_5' ? 6 : 10 }));
   process.exit(0);
 }
 if (args[0] === 'generate' && args[1] === 'create') {
-  if (args[2] !== 'seedance_2_0' || !args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std') process.exit(92);
+  if (args[2] === 'seedance_2_0' && (!args.includes('--mode') || args[args.indexOf('--mode') + 1] !== 'std')) process.exit(92);
+  if (args[2] === 'gpt_image_2_5' && (!args.includes('--quality') || args[args.indexOf('--quality') + 1] !== 'high' || !args.includes('--variant') || args[args.indexOf('--variant') + 1] !== 'flare')) process.exit(95);
   if (!args.includes('--json') || args.includes('--wait')) process.exit(92);
   log('create');
-  console.log(JSON.stringify({ job_id: 'job-abc', status: 'queued' }));
+  console.log(JSON.stringify({ job_id: args[2] === 'gpt_image_2_5' ? 'job-image-abc' : 'job-abc', status: 'queued' }));
   process.exit(0);
 }
 if (args[0] === 'generate' && args[1] === 'get' && args[2] === 'job-abc') {
   console.log(JSON.stringify({ id: 'job-abc', status: 'completed', result_url: 'https://media.example.test/output.mp4' }));
+  process.exit(0);
+}
+if (args[0] === 'generate' && args[1] === 'get' && args[2] === 'job-image-abc') {
+  console.log(JSON.stringify({ id: 'job-image-abc', status: 'completed', image_url: 'https://media.example.test/output.png' }));
   process.exit(0);
 }
 process.exit(2);
@@ -429,6 +438,7 @@ process.exit(2);
       assert.equal(modelsResponse.status, 200);
       const models = (await modelsResponse.json()).result.models;
       assert.equal(models[0].id, 'seedance_2_0');
+      assert.equal(models[1].id, 'gpt_image_2_5');
 
       const quoted = await fetch(url + '/v1/higgsfield/quote', {
         method: 'POST', headers,
@@ -461,6 +471,37 @@ process.exit(2);
 
       const calls = (await readFile(logPath, 'utf8')).trim().split(/\r?\n/u);
       assert.deepEqual(calls, ['cost', 'cost', 'create']);
+
+      const imageQuoted = await fetch(url + '/v1/higgsfield/quote', {
+        method: 'POST', headers,
+        body: JSON.stringify({ kind: 'image', modelId: 'gpt_image_2_5', prompt: 'A detailed blue robot mascot', resolution: '2k', aspectRatio: '1:1', quality: 'high', variant: 'flare' }),
+      });
+      assert.equal(imageQuoted.status, 200);
+      const imageQuote = (await imageQuoted.json()).result;
+      assert.equal(imageQuote.kind, 'image');
+      assert.equal(imageQuote.raw.estimated_credits, 6);
+
+      const imageRefused = await fetch(url + '/v1/higgsfield/create', {
+        method: 'POST', headers, body: JSON.stringify({ quoteId: imageQuote.quoteId, confirmed: false }),
+      });
+      assert.equal(imageRefused.status, 409);
+      assert.equal((await readFile(logPath, 'utf8')).trim().split(/\\r?\\n/u).filter((line) => line === 'create').length, 1);
+
+      const imageCreated = await fetch(url + '/v1/higgsfield/create', {
+        method: 'POST', headers, body: JSON.stringify({ quoteId: imageQuote.quoteId, confirmed: true }),
+      });
+      assert.equal(imageCreated.status, 202);
+      const imageJob = (await imageCreated.json()).result;
+      assert.equal(imageJob.jobId, 'job-image-abc');
+
+      const imagePolled = await fetch(url + '/v1/higgsfield/job?id=job-image-abc', {
+        headers: { Authorization: 'Bearer secret-token' },
+      });
+      assert.equal(imagePolled.status, 200);
+      assert.equal((await imagePolled.json()).result.image_url, 'https://media.example.test/output.png');
+
+      const allCalls = (await readFile(logPath, 'utf8')).trim().split(/\\r?\\n/u);
+      assert.deepEqual(allCalls, ['cost', 'cost', 'create', 'cost', 'cost', 'create']);
     }, { higgsfieldCommand: command });
   } finally {
     await rm(directory, { recursive: true, force: true });
