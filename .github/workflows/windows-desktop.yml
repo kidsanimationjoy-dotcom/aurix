@@ -1,6 +1,12 @@
 name: Windows desktop companion
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "windows/Aurix.Desktop/**"
+      - ".github/workflows/windows-desktop.yml"
   pull_request:
     paths:
       - "windows/Aurix.Desktop/**"
