@@ -103,6 +103,15 @@ export function Tasks() {
             <small>A selected provider will never be silently replaced by another provider.</small>
           </label>
           {error && <Notice tone="bad">{error}</Notice>}
+          {project ? (
+            project.localPath ? (
+              <small className="muted">Active project folder: <code>{project.localPath}</code>. Codex can use it only when it is inside an AURIX_CODEX_ROOTS folder.</small>
+            ) : (
+              <Notice tone="warn">This project has no local folder linked. Read-only chat tasks can still run, but coding tasks need a real folder saved in Projects and included in AURIX_CODEX_ROOTS.</Notice>
+            )
+          ) : (
+            <Notice tone="warn">No active project is selected. Read-only chat tasks can still run, but coding tasks need a selected project with a linked local folder.</Notice>
+          )}
           <div className="row">
             <button type="submit" className="btn primary" disabled={!prompt.trim() || submitting}>
               {submitting ? 'Creating task…' : 'Create task'}
