@@ -84,7 +84,7 @@ public sealed class LocalCodexChatService
             throw new ArgumentException("Add a voice chat message before sending.", nameof(messages));
 
         var bounded = messages.TakeLast(12)
-            .Where(message => message.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(message.Content))
+            .Where(message => (message.Role == "user" || message.Role == "assistant") && !string.IsNullOrWhiteSpace(message.Content))
             .Select(message => new LocalCodexMessage(message.Role, message.Content.Trim()))
             .ToList();
         var totalCharacters = bounded.Sum(message => message.Content.Length);
