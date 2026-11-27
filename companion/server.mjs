@@ -600,7 +600,9 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/chat') {
       const controller = new AbortController();
-      const activeChatRequest = { controller, response: res };
+      let finishActiveChat;
+      const finished = new Promise((resolve) => { finishActiveChat = resolve; });
+      const activeChatRequest = { controller, response: res, finished };
       activeChatRequests.add(activeChatRequest);
       const abortOnRequest = () => controller.abort();
       const abortOnResponseClose = () => {
@@ -669,6 +671,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         });
       } finally {
         activeChatRequests.delete(activeChatRequest);
+        finishActiveChat();
         req.off('aborted', abortOnRequest);
         res.off('close', abortOnResponseClose);
       }
@@ -686,25 +689,26 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     if (closeCompanionPromise)
       return closeCompanionPromise;
 
-    for (const active of activeChatRequests) {
+    const activeChats = [...activeChatRequests];
+    for (const active of activeChats) {
       active.controller.abort();
       if (!active.response.writableEnded && !active.response.destroyed)
         active.response.destroy();
     }
+    const activeChatsClosed = Promise.all(activeChats.map((active) => active.finished));
 
     if (loginChild) {
       try { loginChild.kill(); } catch { /* The login process may already have exited. */ }
       loginChild = null;
     }
 
-    if (!server.listening) {
-      closeCompanionPromise = Promise.resolve();
-      return closeCompanionPromise;
-    }
+    const serverClosed = !server.listening
+      ? Promise.resolve()
+      : new Promise((resolve, reject) => {
+          server.close((error) => error ? reject(error) : resolve());
+        });
 
-    closeCompanionPromise = new Promise((resolve, reject) => {
-      server.close((error) => error ? reject(error) : resolve());
-    });
+    closeCompanionPromise = Promise.all([activeChatsClosed, serverClosed]).then(() => undefined);
     return closeCompanionPromise;
   };
 
