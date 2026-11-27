@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Speech.Synthesis;
 using System.Windows;
 using System.Windows.Input;
 using Aurix.Desktop.Services;
@@ -13,12 +14,24 @@ public partial class MainWindow : Window
 
     private HandsFreeVoiceService? _handsFreeVoice;
     private CancellationTokenSource? _taskCancellation;
+    private readonly LocalCodexChatService _localCodexChat = new();
+    private SpeechSynthesizer? _speechSynthesizer;
+    private string _companionToken = string.Empty;
+    private bool _codexReady;
+    private readonly List<LocalCodexMessage> _voiceConversation = new();
 
     public event Action<bool>? UpdateTrayWakeState;
 
     public MainWindow()
     {
         InitializeComponent();
+        _companionToken = CompanionSettingsStore.LoadToken();
+        CompanionTokenBox.Password = _companionToken;
+        AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
+            ? "Optional: connect the local AURIX companion for read-only AI conversation."
+            : "Saved pairing token found. Connect to check the local AI engine.";
+        try { _speechSynthesizer = new SpeechSynthesizer(); }
+        catch { _speechSynthesizer = null; }
         Loaded += async (_, _) =>
         {
             UpdateStartupButton();
@@ -44,6 +57,90 @@ public partial class MainWindow : Window
 
     private void HandsFreeButton_Click(object sender, RoutedEventArgs e)
         => ToggleHandsFreeFromTray();
+
+    private string CurrentCompanionToken()
+        => string.IsNullOrWhiteSpace(CompanionTokenBox.Password)
+            ? _companionToken
+            : CompanionTokenBox.Password.Trim();
+
+    private async void PairCompanionButton_Click(object sender, RoutedEventArgs e)
+    {
+        var token = CurrentCompanionToken();
+        PairCompanionButton.IsEnabled = false;
+        AiConnectionStatusText.Text = "Checking the authenticated local AURIX companion…";
+        try
+        {
+            var status = await _localCodexChat.CheckAsync(token);
+            CompanionSettingsStore.SaveToken(token);
+            _companionToken = token;
+            UpdateCodexStatus(status);
+        }
+        catch (Exception ex)
+        {
+            _codexReady = false;
+            AiConnectionStatusText.Text = ex.Message;
+        }
+        finally
+        {
+            PairCompanionButton.IsEnabled = true;
+        }
+    }
+
+    private async void PrepareCodexButton_Click(object sender, RoutedEventArgs e)
+    {
+        var token = CurrentCompanionToken();
+        PrepareCodexButton.IsEnabled = false;
+        AiConnectionStatusText.Text = "Preparing the separate AURIX Codex profile and verifying its OS sandbox…";
+        try
+        {
+            var status = await _localCodexChat.PrepareAsync(token);
+            CompanionSettingsStore.SaveToken(token);
+            _companionToken = token;
+            UpdateCodexStatus(status);
+        }
+        catch (Exception ex)
+        {
+            _codexReady = false;
+            AiConnectionStatusText.Text = ex.Message;
+        }
+        finally
+        {
+            PrepareCodexButton.IsEnabled = true;
+        }
+    }
+
+    private async void CodexLoginButton_Click(object sender, RoutedEventArgs e)
+    {
+        var token = CurrentCompanionToken();
+        CodexLoginButton.IsEnabled = false;
+        try
+        {
+            var message = await _localCodexChat.StartLoginAsync(token);
+            AiConnectionStatusText.Text = message;
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = ex.Message;
+        }
+        finally
+        {
+            CodexLoginButton.IsEnabled = true;
+        }
+    }
+
+    private void ClearVoiceChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        _voiceConversation.Clear();
+        TaskOutputText.Text = "Voice conversation cleared from this session's memory.";
+    }
+
+    private void UpdateCodexStatus(LocalCodexStatus status)
+    {
+        _codexReady = status.CanChat;
+        AiConnectionStatusText.Text = status.CanChat
+            ? "AI READY — local Codex is signed in and the read-only sandbox is verified. Voice questions can now receive AI answers."
+            : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
+    }
 
     private void StartHandsFreeListening(bool savePreference)
     {
@@ -223,7 +320,7 @@ public partial class MainWindow : Window
 
         if (!plan.IsValid)
         {
-            TaskOutputText.Text = plan.Error ?? "AURIX could not create a safe local plan for that request.";
+            await RunAiChatAsync(command);
             return;
         }
 
@@ -269,9 +366,87 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task RunAiChatAsync(string prompt)
+    {
+        var token = CurrentCompanionToken();
+        PlanText.Text = "READ-ONLY AI CHAT\nAURIX will ask the connected local Codex CLI for a text response. This does not authorise desktop actions.";
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using AI conversation. Typed local commands remain available without AI.";
+            return;
+        }
+
+        _taskCancellation?.Cancel();
+        _taskCancellation?.Dispose();
+        _taskCancellation = new CancellationTokenSource();
+        var cancellationToken = _taskCancellation.Token;
+        RunTaskButton.IsEnabled = false;
+        EmergencyStopButton.IsEnabled = true;
+        TaskOutputText.Text = "Checking the local AI connection…";
+
+        try
+        {
+            var status = await _localCodexChat.CheckAsync(token, cancellationToken);
+            UpdateCodexStatus(status);
+            if (!status.CanChat)
+            {
+                TaskOutputText.Text = "AI chat is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
+                return;
+            }
+
+            _voiceConversation.Add(new LocalCodexMessage("user", prompt));
+            TaskOutputText.Text = "AURIX is thinking…";
+            var answer = await _localCodexChat.ChatAsync(token, _voiceConversation, cancellationToken);
+            _voiceConversation.Add(new LocalCodexMessage("assistant", answer.Length > 4_000 ? answer[..4_000] : answer));
+            while (_voiceConversation.Count > 12)
+                _voiceConversation.RemoveAt(0);
+            TaskOutputText.Text = answer;
+            ListeningStatusText.Text = "AI response ready. Say “AURIX” for another instruction.";
+            SpeakAnswer(answer);
+        }
+        catch (OperationCanceledException)
+        {
+            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
+                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
+            TaskOutputText.Text = "AI request stopped. No further response will be requested.";
+            ListeningStatusText.Text = "Emergency stop activated.";
+        }
+        catch (Exception ex)
+        {
+            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
+                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
+            TaskOutputText.Text = $"AI chat could not complete: {ex.Message}";
+        }
+        finally
+        {
+            RunTaskButton.IsEnabled = true;
+            EmergencyStopButton.IsEnabled = false;
+            _taskCancellation?.Dispose();
+            _taskCancellation = null;
+        }
+    }
+
+    private void SpeakAnswer(string answer)
+    {
+        if (_speechSynthesizer is null || string.IsNullOrWhiteSpace(answer))
+            return;
+
+        try
+        {
+            _speechSynthesizer.SpeakAsyncCancelAll();
+            var spoken = answer.Length > 1800 ? answer[..1800] + ". The rest of the answer is shown on screen." : answer;
+            _speechSynthesizer.SpeakAsync(spoken);
+        }
+        catch
+        {
+            // Text remains available even if Windows has no usable speech voice.
+        }
+    }
+
     private void EmergencyStopButton_Click(object sender, RoutedEventArgs e)
     {
         _taskCancellation?.Cancel();
+        _speechSynthesizer?.SpeakAsyncCancelAll();
         TaskOutputText.Text = "Stopping remaining task steps…";
         ListeningStatusText.Text = "Emergency stop requested.";
     }
@@ -333,5 +508,8 @@ public partial class MainWindow : Window
         _taskCancellation?.Cancel();
         _taskCancellation?.Dispose();
         _taskCancellation = null;
+        _speechSynthesizer?.SpeakAsyncCancelAll();
+        _speechSynthesizer?.Dispose();
+        _speechSynthesizer = null;
     }
 }
