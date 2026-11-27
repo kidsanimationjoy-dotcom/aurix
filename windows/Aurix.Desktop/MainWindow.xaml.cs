@@ -214,6 +214,15 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(new Action(() =>
         {
             var active = _handsFreeVoice?.IsRunning == true;
+            if (!active && message.Contains("stopped", StringComparison.OrdinalIgnoreCase))
+            {
+                // Keep the saved opt-in so a later app launch can retry, but
+                // make the current UI accurately show that listening has ended.
+                _handsFreeVoice = null;
+                UpdateHandsFreeUi(false, message);
+                return;
+            }
+
             ListeningStatusText.Text = message;
             ListeningStatusText.Foreground = active
                 ? System.Windows.Media.Brushes.LightGreen
