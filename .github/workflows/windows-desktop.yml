@@ -39,6 +39,13 @@ jobs:
       - name: Verify AI desktop proposal policy
         run: dotnet run --project windows/Aurix.Desktop.Tests/Aurix.Desktop.Tests.csproj --configuration Release
 
+      - name: Validate read-only Windows readiness diagnostic
+        shell: pwsh
+        run: |
+          $report = & pwsh -NoProfile -File windows/Aurix.Desktop/diagnostics/Test-AurixReadiness.ps1 -Json | ConvertFrom-Json
+          if (!$report -or $report.Count -lt 1) { throw "Readiness diagnostic returned no checks." }
+          $report | Format-Table -AutoSize
+
       - name: Publish self-contained Windows x64 application
         run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"
 
@@ -49,6 +56,9 @@ jobs:
           $exe = Join-Path $publish "Aurix.Desktop.exe"
           if (!(Test-Path -LiteralPath $exe)) { throw "Published executable was not found." }
           Copy-Item "windows/Aurix.Desktop/README.md" (Join-Path $publish "README.txt")
+          $diagnostics = Join-Path $publish "diagnostics"
+          New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
+          Copy-Item "windows/Aurix.Desktop/diagnostics/Test-AurixReadiness.ps1" $diagnostics
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  Aurix.Desktop.exe" | Set-Content -LiteralPath (Join-Path $publish "SHA256SUMS.txt") -Encoding utf8
           @(
@@ -83,6 +93,7 @@ jobs:
           Copy-Item (Join-Path $publish "README.txt") $layout
           Copy-Item (Join-Path $publish "RELEASE-STATUS.txt") $layout
           Copy-Item (Join-Path $publish "SHA256SUMS.txt") $layout
+          Copy-Item (Join-Path $publish "diagnostics") $layout -Recurse
 
           Add-Type -AssemblyName System.Drawing
           foreach ($spec in @(@{Name="StoreLogo.png";Size=50},@{Name="Square44x44Logo.png";Size=44},@{Name="Square150x150Logo.png";Size=150})) {
