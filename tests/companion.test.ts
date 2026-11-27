@@ -1,4 +1,5 @@
 import test from 'node:test';
+import http from 'node:http';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, chmod, mkdir, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -844,6 +845,37 @@ test('companion does not expose filesystem, terminal, or Codex task execution en
       body: JSON.stringify({ prompt: 'Hello' }),
     });
     assert.equal(post.status, 501);
+  });
+});
+
+test('companion rejects spoofed non-loopback Host headers and missing bearer tokens', async () => {
+  await withServer(async (url) => {
+    const missingToken = await fetch(url + '/v1/health');
+    assert.equal(missingToken.status, 401);
+
+    const address = new URL(url);
+    const response = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = http.request({
+        hostname: '127.0.0.1',
+        port: Number(address.port),
+        path: '/v1/health',
+        method: 'GET',
+        headers: {
+          Host: 'evil.example',
+          Authorization: 'Bearer secret-token',
+        },
+      }, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+      });
+      request.once('error', reject);
+      request.end();
+    });
+
+    assert.equal(response.status, 403);
+    assert.match(response.body, /HOST_NOT_ALLOWED/);
   });
 });
 
