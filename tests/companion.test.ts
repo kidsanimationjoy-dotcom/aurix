@@ -11,7 +11,7 @@ import { checkLegacySystemConfig, hasLegacySandboxSetting, prepareCodexHome, ren
 
 async function withServer<T>(
   fn: (url: string) => Promise<T>,
-  options: { codexCommand?: string; codexPaths?: ReturnType<typeof resolveCodexPaths>; reaCommand?: string; reaRoots?: string[]; codexRoots?: string[] } = {},
+  options: { codexCommand?: string; codexPaths?: ReturnType<typeof resolveCodexPaths>; reaCommand?: string; reaRoots?: string[]; codexRoots?: string[]; higgsfieldCommand?: string } = {},
 ): Promise<T> {
   const server = createCompanionServer({
     token: 'secret-token',
@@ -21,6 +21,7 @@ async function withServer<T>(
     ...(options.reaCommand ? { reaCommand: options.reaCommand } : {}),
     ...(options.reaRoots ? { reaRoots: options.reaRoots } : {}),
     ...(options.codexRoots ? { codexRoots: options.codexRoots } : {}),
+    ...(options.higgsfieldCommand ? { higgsfieldCommand: options.higgsfieldCommand } : {}),
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
@@ -375,6 +376,94 @@ process.exit(2);
   }
 });
 
+
+
+test('Higgsfield local OAuth bridge discovers models and requires a fresh confirmed credit quote before job creation', async () => {
+  if (process.platform === 'win32') return;
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'aurix-higgsfield-fake-'));
+  const command = path.join(directory, 'higgsfield');
+  const logPath = path.join(directory, 'calls.txt');
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const log = (value) => fs.appendFileSync(${JSON.stringify(logPath)}, value + '\\n');
+if (process.env.OPENAI_API_KEY || process.env.HIGGSFIELD_API_KEY || process.env.HF_API_KEY) process.exit(90);
+if (args[0] === 'version' && args.includes('--json')) { console.log(JSON.stringify({ version: '1.2.2' })); process.exit(0); }
+if (args[0] === 'account' && args[1] === 'status' && args.includes('--json')) { console.log(JSON.stringify({ email: 'user@example.test', plan: 'Creator', available_credits: 120 })); process.exit(0); }
+if (args[0] === 'model' && args[1] === 'list' && args.includes('--json')) {
+  console.log(JSON.stringify({ models: [{ job_set_type: 'seedance_2_5', name: 'Seedance 2.5', categories: ['video'] }] }));
+  process.exit(0);
+}
+if (args[0] === 'generate' && args[1] === 'cost') {
+  if (!args.includes('--json') || !args.includes('--prompt') || args.includes('--wait')) process.exit(91);
+  log('cost');
+  console.log(JSON.stringify({ estimated_credits: 10 }));
+  process.exit(0);
+}
+if (args[0] === 'generate' && args[1] === 'create') {
+  if (!args.includes('--json') || args.includes('--wait')) process.exit(92);
+  log('create');
+  console.log(JSON.stringify({ job_id: 'job-abc', status: 'queued' }));
+  process.exit(0);
+}
+if (args[0] === 'generate' && args[1] === 'get' && args[2] === 'job-abc') {
+  console.log(JSON.stringify({ id: 'job-abc', status: 'completed', result_url: 'https://media.example.test/output.mp4' }));
+  process.exit(0);
+}
+process.exit(2);
+`;
+  await writeFile(command, script);
+  await chmod(command, 0o700);
+  try {
+    await withServer(async (url) => {
+      const headers = { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' };
+      const status = await fetch(url + '/v1/higgsfield/status', { headers: { Authorization: 'Bearer secret-token' } });
+      assert.equal(status.status, 200);
+      const account = (await status.json()).result;
+      assert.equal(account.signedIn, true);
+      assert.equal(account.account.available_credits, 120);
+
+      const modelsResponse = await fetch(url + '/v1/higgsfield/models', { headers: { Authorization: 'Bearer secret-token' } });
+      assert.equal(modelsResponse.status, 200);
+      const models = (await modelsResponse.json()).result.models;
+      assert.equal(models[0].id, 'seedance_2_5');
+
+      const quoted = await fetch(url + '/v1/higgsfield/quote', {
+        method: 'POST', headers,
+        body: JSON.stringify({ modelId: 'seedance_2_5', prompt: 'A sunrise over a calm ocean', duration: 5, resolution: '720p', aspectRatio: '16:9' }),
+      });
+      assert.equal(quoted.status, 200);
+      const quote = (await quoted.json()).result;
+      assert.equal(quote.raw.estimated_credits, 10);
+      assert.ok(quote.quoteId);
+
+      const refused = await fetch(url + '/v1/higgsfield/create', {
+        method: 'POST', headers, body: JSON.stringify({ quoteId: quote.quoteId, confirmed: false }),
+      });
+      assert.equal(refused.status, 409);
+      assert.match((await refused.json()).message, /explicit confirmation/);
+      assert.equal((await readFile(logPath, 'utf8')).includes('create'), false);
+
+      const created = await fetch(url + '/v1/higgsfield/create', {
+        method: 'POST', headers, body: JSON.stringify({ quoteId: quote.quoteId, confirmed: true }),
+      });
+      assert.equal(created.status, 202);
+      const job = (await created.json()).result;
+      assert.equal(job.jobId, 'job-abc');
+
+      const polled = await fetch(url + '/v1/higgsfield/job?id=job-abc', {
+        headers: { Authorization: 'Bearer secret-token' },
+      });
+      assert.equal(polled.status, 200);
+      assert.equal((await polled.json()).result.status, 'completed');
+
+      const calls = (await readFile(logPath, 'utf8')).trim().split('\\n');
+      assert.deepEqual(calls, ['cost', 'cost', 'create']);
+    }, { higgsfieldCommand: command });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('REA browser inspection is loopback-only, requires authorisation, and uses fixed passive commands', async () => {
   if (process.platform === 'win32') return;
