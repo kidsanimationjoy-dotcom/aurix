@@ -7,7 +7,7 @@ export const higgsfieldMeta: ProviderMeta = {
   name: 'Higgsfield',
   vendor: 'Higgsfield',
   role: 'AI video and image generation',
-  plannedCapabilities: ['media_video', 'media_image', 'model_discovery'],
+  plannedCapabilities: ['media_video', 'model_discovery'],
   authentication: 'Uses the official Higgsfield CLI browser OAuth flow on the local computer. No API key is used and AURIX never reads the CLI credential store.',
   references: [
     { label: 'Official Higgsfield CLI', url: 'https://github.com/higgsfield-ai/cli' },
@@ -99,7 +99,7 @@ export class HiggsfieldAdapter implements MediaAdapter {
       return [
         'model_discovery',
         ...(models.some((model) => model.kinds.includes('video')) ? ['media_video' as const] : []),
-        ...(models.some((model) => model.kinds.includes('image')) ? ['media_image' as const] : []),
+        // Image models may be visible in the live catalog, but this adapter does not yet submit image jobs.
       ];
     } catch {
       return [];
