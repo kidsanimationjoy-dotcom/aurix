@@ -1,21 +1,20 @@
 # AURIX launch readiness
 
-**Decision: NOT READY for public launch.** The Windows desktop companion is merged into `main` and all three fresh CI workflows passed. Legal, trusted-signing, real-device acceptance and broader product gates remain open.
+**Decision: NOT READY for public launch.** The latest merged main-branch Windows build and application verification passed. Legal, trusted-signing, real-device acceptance, installer and broader product gates remain open.
 
 ## Latest main-branch Windows preview evidence
 
-- Current main source commit: `5f5f8fd81fe842eb87baa5aa4b2f8a1eb635ef99`.
-- Windows x64 compile, self-contained publish, release notice/checksum generation and artifact upload: [main run 45921375421](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375421) — passed on the current main commit.
-- Application TypeScript, unit tests, production build and browser smoke tests: [main run 45921375437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375437) — passed on the current main commit.
-- Repository CI on the merged engineering revision: [run 45921098904](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098904) — passed.
-- AURIX verification on the merged engineering revision: [run 45921098909](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098909) — passed.
-- Engineering PR [#19](https://github.com/kidsanimationjoy-dotcom/aurix/pull/19) was merged in commit `2cae59ab4c865aca4b52700828c41b197bc99f50`.
-- Windows artifact: `AURIX-Windows-x64`, artifact ID `15164239353`, SHA-256 `f4b9e5d0342302c0268e69cff1ee59deeb1906e5fa649e42747cbbed57afac3e`; retained until 2026-12-11.
-- Downloaded ZIP checksum independently verified: `f4b9e5d0342302c0268e69cff1ee59deeb1906e5fa649e42747cbbed57afac3e`.
-- Executable SHA-256: `73609efb3279d6c94083bf52decb6f47cfc2316110335e450a931d1c926b2a5e`; verified against the included `SHA256SUMS.txt`.
-- ZIP inspection confirms a single-level Windows x64 portable package containing the executable, PDB, README, release-status notice and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are zero. The executable is **unsigned**.
-
+- Current main source commit: `7472dd196d3fb7c9084bdab9f7337b32cdc402dd`.
+- Windows x64 compile, AI-proposal policy tests, self-contained publish, release notice/checksum generation and artifact upload: [main run 45924739819](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924739819) — passed on the current main commit.
+- Application TypeScript, unit tests, production build and browser smoke tests: [main run 45924739804](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924739804) — passed on the current main commit.
+- PR [#21](https://github.com/kidsanimationjoy-dotcom/aurix/pull/21) added approval-gated AI-proposed desktop plans and was merged in commit `4ebf2156f1321f7b4ebe076a1c3209185c2ed15b`.
+- PR [#22](https://github.com/kidsanimationjoy-dotcom/aurix/pull/22) restricted AI-generated button clicks and text entry to Notepad and added policy tests; it was merged in commit `aadfd26aa326b57d6f18a15bbc4dc9bb0baa787d`.
+- PR [#23](https://github.com/kidsanimationjoy-dotcom/aurix/pull/23) aligned Codex's system instructions and user-facing copy with the Notepad-only rule; it was merged in commit `7472dd196d3fb7c9084bdab9f7337b32cdc402dd`.
+- Latest Windows artifact: `AURIX-Windows-x64`, artifact ID `15164984452`, GitHub artifact digest `sha256:0182530d0fac6d21d57854c1343c564dc5c23f9c08aa72fe11dd72583a92dd5b`; retained until 2026-12-11.
+- Downloaded ZIP SHA-256 independently matches the GitHub artifact digest: `0182530d0fac6d21d57854c1343c564dc5c23f9c08aa72fe11dd72583a92dd5b`.
+- Executable SHA-256: `b04ee631dcab8b8664c0043db81c90e331004d59f06bc04ba61108ee732ceb53`; verified against the included `SHA256SUMS.txt`.
+- ZIP inspection confirms a single-level Windows x64 portable package containing `Aurix.Desktop.exe`, its PDB, `README.txt`, `RELEASE-STATUS.txt` and `SHA256SUMS.txt`.
+- The package explicitly identifies the executable as **unsigned** and instructs users not to bypass SmartScreen or Microsoft Defender. It is a portable preview, not an installer.
 
 #### What the Windows companion currently does
 
@@ -28,6 +27,8 @@
 - Emergency stop for remaining task steps.
 - Bounded local task audit history that records action type, application, UTC time and outcome, but does not record dictated instructions, entered text, window titles or exception messages.
 - Reversible current-user startup registration.
+- Authenticated local Codex voice reasoning: Codex can answer ordinary questions or propose up to five supported desktop steps.
+- AI-proposed app launches and read-only inspection use the supported application allowlist. AI-generated button clicks and text entry are restricted to Notepad; AURIX validates the full plan, asks for whole-plan approval, and retains separate approval prompts for each Notepad UI mutation.
 
 ## Latest merged AI voice extension
 
@@ -38,6 +39,16 @@
 - Windows artifact: `AURIX-Windows-x64`, artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`; retained until 2026-12-11.
 - The voice bridge uses the authenticated loopback companion and separately signed-in Codex CLI. Recognised speech is sent as text; microphone audio remains local. Codex can return normal answers or structured proposals for the bounded desktop action schema. AURIX validates the proposal, requires whole-plan approval, and retains separate approval for button clicks and text entry. AI-proposed UI mutations are restricted to Notepad; browsers and messaging clients are excluded.
 - Pairing tokens are protected with Windows DPAPI. Up to 12 bounded conversation turns remain in process memory only and can be cleared.
+
+### Approval-gated desktop-action proposals (PRs #21–#23)
+
+- Local Codex may return either a normal answer or a strict JSON proposal for one to five supported steps.
+- AURIX rejects malformed JSON, unknown fields, duplicate fields, unsupported action types, unsupported apps, invalid text and external-impact button names.
+- AI-proposed launching and read-only inspection can use the approved app allowlist. AI-generated button clicks and text entry are restricted to Notepad. Browser and messaging-app UI mutations are rejected by the parser and covered by Windows policy tests.
+- AURIX displays the full proposed plan and requires approval before execution. Each button click and text-entry operation then requires its own approval. The existing deterministic local command grammar remains separate and retains its existing per-action approvals.
+- The bridge does not add arbitrary shell execution, scripts, unrestricted keyboard/mouse control, general filesystem access, browser navigation or network actions.
+- The system prompt, desktop UI, README and architecture document now describe the same Notepad-only AI mutation boundary.
+
 
 ## Remaining launch blockers
 
