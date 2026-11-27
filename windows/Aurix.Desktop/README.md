@@ -24,18 +24,26 @@ Hands-free opt-in is saved for the current Windows user. If you also press **Ena
 
 ## Local AI conversation
 
-The Windows companion can route ordinary spoken questions to the separate AURIX Codex profile through the authenticated loopback companion:
+Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles both ordinary questions and the reasoning that proposes supported desktop tasks. AURIX—not OpenJarvis—validates any proposed desktop plan and controls whether an action can run.
 
-1. Start the Node companion on this same PC at its default address, `http://127.0.0.1:4317`.
-2. Copy the pairing token printed in that companion terminal into **Local AI Chat → Connect**. AURIX stores it encrypted with Windows DPAPI for the current Windows user.
-3. Use **Verify AI sandbox** and wait for the local Codex profile and operating-system sandbox check to pass.
-4. If Codex is not signed in, use **Sign in to Codex** and complete the official sign-in in the companion terminal.
-5. Say “AURIX” and ask a question. Requests that do not match a supported local desktop command are sent as text to the local Codex CLI; the microphone audio is not sent.
+1. Install Stanford OpenJarvis using its official Windows release or documented CLI setup.
+2. Start its local API server on this same PC at `127.0.0.1:8000`. For the CLI, use:
 
-When a voice request does not match a built-in command, local Codex may return either a normal answer or a JSON desktop-action proposal. AURIX validates proposals against the strict action schema and the existing application allowlist. AI proposals may launch allowlisted apps and inspect visible windows or named controls across supported apps, but AI-proposed button clicks and text entry are restricted to Notepad only. Browsers, messaging clients and other connected apps cannot receive AI-proposed UI mutations in this release. A proposed plan is shown for approval before execution; Notepad button clicks and text entry still require their own separate approvals. The existing deterministic command grammar continues to allow explicitly named actions in its documented supported apps, with the same per-action approval prompts. AURIX does not run arbitrary shell commands, scripts, general filesystem operations, network actions or unrestricted mouse/keyboard automation. The last 12 user/assistant turns are kept in memory for the current desktop session only; use **Clear conversation** to erase that in-memory context. An emergency stop cancels the in-flight chat request or stops remaining desktop task steps.
+   ```powershell
+   jarvis serve --host 127.0.0.1 --port 8000 --agent simple
+   ```
 
-The pairing token is encrypted for the current Windows user and is not written to the task audit log. The local companion must remain running. The desktop companion does not bypass the Codex plan, account, or usage limits.
+   When installing the CLI from source, install its API dependencies with `uv sync --extra server`.
+3. Open AURIX Desktop. **Stanford OpenJarvis** is selected by default. Select **Check OpenJarvis** and confirm that a local model is ready.
+4. Say **“AURIX”** and speak one instruction, or enter a request in the task box.
 
+AURIX sends recognised speech as text to the local OpenJarvis service; microphone audio stays on this PC. OpenJarvis returns a JSON answer or a proposed plan. AURIX independently validates the response against the strict action schema, supported application allowlist, and the user's latest instruction. AURIX displays a proposed plan and asks for approval before execution. AI-proposed button clicks and text entry remain restricted to Notepad, and each UI change has its own approval prompt. The emergency stop cancels the active AI request or remaining task steps.
+
+OpenJarvis is not given direct desktop-control tools, shell access, arbitrary script execution, unrestricted file access, browser navigation, or general keyboard/mouse control. The API must remain bound to `127.0.0.1`; do not expose it to a public or untrusted network. The integration does not automatically install OpenJarvis or download/bundle model weights.
+
+**Codex remains as an optional backup provider.** Select **Codex (backup AI provider)** in the AI provider menu, connect the local AURIX companion, verify its operating-system sandbox, and complete the official Codex sign-in if required. The backup continues to use the existing authenticated loopback companion and approval-gated AURIX planner.
+
+The last 12 user/assistant turns are kept in memory for the current desktop session only; use **Clear conversation** to erase this in-memory context. AURIX's audit log records bounded task metadata rather than dictated instructions or entered text.
 ## Voice privacy and requirements
 
 The hands-free service uses `System.Speech` and a locally installed English Windows speech recognizer. While waiting, it loads a narrow grammar containing only the AURIX wake phrase choices; it does not run general dictation in the background. Only after the wake phrase is recognised does it load a dictation grammar for one instruction. The dictation grammar is unloaded after that command and the wake-word grammar is restored.
