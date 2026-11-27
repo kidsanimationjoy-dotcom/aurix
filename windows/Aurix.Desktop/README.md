@@ -4,9 +4,9 @@ This is the native Windows desktop companion for AURIX. It is a real WPF desktop
 
 ## Check laptop readiness before enabling hands-free
 
-The portable preview includes a one-click helper named `Run-AURIX-Readiness.cmd` beside `Aurix.Desktop.exe`. Double-click that helper to run `diagnostics/Test-AurixReadiness.ps1`; you do not need to open PowerShell or change folders. If you prefer PowerShell, run the script from the extracted AURIX folder. The report checks Windows version and architecture, visible audio input endpoints, installed offline English speech recognizers, and an optional machine-wide microphone policy. It is read-only: it does not open the microphone, record audio, change privacy settings, or bypass SmartScreen/Defender. A warning is not a diagnosis; review Windows Settings → System → Sound → Input and Settings → Privacy & security → Microphone. Do not weaken PowerShell execution policy to run this diagnostic.
+The portable preview includes a one-click helper named `Run-AURIX-Readiness.cmd` beside `Aurix.Desktop.exe`. Double-click it to open AURIX's native read-only readiness report. The helper launches `Aurix.Desktop.exe --readiness-check` directly; it does not depend on running an unsigned PowerShell script or changing PowerShell execution policy. The report checks Windows version and architecture, available waveform-audio input device count, installed offline English speech recognizers, and the optional machine-wide microphone policy. It does not open the microphone, record or upload audio, change privacy settings, or bypass SmartScreen/Defender. A warning is a prompt to review Windows Settings → System → Sound → Input and Settings → Privacy & security → Microphone.
 
-The script cannot prove that the microphone works or that the wake phrase is accurate. Those require a live test on this laptop after a trusted build is available.
+The report cannot prove that the microphone works, that Windows consent is enabled, or that the wake phrase is accurate. Those require a live test on this laptop after a trusted build is available.
 
 ## Hands-free voice behaviour
 
