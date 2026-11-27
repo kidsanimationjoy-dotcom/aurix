@@ -19,6 +19,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const MIN_TIMEOUT_MS = 1_000;
 const MAX_TIMEOUT_MS = 10 * 60_000;
 const MAX_OUTPUT_CHARS = 200_000;
+const ACTION_APPROVAL_TIMEOUT_MS = 100_000;
 
 interface RunningTask {
   controller: AbortController;
@@ -30,6 +31,7 @@ interface PendingActionApproval {
   resolve: (decision: TaskActionApprovalDecision) => void;
   signal: AbortSignal;
   onAbort: () => void;
+  timer: ReturnType<typeof setTimeout>;
   settled: boolean;
 }
 
@@ -476,6 +478,7 @@ export class TaskEngine {
     const approval: TaskActionApproval = {
       ...request,
       id: newId('taskapproval'),
+      expiresAt: Date.now() + ACTION_APPROVAL_TIMEOUT_MS,
       reason: String(request.reason ?? '').slice(0, 1000),
       command: Array.isArray(request.command) ? request.command.slice(0, 40).map((item) => String(item).slice(0, 500)) : [],
       cwd: String(request.cwd ?? '').slice(0, 2048),
@@ -498,13 +501,14 @@ export class TaskEngine {
       id: approval.id,
       resolve: resolvePromise,
       signal,
+      timer: setTimeout(() => undefined, ACTION_APPROVAL_TIMEOUT_MS),
       settled: false,
       onAbort: () => {
         if (!this.pendingActionApprovals.has(taskId)) {
           abortBeforeRegistration = true;
           return;
         }
-        void this.settleActionApproval(taskId, approval.id, 'cancel');
+        void this.settleActionApproval(taskId, approval.id, 'cancel').catch(() => undefined);
       },
     };
     signal.addEventListener('abort', pending.onAbort, { once: true });
@@ -519,6 +523,10 @@ export class TaskEngine {
         status: 'awaiting_action_approval',
         pendingActionApproval: approval,
       });
+      clearTimeout(pending.timer);
+      pending.timer = setTimeout(() => {
+        void this.settleActionApproval(taskId, approval.id, 'decline').catch(() => undefined);
+      }, Math.max(1, approval.expiresAt - Date.now()));
       this.pendingActionApprovals.set(taskId, pending);
       await this.event(
         taskId,
@@ -531,6 +539,7 @@ export class TaskEngine {
       }
       return await decisionPromise;
     } catch (error) {
+      clearTimeout(pending.timer);
       signal.removeEventListener('abort', pending.onAbort);
       this.pendingActionApprovals.delete(taskId);
       if (!pending.settled) {
@@ -563,6 +572,7 @@ export class TaskEngine {
     const pending = this.pendingActionApprovals.get(taskId);
     if (!pending || pending.id !== approvalId || pending.settled) return false;
     pending.settled = true;
+    clearTimeout(pending.timer);
     this.pendingActionApprovals.delete(taskId);
     pending.signal.removeEventListener('abort', pending.onAbort);
 
