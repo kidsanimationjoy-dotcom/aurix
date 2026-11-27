@@ -118,9 +118,11 @@ public sealed class HandsFreeVoiceService : IDisposable
         {
             engine?.RecognizeAsyncCancel();
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            StatusChanged?.Invoke("AURIX could not switch into command mode. Say “AURIX” again.");
+            // A failed transition must never leave the UI claiming that a
+            // microphone listener is healthy when the recognizer is not.
+            StopAfterRecognitionFailure(engine, $"AURIX could not switch into command mode: {ex.Message}");
         }
     }
 
@@ -137,6 +139,15 @@ public sealed class HandsFreeVoiceService : IDisposable
 
             try
             {
+                // RecognizeAsyncCancel is expected only for the deliberate
+                // wake-word -> one-command transition. Device/driver failures
+                // or any other cancellation stop hands-free and release audio.
+                if (e.Error is not null)
+                    throw new InvalidOperationException($"Windows speech recognition failed: {e.Error.Message}", e.Error);
+
+                if (e.Cancelled && _state != ListeningState.SwitchingToCommand)
+                    throw new InvalidOperationException("Windows speech recognition was interrupted. Check the microphone connection and enable hands-free again.");
+
                 if (_state == ListeningState.SwitchingToCommand)
                 {
                     // The wake grammar has stopped. Dictation is enabled only now.
@@ -178,7 +189,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engineToDispose = _engine;
                 _engine = null;
                 _wakeGrammar = null;
-                status = $"Hands-free voice stopped: {ex.Message}";
+                status = $"Hands-free voice stopped and the microphone was released: {ex.Message}";
             }
         }
 
@@ -190,6 +201,31 @@ public sealed class HandsFreeVoiceService : IDisposable
 
         if (!string.IsNullOrWhiteSpace(command))
             CommandRecognized?.Invoke(command);
+    }
+
+    private void StopAfterRecognitionFailure(SpeechRecognitionEngine? expectedEngine, string message)
+    {
+        SpeechRecognitionEngine? engineToDispose = null;
+
+        lock (_gate)
+        {
+            if (!_disposed && _engine is not null &&
+                (expectedEngine is null || ReferenceEquals(_engine, expectedEngine)))
+            {
+                _disposed = true;
+                _state = ListeningState.Stopped;
+                engineToDispose = _engine;
+                _engine = null;
+                _wakeGrammar = null;
+            }
+        }
+
+        if (engineToDispose is not null)
+            DisposeEngine(engineToDispose);
+
+        StatusChanged?.Invoke(engineToDispose is null
+            ? "AURIX voice state changed during a microphone transition. Check the listening indicator."
+            : $"Hands-free voice stopped and the microphone was released: {message}");
     }
 
     private void DisposeEngine(SpeechRecognitionEngine engine)
