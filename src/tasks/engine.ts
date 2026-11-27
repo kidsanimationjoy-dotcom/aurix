@@ -485,6 +485,9 @@ export class TaskEngine {
         diff: String(change.diff ?? '').slice(0, 6000),
       })) : [],
       grantRoot: typeof request.grantRoot === 'string' ? request.grantRoot.slice(0, 2048) : undefined,
+      network: request.network && typeof request.network.host === 'string'
+        ? { host: request.network.host.slice(0, 255), protocol: String(request.network.protocol ?? '').slice(0, 40) }
+        : null,
       commandActions: Array.isArray(request.commandActions) ? request.commandActions.slice(0, 20) : [],
     };
 
