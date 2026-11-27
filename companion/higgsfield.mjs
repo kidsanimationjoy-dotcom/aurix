@@ -100,7 +100,7 @@ function parseJson(stdout, label) {
 function pickAccount(value) {
   const account = value && typeof value === 'object' ? value : {};
   const safe = {};
-  for (const key of ['email', 'plan', 'workspace', 'credits', 'available_credits', 'balance', 'subscription']) {
+  for (const key of ['email', 'plan', 'workspace', 'credits', 'available_credits', 'credit_balance', 'remaining_credits', 'balance', 'subscription']) {
     if (account[key] !== undefined && account[key] !== null) safe[key] = account[key];
   }
   return safe;
@@ -179,6 +179,7 @@ function findJobId(value) {
 export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
   const quotes = new Map();
   let resolved = null;
+  let loginChild = null;
   const cli = async (args, timeoutMs) => {
     resolved ??= await resolveCommand(command);
     const result = await run(resolved.command, [...resolved.prefix, ...args], { timeoutMs });
@@ -186,6 +187,18 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
   };
 
   return {
+    async login() {
+      if (loginChild && loginChild.exitCode === null && !loginChild.killed) throw new Error('A Higgsfield sign-in process is already running in the companion terminal.');
+      resolved ??= await resolveCommand(command);
+      const child = spawn(resolved.command, [...resolved.prefix, 'auth', 'login'], {
+        shell: false, windowsHide: false, stdio: 'inherit', env: safeEnvironment(),
+      });
+      loginChild = child;
+      child.once('error', () => { if (loginChild === child) loginChild = null; });
+      child.once('close', () => { if (loginChild === child) loginChild = null; });
+      return { started: true, message: 'The official Higgsfield browser sign-in has started in the local companion terminal. Complete the browser flow there, then refresh the account status. AURIX does not read the sign-in credentials.' };
+    },
+
     async status() {
       try {
         const [versionOut, accountOut] = await Promise.all([
