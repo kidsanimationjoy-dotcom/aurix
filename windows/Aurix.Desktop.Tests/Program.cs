@@ -58,6 +58,10 @@ Check("user-provided multiline text accepted",
 
 Reject("external send button rejected",
     """{"type":"desktop_plan","summary":"Send a message","steps":[{"kind":"click_button","app":"Notepad","button":"Send"}]}""");
+Reject("browser button action rejected",
+    """{"type":"desktop_plan","summary":"Open a website","steps":[{"kind":"click_button","app":"Microsoft Edge","button":"Open"}]}""");
+Reject("messaging text entry rejected",
+    """{"type":"desktop_plan","summary":"Write a message","steps":[{"kind":"type_text","app":"Discord","control":"Message","text":"Hello"}]}""");
 Reject("external publish button rejected",
     """{"type":"desktop_plan","summary":"Publish","steps":[{"kind":"click_button","app":"Notepad","button":"Publish"}]}""");
 Reject("payment action button rejected",

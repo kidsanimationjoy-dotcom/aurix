@@ -104,7 +104,7 @@ public static class AiDesktopCommandParser
             case "click_button":
             {
                 RequireOnlyProperties(item, "kind", "app", "button");
-                var app = ResolveApp(RequiredString(item, "app", 1, 80));
+                var app = ResolveUiApp(RequiredString(item, "app", 1, 80), "click buttons");
                 var button = RequiredString(item, "button", 1, 100).Trim();
                 if (button.Length == 0)
                     throw new InvalidOperationException("The proposed button name cannot be blank.");
@@ -119,7 +119,7 @@ public static class AiDesktopCommandParser
             case "type_text":
             {
                 RequireOnlyProperties(item, "kind", "app", "control", "text");
-                var app = ResolveApp(RequiredString(item, "app", 1, 80));
+                var app = ResolveUiApp(RequiredString(item, "app", 1, 80), "enter text");
                 var control = RequiredString(item, "control", 1, 100).Trim();
                 var text = RequiredString(item, "text", 1, 1_000);
                 if (control.Length == 0)
@@ -134,6 +134,19 @@ public static class AiDesktopCommandParser
             default:
                 throw new InvalidOperationException("Codex proposed an unsupported desktop action: " + kind + ".");
         }
+    }
+
+
+    private static (string DisplayName, string Executable, string[] ProcessNames) ResolveUiApp(string name, string action)
+    {
+        var app = ResolveApp(name);
+        // AI-proposed UI mutations are restricted to Notepad in this release.
+        // Browser and messaging clients can navigate, submit forms, or transmit
+        // content through controls that are difficult to classify safely.
+        if (!string.Equals(app.DisplayName, "Notepad", StringComparison.Ordinal))
+            throw new InvalidOperationException("AI-proposed UI actions are currently limited to Notepad. " +
+                "AURIX will not " + action + " in browsers, messaging apps, or other connected applications.");
+        return app;
     }
 
     private static (string DisplayName, string Executable, string[] ProcessNames) ResolveApp(string name)
