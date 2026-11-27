@@ -32,6 +32,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 ## Documentation
 
 - [Windows code-signing policy and current status](docs/CODE_SIGNING_POLICY.md)
+- [Windows release handoff checklist](docs/WINDOWS_RELEASE_HANDOFF.md)
 
 - [AURIX launch readiness and release gates](docs/LAUNCH_READINESS.md)
 
@@ -60,7 +61,7 @@ A model product is not automatically an embeddable API. Subscription sign-in is 
 
 ## Current status
 
-**Windows desktop preview (November 27, 2026):** the latest main-branch Windows x64 package was built successfully in [workflow run 46033957912](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46033957912). It includes the read-only laptop microphone/speech-recognizer preflight. [Download the `AURIX-Windows-x64` preview artifact](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46033957912/artifacts/15215936317). **This package is unsigned, is not an installer, and is not approved for public launch. Do not disable SmartScreen or Microsoft Defender to run it.** See [launch readiness](docs/LAUNCH_READINESS.md) and [code-signing policy](docs/CODE_SIGNING_POLICY.md).
+**Windows desktop preview (November 27, 2026):** the latest verified build is [Windows workflow run 46038661597](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46038661597). All 13 Windows workflow steps passed, including native compilation, desktop policy tests, the read-only readiness diagnostic, package contents/checksum validation, portable ZIP upload and unsigned MSIX validation. This workflow built PR #49's reviewed source tree immediately before it was merged into `main` as `7ebd83d2bacff89738800d18f00c2337f6810e3f`. [Download the AURIX-Windows-x64 preview artifact](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46038661597/artifacts/15219442256). Its GitHub artifact ZIP digest is `sha256:e17a87700fb5776f6e7215c275a8e248e91b9fca31264ce2ecbd8449ffe4915c`. The [unsigned MSIX validation artifact](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/46038661597/artifacts/15219392178) is also available for packaging review only. **Neither artifact is a trusted signed release or a public-launch installer. Do not disable SmartScreen or Microsoft Defender to run it.** See [launch readiness](docs/LAUNCH_READINESS.md), [release handoff](docs/WINDOWS_RELEASE_HANDOFF.md) and [code-signing policy](docs/CODE_SIGNING_POLICY.md).
 
 The Phase 0–1 application source is tracked and its clean-source CI verifies dependency installation, TypeScript checks, unit tests, production build and browser smoke tests.
 
