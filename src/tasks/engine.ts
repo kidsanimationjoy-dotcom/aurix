@@ -508,7 +508,7 @@ export class TaskEngine {
   private async requestActionApproval(
     taskId: string,
     providerId: ProviderId,
-    request: Omit<TaskActionApproval, 'id'>,
+    request: Omit<TaskActionApproval, 'id' | 'expiresAt'>,
     signal: AbortSignal,
   ): Promise<TaskActionApprovalDecision> {
     const current = this.db.get('tasks', taskId);
