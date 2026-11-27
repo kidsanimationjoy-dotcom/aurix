@@ -21,6 +21,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      AURIX_MSIX_IDENTITY: ${{ vars.AURIX_MSIX_IDENTITY || 'AURIX.Desktop' }}
+      AURIX_MSIX_PUBLISHER: ${{ vars.AURIX_MSIX_PUBLISHER || 'CN=UNCONFIGURED-PUBLISHER' }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -44,14 +47,10 @@ jobs:
         run: |
           $publish = "$env:RUNNER_TEMP\aurix-publish"
           $exe = Join-Path $publish "Aurix.Desktop.exe"
-          if (!(Test-Path -LiteralPath $exe)) {
-            throw "Published executable was not found."
-          }
-
+          if (!(Test-Path -LiteralPath $exe)) { throw "Published executable was not found." }
           Copy-Item "windows/Aurix.Desktop/README.md" (Join-Path $publish "README.txt")
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  Aurix.Desktop.exe" | Set-Content -LiteralPath (Join-Path $publish "SHA256SUMS.txt") -Encoding utf8
-
           @(
             "AURIX Windows Desktop Companion — CI preview build"
             "Build commit: $env:GITHUB_SHA"
@@ -60,14 +59,107 @@ jobs:
             "This is an early preview, not a public-launch release or a complete autonomous AI assistant."
             "Do not disable Microsoft Defender or SmartScreen to run this build. If Windows warns that the publisher is unrecognised, stop and wait for a properly signed release."
             "Verify Aurix.Desktop.exe against SHA256SUMS.txt before testing."
-            "The application uses the microphone only after hands-free is explicitly enabled; while enabled, local wake-word recognition remains active. Use the tray control to pause it or Exit AURIX to release the microphone."
+            "The microphone is used only after hands-free is explicitly enabled; while enabled, local wake-word recognition remains active."
             "This ZIP is a portable preview package, not an installer. It has no automatic update or uninstall service."
           ) | Set-Content -LiteralPath (Join-Path $publish "RELEASE-STATUS.txt") -Encoding utf8
 
-      - name: Upload Windows x64 build artifact
+      - name: Upload Windows x64 portable preview
         uses: actions/upload-artifact@v4
         with:
           name: AURIX-Windows-x64
           path: ${{ runner.temp }}/aurix-publish/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Prepare MSIX package layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $publish = "$env:RUNNER_TEMP\aurix-publish"
+          $layout = "$env:RUNNER_TEMP\aurix-msix-layout"
+          $assets = Join-Path $layout "Assets"
+          New-Item -ItemType Directory -Force -Path $assets | Out-Null
+          Copy-Item (Join-Path $publish "Aurix.Desktop.exe") $layout
+          Copy-Item (Join-Path $publish "README.txt") $layout
+          Copy-Item (Join-Path $publish "RELEASE-STATUS.txt") $layout
+          Copy-Item (Join-Path $publish "SHA256SUMS.txt") $layout
+
+          Add-Type -AssemblyName System.Drawing
+          foreach ($spec in @(@{Name="StoreLogo.png";Size=50},@{Name="Square44x44Logo.png";Size=44},@{Name="Square150x150Logo.png";Size=150})) {
+            $bmp = New-Object System.Drawing.Bitmap($spec.Size,$spec.Size)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $g.Clear([System.Drawing.Color]::FromArgb(13,20,35))
+            $font = New-Object System.Drawing.Font("Segoe UI",([float]($spec.Size * 0.58)),[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+            $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(75,155,255))
+            $format = New-Object System.Drawing.StringFormat
+            $format.Alignment = [System.Drawing.StringAlignment]::Center
+            $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+            $g.DrawString("A",$font,$brush,(New-Object System.Drawing.RectangleF(0,0,$spec.Size,$spec.Size)),$format)
+            $bmp.Save((Join-Path $assets $spec.Name),[System.Drawing.Imaging.ImageFormat]::Png)
+            $format.Dispose(); $brush.Dispose(); $font.Dispose(); $g.Dispose(); $bmp.Dispose()
+          }
+
+          $identity = [Security.SecurityElement]::Escape($env:AURIX_MSIX_IDENTITY)
+          $publisher = [Security.SecurityElement]::Escape($env:AURIX_MSIX_PUBLISHER)
+          $manifest = @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10" IgnorableNamespaces="uap desktop">
+            <Identity Name="$identity" Publisher="$publisher" Version="1.0.0.0" ProcessorArchitecture="x64" />
+            <Properties>
+              <DisplayName>AURIX</DisplayName>
+              <PublisherDisplayName>AURIX</PublisherDisplayName>
+              <Logo>Assets\StoreLogo.png</Logo>
+            </Properties>
+            <Dependencies>
+              <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+            </Dependencies>
+            <Resources><Resource Language="en-us" /></Resources>
+            <Applications>
+              <Application Id="AURIX" Executable="Aurix.Desktop.exe" EntryPoint="Windows.FullTrustApplication">
+                <uap:VisualElements DisplayName="AURIX" Description="AURIX Windows desktop assistant" BackgroundColor="#0D1423" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+                  <uap:DefaultTile />
+                </uap:VisualElements>
+                <Extensions>
+                  <desktop:Extension Category="windows.fullTrustProcess" Executable="Aurix.Desktop.exe">
+                    <desktop:FullTrustProcess />
+                  </desktop:Extension>
+                </Extensions>
+              </Application>
+            </Applications>
+            <Capabilities><rescap:Capability Name="runFullTrust" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" /></Capabilities>
+          </Package>
+          "@
+          Set-Content -LiteralPath (Join-Path $layout "AppxManifest.xml") -Value $manifest -Encoding utf8
+          [xml]$check = Get-Content -LiteralPath (Join-Path $layout "AppxManifest.xml") -Raw
+          if ($env:AURIX_MSIX_PUBLISHER -eq "CN=UNCONFIGURED-PUBLISHER") {
+            "UNCONFIGURED-PUBLISHER: package is for packaging validation only; Store identity must be supplied before submission." | Set-Content (Join-Path $layout "MSIX-STATUS.txt")
+          } else {
+            "Publisher identity is configured from repository variables. Package remains unsigned until the approved Store/signing workflow." | Set-Content (Join-Path $layout "MSIX-STATUS.txt")
+          }
+          "MSIX layout prepared: $layout"
+
+      - name: Pack unsigned MSIX for Store identity validation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sdkRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $makeAppx = Get-ChildItem -Path $sdkRoot -Filter MakeAppx.exe -Recurse | Where-Object { $_.FullName -match "\\x64\\MakeAppx.exe$" } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$makeAppx) { throw "MakeAppx.exe was not found in the installed Windows SDK." }
+          $layout = "$env:RUNNER_TEMP\aurix-msix-layout"
+          $package = "$env:RUNNER_TEMP\AURIX-Windows-x64-unsigned.msix"
+          & $makeAppx.FullName pack /d $layout /p $package /o
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path $package)) { throw "MSIX packaging failed." }
+          Get-FileHash $package -Algorithm SHA256 | Format-List | Out-String | Set-Content "$package.sha256.txt"
+          "Built unsigned MSIX. It is not installable for end users until signed by Microsoft Store or a verified publisher certificate." | Set-Content "$package.STATUS.txt"
+
+      - name: Upload unsigned MSIX validation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-Windows-MSIX-unsigned
+          path: |
+            ${{ runner.temp }}/AURIX-Windows-x64-unsigned.msix
+            ${{ runner.temp }}/AURIX-Windows-x64-unsigned.msix.sha256.txt
+            ${{ runner.temp }}/AURIX-Windows-x64-unsigned.msix.STATUS.txt
           if-no-files-found: error
           retention-days: 14
