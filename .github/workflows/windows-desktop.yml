@@ -76,7 +76,7 @@ jobs:
 
       - name: Verify portable preview package contents and integrity
         shell: pwsh
-        run: pwsh -NoProfile -File windows/Aurix.Desktop.Tests/Test-ReleasePackage.ps1 -PublishDirectory "$env:RUNNER_TEMP\\aurix-publish"
+        run: pwsh -NoProfile -File windows/Aurix.Desktop.Tests/Test-ReleasePackage.ps1 -PublishDirectory "$env:RUNNER_TEMP\aurix-publish"
 
       - name: Upload Windows x64 portable preview
         uses: actions/upload-artifact@v4
