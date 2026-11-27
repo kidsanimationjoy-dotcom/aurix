@@ -469,6 +469,10 @@ export function createCodexAgentManager({ command = 'codex', codexHome, roots = 
   const sessions = new Map();
 
   return {
+    async validateTarget(target) {
+      const projectRoot = await resolveApprovedProject(target, roots);
+      return { valid: true, projectRoot };
+    },
     async start({ target, prompt }) {
       const active = [...sessions.values()].filter((session) => ['starting', 'running'].includes(session.status)).length;
       if (active >= 2) throw new Error('AURIX allows at most two active local Codex sessions at once. Close or stop an existing task first.');
