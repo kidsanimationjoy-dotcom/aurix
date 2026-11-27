@@ -6,6 +6,8 @@ import {
   type CodexAgentSession,
   type HealthResponse,
   type LocalCompanionConfig,
+  type HiggsfieldStatus,
+  type HiggsfieldQuote,
 } from './protocol';
 
 export interface ProbeOptions {
@@ -404,4 +406,88 @@ export async function inspectReaBrowserTarget(
     kind === 'bundle' ? 320_000 : 120_000,
     fetchImpl,
   );
+}
+
+async function higgsfieldRequest<T>(
+  config: LocalCompanionConfig,
+  route: string,
+  init: RequestInit = {},
+  timeoutMs = 30_000,
+  fetchImpl: typeof fetch = fetch,
+): Promise<T> {
+  const base = companionBaseUrl(config.url);
+  if (!config.token.trim()) throw new Error('Pair the local companion before using Higgsfield.');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(base + route, {
+      ...init,
+      headers: {
+        Authorization: 'Bearer ' + config.token.trim(),
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
+      },
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({})) as T & { ok?: boolean; result?: unknown; message?: string };
+    if (!response.ok || body.ok !== true) throw new Error(body.message ?? 'Higgsfield companion request failed (HTTP ' + response.status + ').');
+    return body.result as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('Higgsfield did not respond in time.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function getHiggsfieldStatus(
+  config: LocalCompanionConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<HiggsfieldStatus> {
+  return higgsfieldRequest<HiggsfieldStatus>(config, '/v1/higgsfield/status', {}, 20_000, fetchImpl);
+}
+
+export async function listHiggsfieldModels(
+  config: LocalCompanionConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ raw: unknown; models: { id: string; name: string; kinds: string[]; raw: unknown }[] }> {
+  return higgsfieldRequest(config, '/v1/higgsfield/models', {}, 40_000, fetchImpl);
+}
+
+export async function quoteHiggsfieldJob(
+  config: LocalCompanionConfig,
+  request: { modelId: string; prompt: string; duration?: number; resolution?: string; aspectRatio?: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<HiggsfieldQuote> {
+  return higgsfieldRequest<HiggsfieldQuote>(
+    config,
+    '/v1/higgsfield/quote',
+    { method: 'POST', body: JSON.stringify(request) },
+    75_000,
+    fetchImpl,
+  );
+}
+
+export async function createHiggsfieldJob(
+  config: LocalCompanionConfig,
+  quoteId: string,
+  confirmed: boolean,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ jobId: string; submittedAt: string; raw: unknown }> {
+  return higgsfieldRequest(
+    config,
+    '/v1/higgsfield/create',
+    { method: 'POST', body: JSON.stringify({ quoteId, confirmed }) },
+    100_000,
+    fetchImpl,
+  );
+}
+
+export async function getHiggsfieldJob(
+  config: LocalCompanionConfig,
+  jobId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<unknown> {
+  const query = new URLSearchParams({ id: jobId });
+  return higgsfieldRequest(config, '/v1/higgsfield/job?' + query.toString(), {}, 40_000, fetchImpl);
 }
