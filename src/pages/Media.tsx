@@ -166,8 +166,8 @@ export function Media() {
         <>
           <Panel title="Higgsfield account">
             <div className="row wrap">
-              <span><b>{account.account.email ? String(account.account.email) : 'Signed in account'}</b></span>
-              {account.account.plan && <span>Plan: {String(account.account.plan)}</span>}
+              <span><b>{typeof account.account.email === 'string' ? account.account.email : 'Signed in account'}</b></span>
+              {account.account.plan !== undefined && <span>Plan: {String(account.account.plan)}</span>}
               {hasCredits !== null && <span>Available credits: <b>{hasCredits}</b></span>}
               {account.version && <span>CLI: {String((account.version as Record<string, unknown>).version ?? account.version)}</span>}
             </div>
@@ -198,7 +198,7 @@ export function Media() {
             </Panel>
             <Panel title="Cost estimate and confirmation">
               {!quote ? (
-                <EmptyState icon="credit-card" title="No cost estimate yet">First request a cost estimate. It does not create a job or spend credits.</EmptyState>
+                <EmptyState icon="list" title="No cost estimate yet">First request a cost estimate. It does not create a job or spend credits.</EmptyState>
               ) : (
                 <div className="stack">
                   <Notice tone="warn">Review this estimate before generating. It expires in approximately {quoteExpiry} seconds. The companion checks the price again when you confirm.</Notice>
