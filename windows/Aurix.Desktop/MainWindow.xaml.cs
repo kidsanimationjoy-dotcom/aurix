@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private SpeechSynthesizer? _speechSynthesizer;
+    private ActiveOrbWindow? _activeOrb;
     private string _companionToken = string.Empty;
     private bool _codexReady;
     private readonly List<LocalCodexMessage> _voiceConversation = new();
@@ -30,8 +31,13 @@ public partial class MainWindow : Window
         AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
             ? "Optional: connect the local AURIX companion for AI answers and approval-gated Notepad actions."
             : "Saved pairing token found. Connect to check the local AI engine.";
-        try { _speechSynthesizer = new SpeechSynthesizer(); }
+        try
+        {
+            _speechSynthesizer = new SpeechSynthesizer();
+            _speechSynthesizer.SpeakCompleted += (_, _) => Dispatcher.BeginInvoke(new Action(HideActiveOrb));
+        }
         catch { _speechSynthesizer = null; }
+        _activeOrb = new ActiveOrbWindow();
         Loaded += async (_, _) =>
         {
             UpdateStartupButton();
@@ -92,6 +98,45 @@ public partial class MainWindow : Window
 
     private void HandsFreeButton_Click(object sender, RoutedEventArgs e)
         => ToggleHandsFreeFromTray();
+
+    private void VoiceDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var report = WindowsReadinessDiagnostic.CreateReport();
+            System.Windows.MessageBox.Show(report, "AURIX Voice Diagnostics",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"AURIX could not complete its read-only voice checks: {ex.GetType().Name}: {ex.Message}",
+                "AURIX Voice Diagnostics",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
+    private void ShowActiveOrb(string state, string hint)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => ShowActiveOrb(state, hint)));
+            return;
+        }
+        _activeOrb ??= new ActiveOrbWindow();
+        _activeOrb.SetState(state, hint);
+    }
+
+    private void HideActiveOrb()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(HideActiveOrb));
+            return;
+        }
+        _activeOrb?.HideOrb();
+    }
 
     private string CurrentCompanionToken()
         => string.IsNullOrWhiteSpace(CompanionTokenBox.Password)
@@ -282,6 +327,14 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (message.Contains("heard you", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("listening for one instruction", StringComparison.OrdinalIgnoreCase))
+                ShowActiveOrb("Listening", "Listening to you");
+            else if (message.StartsWith("I heard:", StringComparison.OrdinalIgnoreCase))
+                ShowActiveOrb("Thinking", "Preparing your request");
+            else if (message.Contains("stopped", StringComparison.OrdinalIgnoreCase) ||
+                     message.Contains("paused", StringComparison.OrdinalIgnoreCase))
+                HideActiveOrb();
             var active = _handsFreeVoice?.IsRunning == true;
             if (!active && message.Contains("stopped", StringComparison.OrdinalIgnoreCase))
             {
@@ -304,6 +357,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            ShowActiveOrb("Thinking", "Working on your request");
             CommandInput.Text = command;
             CommandInput.CaretIndex = CommandInput.Text.Length;
             ListeningStatusText.Text = $"AURIX heard your instruction: “{command}”. Working on it…";
@@ -316,6 +370,7 @@ public partial class MainWindow : Window
         var voice = _handsFreeVoice;
         _handsFreeVoice = null;
         voice?.Dispose();
+        HideActiveOrb();
         UpdateTrayWakeState?.Invoke(false);
     }
 
@@ -433,6 +488,7 @@ public partial class MainWindow : Window
                 return;
 
             TaskOutputText.Text = result.Output;
+            HideActiveOrb();
             ListeningStatusText.Text = result.Cancelled
                 ? "Task stopped. Already completed actions are not undone."
                 : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
@@ -637,6 +693,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         try
         {
             _speechSynthesizer.SpeakAsyncCancelAll();
+            ShowActiveOrb("Speaking", "AURIX is speaking");
             var spoken = answer.Length > 1800 ? answer[..1800] + ". The rest of the answer is shown on screen." : answer;
             _speechSynthesizer.SpeakAsync(spoken);
         }
@@ -710,6 +767,9 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         ShutdownHandsFree();
         _taskRuns.CancelCurrent();
         _speechSynthesizer?.SpeakAsyncCancelAll();
+        HideActiveOrb();
+        _activeOrb?.Close();
+        _activeOrb = null;
         _speechSynthesizer?.Dispose();
         _speechSynthesizer = null;
     }
