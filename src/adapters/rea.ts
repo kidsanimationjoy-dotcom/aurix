@@ -1,6 +1,7 @@
 import type { InvestigationAdapter, InvestigationAuthorization, InvestigationReport, ProviderMeta } from './types';
 import type { LocalCompanionConfig } from '../companion/protocol';
-import { analyzeReaTarget, getReaStatus } from '../companion/client';
+import { analyzeReaTarget, getReaStatus, inspectReaBrowserTarget, listReaBrowserTargets } from '../companion/client';
+import type { ReaBrowserAuthorization } from '../companion/client';
 
 export const reaMeta: ProviderMeta = {
   id: 'rea',
@@ -57,6 +58,31 @@ export class ReaAdapter implements InvestigationAdapter {
         detail: error instanceof Error ? error.message : 'Could not check REA.',
         checkedAt: Date.now(),
       };
+    }
+  }
+
+
+  async listBrowserTargets(endpoint: string, auth: ReaBrowserAuthorization) {
+    if (!auth || !auth.statement?.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
+      return { ok: false as const, error: { code: 'AUTHORIZATION_REQUIRED' as const, message: 'Confirm that you are authorised to inspect this local browser session.' } };
+    }
+    try {
+      const value = await listReaBrowserTargets(this.getConfig(), endpoint, auth);
+      return { ok: true as const, value };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'REA could not list browser tabs.' } };
+    }
+  }
+
+  async inspectBrowserTarget(endpoint: string, targetId: string, kind: 'page' | 'bundle', auth: ReaBrowserAuthorization) {
+    if (!auth || !auth.statement?.trim() || !Number.isFinite(auth.confirmedAt) || auth.confirmedAt <= 0) {
+      return { ok: false as const, error: { code: 'AUTHORIZATION_REQUIRED' as const, message: 'Confirm that you are authorised to inspect this local browser session.' } };
+    }
+    try {
+      const value = await inspectReaBrowserTarget(this.getConfig(), endpoint, targetId, kind, auth);
+      return { ok: true as const, value };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'PROVIDER_ERROR' as const, message: error instanceof Error ? error.message : 'REA browser inspection failed.' } };
     }
   }
 
