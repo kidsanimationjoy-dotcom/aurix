@@ -98,7 +98,8 @@ function parseJson(stdout, label) {
 }
 
 function pickAccount(value) {
-  const account = value && typeof value === 'object' ? value : {};
+  const root = value && typeof value === 'object' ? value : {};
+  const account = root.account && typeof root.account === 'object' ? root.account : root.data && typeof root.data === 'object' ? root.data : root;
   const safe = {};
   for (const key of ['email', 'plan', 'workspace', 'credits', 'available_credits', 'credit_balance', 'remaining_credits', 'balance', 'subscription']) {
     if (account[key] !== undefined && account[key] !== null) safe[key] = account[key];
