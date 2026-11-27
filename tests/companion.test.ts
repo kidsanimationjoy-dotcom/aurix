@@ -272,6 +272,7 @@ test('companion shutdown aborts active Codex chat and closes the response', asyn
       headers,
       body: JSON.stringify({ messages: [{ role: 'user', content: 'Keep running until shutdown.' }] }),
     });
+    const requestRejected = assert.rejects(request);
 
     let pid: number | undefined;
     const deadline = Date.now() + 5_000;
@@ -288,7 +289,7 @@ test('companion shutdown aborts active Codex chat and closes the response', asyn
 
     const closeCompanion = (server as unknown as { closeCompanion: () => Promise<void> }).closeCompanion;
     await closeCompanion();
-    await assert.rejects(request);
+    await requestRejected;
 
     assert.throws(
       () => process.kill(pid!, 0),
