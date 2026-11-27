@@ -61,6 +61,7 @@ check('task has a visible plan', await page.getByText('Check coding capability')
 await page.getByRole('button', { name: 'Check provider again' }).click();
 // Retry is asynchronous: wait for its terminal readiness state before reloading,
 // otherwise the reload can intentionally mark an in-progress task as interrupted.
+await page.getByText('Waiting for provider', { exact: true }).waitFor({ state: 'hidden' });
 await page.getByText('Waiting for provider', { exact: true }).waitFor();
 check('task can re-check the provider without creating a duplicate', (await page.getByText('Build a responsive website dashboard').count()) === 1);
 await page.reload();
