@@ -1,21 +1,25 @@
 # AURIX launch readiness
 
-**Decision: NOT READY for public launch.** The Windows desktop companion is merged into `main` and all three fresh CI workflows passed. Legal, trusted-signing, real-device acceptance and broader product gates remain open.
+**Decision: NOT READY for public launch.** The latest main-branch Windows compile, AI desktop-proposal policy tests, package generation, TypeScript checks, unit tests, production build and browser smoke tests have passed. Real-device acceptance, trusted publisher identity, Store certification, legal/privacy governance and broader provider acceptance remain open.
 
-## Latest main-branch Windows preview evidence
+## Latest main-branch Windows build evidence
 
-- Current main source commit: `7127fc0f54018c54f30aca575e97c4fa23a0e2d0`.
-- Windows x64 compile, self-contained publish, release notice/checksum generation and artifact upload: [main run 45921375421](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375421) — passed on the current main commit.
-- Application TypeScript, unit tests, production build and browser smoke tests: [main run 45921375437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375437) — passed on the current main commit.
-- Repository CI on the merged engineering revision: [run 45921098904](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098904) — passed.
-- AURIX verification on the merged engineering revision: [run 45921098909](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098909) — passed.
-- Engineering PR [#19](https://github.com/kidsanimationjoy-dotcom/aurix/pull/19) was merged in commit `2cae59ab4c865aca4b52700828c41b197bc99f50`.
-- Windows artifact: `AURIX-Windows-x64`, artifact ID `15164239353`, SHA-256 `f4b9e5d0342302c0268e69cff1ee59deeb1906e5fa649e42747cbbed57afac3e`; retained until 2026-12-11.
-- Downloaded ZIP checksum independently verified: `f4b9e5d0342302c0268e69cff1ee59deeb1906e5fa649e42747cbbed57afac3e`.
-- Executable SHA-256: `73609efb3279d6c94083bf52decb6f47cfc2316110335e450a931d1c926b2a5e`; verified against the included `SHA256SUMS.txt`.
-- ZIP inspection confirms a single-level Windows x64 portable package containing the executable, PDB, README, release-status notice and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are zero. The executable is **unsigned**.
+- Current main repository head: `f7e837b3ac582bf0c2d08a39b323608d38ea00a9`. Windows desktop code and packaging pipeline are in commit `7127fc0f54018c54f30aca575e97c4fa23a0e2d0`; the later main commit only refreshes launch-readiness evidence.
+- Windows x64 compile, AI-proposal policy tests, self-contained publish, release notice/checksum generation, portable preview upload and unsigned MSIX packaging/upload: [main run 45924906069](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924906069) — passed.
+- TypeScript, unit tests, production build and browser smoke tests on the same code commit: [main run 45924906075](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924906075) — passed.
+- AURIX verification on the current documentation head: [main run 45924932986](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924932986) — passed.
+- PR [#19](https://github.com/kidsanimationjoy-dotcom/aurix/pull/19) merged the native Windows companion; PR [#21](https://github.com/kidsanimationjoy-dotcom/aurix/pull/21) added approval-gated AI-proposed desktop plans; PR [#22](https://github.com/kidsanimationjoy-dotcom/aurix/pull/22) restricted AI-generated UI mutations to Notepad and added policy tests; PR [#23](https://github.com/kidsanimationjoy-dotcom/aurix/pull/23) aligned the prompt and user-facing text with that restriction; PR [#24](https://github.com/kidsanimationjoy-dotcom/aurix/pull/24) added MSIX packaging validation.
+- Latest portable preview: artifact `AURIX-Windows-x64`, ID `15166585001`, GitHub digest `sha256:9f862ed7535aaa588c14db5a461a9db7123953f86804dcddd3d1932d78af58a2`; retained until 2026-12-11.
+- Downloaded portable ZIP SHA-256 independently matches that digest. Executable SHA-256 is `b04ee631dcab8b8664c0043db81c90e331004d59f06bc04ba61108ee732ceb53`, matching the included `SHA256SUMS.txt`.
+- The portable package is a Windows x64 ZIP containing `Aurix.Desktop.exe`, PDB, README, release-status notice and checksum manifest. It is explicitly **unsigned**, not an installer, and must not be run by bypassing SmartScreen or Microsoft Defender.
 
+## Latest MSIX packaging validation
+
+- The MSIX pipeline was merged in PR [#24](https://github.com/kidsanimationjoy-dotcom/aurix/pull/24), commit `7127fc0f54018c54f30aca575e97c4fa23a0e2d0`. It creates the package layout, validates the manifest, uses Windows SDK MakeAppx to pack the MSIX, and uploads a separate validation artifact.
+- Latest main-run artifact: `AURIX-Windows-MSIX-unsigned`, ID `15166106210`, GitHub digest `sha256:c42e35c58fc698fc05e5862402ede6e0aad08553e3b1471dce7bb02f16e31007`; retained until 2026-12-11.
+- Downloaded validation ZIP SHA-256 independently matches the GitHub artifact digest. Its inner `.msix` SHA-256 is `1de9c2e0383b20d6842af608e8442cab042f0b91688f6c34aa226621a4903f52`, matching its included hash manifest.
+- The package manifest sets `Identity Publisher="CN=UNCONFIGURED-PUBLISHER"`. The MSIX contains no signature file, and its status file says it is not installable for end users until signed by Microsoft Store or a verified publisher certificate.
+- This proves the MSIX packaging path works; it does **not** prove Store acceptance, a valid publisher identity, signing, installation or runtime behavior. It is not a Store-ready release.
 
 #### What the Windows companion currently does
 
@@ -28,16 +32,16 @@
 - Emergency stop for remaining task steps.
 - Bounded local task audit history that records action type, application, UTC time and outcome, but does not record dictated instructions, entered text, window titles or exception messages.
 - Reversible current-user startup registration.
+- Authenticated local Codex voice reasoning: Codex can answer ordinary questions or propose up to five supported desktop steps.
+- AI-proposed app launches and read-only inspection use the supported application allowlist. AI-generated button clicks and text entry are restricted to Notepad; AURIX validates the entire plan, requires whole-plan approval, and retains separate approval prompts for each Notepad UI mutation.
 
-## Latest merged AI voice extension
+## Latest merged AI voice and desktop-action extension
 
-- Main merge commit: [`e37bf46129518cc281d9209374e3f3332ab2c23c`](https://github.com/kidsanimationjoy-dotcom/aurix/commit/e37bf46129518cc281d9209374e3f3332ab2c23c).
-- PR [#20](https://github.com/kidsanimationjoy-dotcom/aurix/pull/20) added read-only Codex chat to the Windows voice path and was merged after the checks below passed.
-- Windows x64 compile, self-contained publish and artifact upload: [run 45922086971](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086971) — passed.
-- Application TypeScript, unit tests, production build and browser smoke tests: [run 45922086918](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086918) — passed.
-- Windows artifact: `AURIX-Windows-x64`, artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`; retained until 2026-12-11.
-- The voice bridge uses the authenticated loopback companion and separately signed-in Codex CLI. Recognised speech is sent as text; microphone audio remains local. Codex can return normal answers or structured proposals for the bounded desktop action schema. AURIX validates the proposal, requires whole-plan approval, and retains separate approval for button clicks and text entry. AI-proposed UI mutations are restricted to Notepad; browsers and messaging clients are excluded.
-- Pairing tokens are protected with Windows DPAPI. Up to 12 bounded conversation turns remain in process memory only and can be cleared.
+- The Windows voice path uses the authenticated loopback AURIX companion and the separately signed-in local Codex CLI. Recognised speech is sent as text; microphone audio remains on the user's PC. Pairing tokens are protected with Windows DPAPI, and up to 12 bounded conversation turns remain in process memory only.
+- Codex can return a normal answer or a strict JSON proposal containing up to five supported steps. AURIX rejects malformed responses, unknown/duplicate fields, unsupported actions/apps, invalid input and external-impact button names.
+- AI-proposed app launching and read-only inspection can use the supported application allowlist. AI-generated button clicks and text entry are limited to Notepad. Browser and messaging-app UI mutations are rejected by the parser and covered by Windows policy tests.
+- AURIX displays the complete proposed plan and requires whole-plan approval. Each Notepad button click and text-entry action then requires its own approval. The deterministic local command grammar remains separately bounded and keeps its own per-action approval prompts.
+- The AI bridge does not add arbitrary shell execution, scripts, generic filesystem access, network actions, browser navigation or unrestricted keyboard/mouse control. It remains a bounded assistant, not a general-purpose autonomous desktop agent.
 
 ## Remaining launch blockers
 
@@ -53,7 +57,7 @@
 - Do not disable SmartScreen or Microsoft Defender to run an unrecognised build. Wait for a verified signed distribution or use a separately reviewed test environment.
 - Preferred trusted distribution path to investigate: package the desktop app as MSIX and submit it through the Microsoft Store, which re-signs certified Store MSIX packages. This requires real package identity/publisher details, a tested MSIX, Store policy/certification and a human-verified Partner Center account.
 - Alternative for direct downloads: apply to SignPath Foundation only after checking its open-source, release, privacy/security, MFA, team-role and manual-approval conditions. A commercial direct-download route may require a paid organization-validated certificate.
-- The MSIX packaging pipeline is now implemented and merged in PR [#24](https://github.com/kidsanimationjoy-dotcom/aurix/pull/24). Its Windows CI run [45924771688](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924771688) passed, producing unsigned validation artifact `AURIX-Windows-MSIX-unsigned` (artifact ID `15166165899`, digest `sha256:c0c304f4ed65623d408ce40b567949ea4a48da6393e04a89462c16cb4e1db2aa`). The default publisher is explicitly `CN=UNCONFIGURED-PUBLISHER`; this artifact proves packaging only and is not a Store-ready or end-user-installable release. The real Store identity, Partner Center account, Store submission/certification, trusted signing and production approval are still not configured. The human legal owner must complete account, identity/business and agreement steps; AI automation must not attempt those actions.
+- The MSIX packaging pipeline is implemented and merged in PR [#24](https://github.com/kidsanimationjoy-dotcom/aurix/pull/24). The latest main run produced unsigned validation artifact `AURIX-Windows-MSIX-unsigned` (artifact ID `15166106210`, digest `sha256:c42e35c58fc698fc05e5862402ede6e0aad08553e3b1471dce7bb02f16e31007`). The downloaded archive and its inner MSIX checksum were independently verified. The package publisher is explicitly `CN=UNCONFIGURED-PUBLISHER`, and the MSIX has no signature file; it is packaging validation only, not end-user-installable or Store-ready. The real Store identity, Partner Center account, Store submission/certification, trusted signing and production approval remain unconfigured. The human legal owner must complete account, identity/business and agreement steps with appropriate adult/guardian guidance; AI automation must not attempt those actions.
 - Never label a build signed until the final executable's Authenticode signature and publisher identity have been independently verified.
 
 ### Legal, privacy and release governance
