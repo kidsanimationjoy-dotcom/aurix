@@ -4,7 +4,7 @@
 
 ## Latest main-branch Windows preview evidence
 
-- Current main source commit: `5f5f8fd81fe842eb87baa5aa4b2f8a1eb635ef99`.
+- Current main source commit: `7127fc0f54018c54f30aca575e97c4fa23a0e2d0`.
 - Windows x64 compile, self-contained publish, release notice/checksum generation and artifact upload: [main run 45921375421](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375421) — passed on the current main commit.
 - Application TypeScript, unit tests, production build and browser smoke tests: [main run 45921375437](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921375437) — passed on the current main commit.
 - Repository CI on the merged engineering revision: [run 45921098904](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45921098904) — passed.
@@ -53,7 +53,7 @@
 - Do not disable SmartScreen or Microsoft Defender to run an unrecognised build. Wait for a verified signed distribution or use a separately reviewed test environment.
 - Preferred trusted distribution path to investigate: package the desktop app as MSIX and submit it through the Microsoft Store, which re-signs certified Store MSIX packages. This requires real package identity/publisher details, a tested MSIX, Store policy/certification and a human-verified Partner Center account.
 - Alternative for direct downloads: apply to SignPath Foundation only after checking its open-source, release, privacy/security, MFA, team-role and manual-approval conditions. A commercial direct-download route may require a paid organization-validated certificate.
-- No Store developer account, MSIX package, trusted certificate, SignPath project, or production signing approval is currently configured. The human legal owner must complete account, identity/business and agreement steps; AI automation must not attempt those actions.
+- The MSIX packaging pipeline is now implemented and merged in PR [#24](https://github.com/kidsanimationjoy-dotcom/aurix/pull/24). Its Windows CI run [45924771688](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45924771688) passed, producing unsigned validation artifact `AURIX-Windows-MSIX-unsigned` (artifact ID `15166165899`, digest `sha256:c0c304f4ed65623d408ce40b567949ea4a48da6393e04a89462c16cb4e1db2aa`). The default publisher is explicitly `CN=UNCONFIGURED-PUBLISHER`; this artifact proves packaging only and is not a Store-ready or end-user-installable release. The real Store identity, Partner Center account, Store submission/certification, trusted signing and production approval are still not configured. The human legal owner must complete account, identity/business and agreement steps; AI automation must not attempt those actions.
 - Never label a build signed until the final executable's Authenticode signature and publisher identity have been independently verified.
 
 ### Legal, privacy and release governance
