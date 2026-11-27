@@ -27,7 +27,12 @@ export type CompanionCapability =
   | 'rea.desktop.inspect'
   | 'rea.android.inspect'
   | 'rea.browser.targets'
-  | 'rea.browser.inspect';
+  | 'rea.browser.inspect'
+  | 'higgsfield.status'
+  | 'higgsfield.models'
+  | 'higgsfield.quote'
+  | 'higgsfield.generate'
+  | 'higgsfield.job';
 
 export interface HealthResponse {
   service: 'aurix-companion';
@@ -105,4 +110,23 @@ export interface CodexAgentSession {
   error: string;
   nextCursor: number;
   events: CodexAgentEvent[];
+}
+
+export interface HiggsfieldStatus {
+  installed: boolean;
+  signedIn: boolean;
+  version: unknown;
+  account: Record<string, unknown>;
+  message: string;
+  code?: string;
+}
+export interface HiggsfieldQuote {
+  quoteId: string;
+  createdAt: number;
+  expiresAt: number;
+  modelId: string;
+  prompt: string;
+  settings: { duration: number; resolution: string; aspectRatio: string };
+  raw: unknown;
+  pricing: Record<string, string | number>;
 }
