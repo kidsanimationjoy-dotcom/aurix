@@ -598,25 +598,47 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/codex/chat') {
-      let body;
-      try { body = await readJson(req, 24_000); }
-      catch (error) {
-        const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
-        return send(status >= 400 && status < 500 ? status : 400, {
-          error: 'INVALID_REQUEST',
-          message: status === 413 ? 'The chat request is too large.' : 'The chat request must contain valid JSON.',
-        });
-      }
+      const controller = new AbortController();
+      const abortOnRequest = () => controller.abort();
+      const abortOnResponseClose = () => {
+        if (!res.writableEnded)
+          controller.abort();
+      };
+      req.once('aborted', abortOnRequest);
+      res.once('close', abortOnResponseClose);
+
       try {
+        let body;
+        try { body = await readJson(req, 24_000); }
+        catch (error) {
+          const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 400;
+          return send(status >= 400 && status < 500 ? status : 400, {
+            error: 'INVALID_REQUEST',
+            message: status === 413 ? 'The chat request is too large.' : 'The chat request must contain valid JSON.',
+          });
+        }
+
+        if (controller.signal.aborted)
+          return;
+
         if (!sandboxVerified) {
           return send(409, { error: 'CODEX_SANDBOX_NOT_VERIFIED', message: 'Prepare the AURIX Codex profile and pass its local sandbox check before starting chat.' });
         }
         await validateCodexHome(paths, { projectRoots: codexRoots });
+        if (controller.signal.aborted)
+          return;
+
         const status = await inspectCodex({ command: codexCommand, prefixArgs: codexPrefixArgs, codexHome: paths.codexHome });
+        if (controller.signal.aborted)
+          return;
+
         if (status.state !== 'ready') {
           return send(409, { error: 'CODEX_SIGN_IN_REQUIRED', message: status.message || 'Sign in to the separate AURIX Codex profile first.' });
         }
         const executable = await resolveNativeCodexCommand(codexCommand, safeEnvironment(paths.codexHome), process.platform);
+        if (controller.signal.aborted)
+          return;
+
         const result = await runCodexReadOnlyChat({
           command: executable,
           workspaceRoot: paths.workspaceRoot,
@@ -624,9 +646,16 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
           platform: process.platform,
           env: safeEnvironment(paths.codexHome),
           messages: body.messages,
+          signal: controller.signal,
         });
+        if (controller.signal.aborted)
+          return;
+
         return send(200, { ok: true, ...result });
       } catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError'))
+          return;
+
         const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
         return send(400, {
           ok: false,
@@ -635,6 +664,9 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
             ? 'The local Codex CLI executable could not be started.'
             : error instanceof Error ? error.message.slice(0, 600) : 'Codex chat failed.',
         });
+      } finally {
+        req.off('aborted', abortOnRequest);
+        res.off('close', abortOnResponseClose);
       }
     }
 
