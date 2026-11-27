@@ -236,7 +236,7 @@ export function createCompanionServer({ token, origin, codexCommand = 'codex', c
         service: 'aurix-companion',
         apiVersion: 1,
         version: VERSION,
-        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job'],
+        capabilities: ['health', 'cli.codex.status', 'cli.codex.login', 'cli.codex.profile.prepare', 'cli.codex.sandbox.verify', 'cli.codex.chat', 'cli.codex.agent', 'rea.status', 'rea.javascript.analyze', 'rea.desktop.inspect', 'rea.android.inspect', 'rea.browser.targets', 'rea.browser.inspect', 'higgsfield.login', 'higgsfield.status', 'higgsfield.models', 'higgsfield.quote', 'higgsfield.generate', 'higgsfield.job'],
         grantedRoots: [],
         codexApprovedRootCount: codexRoots.length,
       });
