@@ -29,7 +29,7 @@ export function Media() {
   const [loadError, setLoadError] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginMessage, setLoginMessage] = useState('');
-  const [modelId, setModelId] = useState('seedance_2_5');
+  const [modelId, setModelId] = useState('seedance_2_0');
   const [duration, setDuration] = useState(5);
   const [resolution, setResolution] = useState<'720p' | '1080p'>('720p');
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('16:9');
@@ -52,7 +52,7 @@ export function Media() {
         if (!result.ok) throw new Error(result.error.message);
         setModels(result.value);
         if (!result.value.some((item) => item.id === modelId)) {
-          const supported = result.value.find((item) => item.id === 'seedance_2_5');
+          const supported = result.value.find((item) => item.id === 'seedance_2_0');
           if (supported) setModelId(supported.id);
         }
       } else {
@@ -89,7 +89,7 @@ export function Media() {
     return () => { active = false; window.clearInterval(timer); };
   }, [higgsfield, jobId, job?.status]);
 
-  const supportedModel = models.find((item) => item.id === 'seedance_2_5' && item.kinds.includes('video'));
+  const supportedModel = models.find((item) => item.id === 'seedance_2_0' && item.kinds.includes('video'));
   const currentModel = models.find((item) => item.id === modelId);
   const hasCredits = account ? accountCredits(account.account) : null;
 
@@ -180,7 +180,7 @@ export function Media() {
             <Panel title="Video prompt">
               <Field label="Model">
                 <select value={modelId} onChange={(e) => { setModelId(e.target.value); setQuote(null); setConfirmed(false); }}>
-                  {supportedModel ? <option value="seedance_2_5">{supportedModel.name} ({supportedModel.id})</option> : <option value="">No enabled video model found</option>}
+                  {supportedModel ? <option value="seedance_2_0">{supportedModel.name} ({supportedModel.id})</option> : <option value="">No enabled video model found</option>}
                 </select>
               </Field>
               <Field label="Describe the video"><textarea value={prompt} onChange={(e) => { setPrompt(e.target.value); setQuote(null); setConfirmed(false); }} placeholder="Describe subject, movement, camera and visual style." rows={6} /></Field>
@@ -193,7 +193,7 @@ export function Media() {
                 <button className="btn primary" disabled={!supportedModel || !prompt.trim() || busy} onClick={() => void requestQuote()}>{busy ? 'Estimating…' : 'Estimate credit cost'}</button>
                 <button className="btn" disabled={!prompt.trim()} onClick={() => void saveDraft()}>Save as draft</button>
               </div>
-              {!supportedModel && <Notice tone="warn">AURIX enables only Seedance 2.5 video generation in this first release. The live model catalog did not return that model, so generation remains disabled.</Notice>}
+              {!supportedModel && <Notice tone="warn">AURIX enables only Seedance 2.0 video generation in this first release. The live model catalog did not return that model, so generation remains disabled.</Notice>}
               {currentModel && <small>Model details are from the live Higgsfield catalog. Generation options are validated again by the companion before a quote is requested.</small>}
             </Panel>
             <Panel title="Cost estimate and confirmation">
