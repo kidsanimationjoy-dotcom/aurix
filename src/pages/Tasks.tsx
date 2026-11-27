@@ -12,6 +12,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   needs_clarification: 'Needs clarification',
   waiting_for_provider: 'Waiting for provider',
   awaiting_approval: 'Awaiting your approval',
+  awaiting_action_approval: 'Local action needs approval',
   running: 'Running',
   cancelling: 'Stopping',
   succeeded: 'Completed',
@@ -74,7 +75,7 @@ export function Tasks() {
         subtitle="AURIX classifies, plans, routes and records work. Provider execution is only enabled through a real connected task adapter."
       />
       <Notice tone="info">
-        This task engine is local and transparent. At present, provider integrations do not expose AURIX's task-execution contract, so tasks will wait rather than pretend an AI model has completed them.
+        This task engine is local and transparent. Codex coding tasks run only inside the selected approved project folder. Every command or file permission request must be reviewed separately here before Codex can continue.
       </Notice>
 
       <Panel title="Create a task">
@@ -160,9 +161,71 @@ export function Tasks() {
 
                   {task.status === 'awaiting_approval' && (
                     <Notice tone="warn">
-                      Review the selected provider and plan before starting this task. This approval only authorizes the provider to begin the task; any future file, command, network, or deployment operation must still pass its own scoped permission checks.
+                      Review the selected provider and plan before starting this task. This approval only authorizes the provider to begin the task; every later file or command operation requires another one-time approval.
                     </Notice>
                   )}
+
+                  {task.status === 'awaiting_action_approval' && task.pendingActionApproval && (() => {
+                    const approval = task.pendingActionApproval;
+                    const isNetwork = approval.kind === 'network';
+                    const isSessionGrant = !!approval.grantRoot;
+                    const isUnreviewableFileChange = approval.kind === 'file_change' && approval.changes.length === 0;
+                    const canApprove = !isNetwork && !isSessionGrant && !isUnreviewableFileChange;
+                    return (
+                      <div className="panel" role="group" aria-label="Codex local action approval">
+                        <h3>Codex requests permission: {approval.kind.replace('_', ' ')}</h3>
+                        {approval.reason && <p>{approval.reason}</p>}
+                        {approval.command.length > 0 && <>
+                          <small>Exact command requested</small>
+                          <pre className="code-block">{approval.command.join('\n')}</pre>
+                        </>}
+                        {approval.cwd && <small>Working directory: <code>{approval.cwd}</code></small>}
+                        {approval.network && (
+                          <Notice tone="warn">Network request: {approval.network.protocol}://{approval.network.host}. AURIX never approves network access.</Notice>
+                        )}
+                        {approval.grantRoot && (
+                          <Notice tone="warn">Session-wide access request for <code>{approval.grantRoot}</code> is not allowed. Codex must request exact per-turn paths instead.</Notice>
+                        )}
+                        {approval.changes.map((change, index) => (
+                          <div key={index}>
+                            <small>{change.kind}: {change.path}</small>
+                            {change.diff && <pre className="code-block">{change.diff}</pre>}
+                          </div>
+                        ))}
+                        {approval.requestedPermissions !== undefined && approval.requestedPermissions !== null && (
+                          <div>
+                            <small>Requested filesystem permissions</small>
+                            <pre className="code-block">{JSON.stringify(approval.requestedPermissions, null, 2)}</pre>
+                          </div>
+                        )}
+                        {approval.commandActions && approval.commandActions.length > 0 && (
+                          <div>
+                            <small>Parsed command actions</small>
+                            <pre className="code-block">{JSON.stringify(approval.commandActions, null, 2)}</pre>
+                          </div>
+                        )}
+                        {isUnreviewableFileChange && <Notice tone="warn">No exact changed-file list was supplied, so AURIX will not approve this request.</Notice>}
+                        <Notice tone="info">This decision applies to this request only. File-system grants are limited to the selected project and current task turn. No session-wide grants are saved.</Notice>
+                        <div className="row">
+                          <button
+                            className="btn primary sm"
+                            disabled={!canApprove}
+                            onClick={async () => {
+                              const accepted = await engine.resolveActionApproval(task.id, approval.id, 'accept');
+                              if (accepted) await audit({ action: 'task.action_approval.accept', target: approval.id, detail: approval.kind, outcome: 'success' });
+                            }}
+                          >Approve this action</button>
+                          <button
+                            className="btn sm"
+                            onClick={async () => {
+                              const declined = await engine.resolveActionApproval(task.id, approval.id, 'decline');
+                              if (declined) await audit({ action: 'task.action_approval.decline', target: approval.id, detail: approval.kind, outcome: 'denied' });
+                            }}
+                          >Decline</button>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="row">
                     {task.status === 'awaiting_approval' && (
