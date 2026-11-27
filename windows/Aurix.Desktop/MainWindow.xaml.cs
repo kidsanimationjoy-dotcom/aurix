@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private readonly LocalCodexChatService _localCodexChat = new();
     private SpeechSynthesizer? _speechSynthesizer;
     private ActiveOrbWindow? _activeOrb;
+    private bool _microphoneTestRunning;
     private string _companionToken = string.Empty;
     private bool _codexReady;
     private readonly List<LocalCodexMessage> _voiceConversation = new();
@@ -55,6 +56,7 @@ public partial class MainWindow : Window
             (nameof(ScanButton), ScanButton),
             (nameof(HandsFreeButton), HandsFreeButton),
             (nameof(VoiceDiagnosticsButton), VoiceDiagnosticsButton),
+            (nameof(TestMicrophoneButton), TestMicrophoneButton),
             (nameof(ListeningStatusText), ListeningStatusText),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
@@ -115,6 +117,50 @@ public partial class MainWindow : Window
                 "AURIX Voice Diagnostics",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
+    private async void TestMicrophoneButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_microphoneTestRunning)
+            return;
+
+        var resumeHandsFree = _handsFreeVoice?.IsRunning == true;
+        _microphoneTestRunning = true;
+        TestMicrophoneButton.IsEnabled = false;
+        VoiceDiagnosticsButton.IsEnabled = false;
+
+        // The live test opens the default input briefly, so pause AURIX's
+        // wake-word engine first to avoid competing for the same microphone.
+        if (resumeHandsFree)
+            StopHandsFreeListening(savePreference: false);
+
+        ListeningStatusText.Text =
+            "MICROPHONE TEST ACTIVE — say a short sentence now. Audio is processed locally and is not saved.";
+        ShowActiveOrb("Listening", "Microphone test — speak now");
+
+        try
+        {
+            var report = await MicrophoneTestService.RunAsync();
+            TaskOutputText.Text = report.Message;
+            ListeningStatusText.Text = report.Success
+                ? "Microphone test passed. AURIX successfully transcribed your speech."
+                : "Microphone test did not pass. Read the detailed result below.";
+        }
+        catch (Exception ex)
+        {
+            TaskOutputText.Text = $"Microphone test failed safely: {ex.GetType().Name}: {ex.Message}";
+            ListeningStatusText.Text = "Microphone test failed. Check the detailed result below.";
+        }
+        finally
+        {
+            _microphoneTestRunning = false;
+            HideActiveOrb();
+            TestMicrophoneButton.IsEnabled = true;
+            VoiceDiagnosticsButton.IsEnabled = true;
+
+            if (resumeHandsFree)
+                StartHandsFreeListening(savePreference: false);
         }
     }
 
@@ -328,14 +374,28 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (message.Contains("heard you", StringComparison.OrdinalIgnoreCase) ||
-                message.Contains("listening for one instruction", StringComparison.OrdinalIgnoreCase))
-                ShowActiveOrb("Listening", "Listening to you");
-            else if (message.StartsWith("I heard:", StringComparison.OrdinalIgnoreCase))
-                ShowActiveOrb("Thinking", "Preparing your request");
-            else if (message.Contains("stopped", StringComparison.OrdinalIgnoreCase) ||
-                     message.Contains("paused", StringComparison.OrdinalIgnoreCase))
-                HideActiveOrb();
+            // Disposing the wake-word listener just before the explicit
+            // microphone test raises a queued "paused" event. It must not
+            // hide the orb or overwrite the microphone-test status.
+            if (_microphoneTestRunning &&
+                (message.Contains("stopped", StringComparison.OrdinalIgnoreCase) ||
+                 message.Contains("paused", StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            switch (VoiceOrbStatusPolicy.Classify(message))
+            {
+                case VoiceOrbDisposition.Listening:
+                    ShowActiveOrb("Listening", message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase)
+                        ? "Hearing your speech"
+                        : "Listening to you");
+                    break;
+                case VoiceOrbDisposition.Thinking:
+                    ShowActiveOrb("Thinking", "Preparing your request");
+                    break;
+                case VoiceOrbDisposition.Hide:
+                    HideActiveOrb();
+                    break;
+            }
             var active = _handsFreeVoice?.IsRunning == true;
             if (!active && message.Contains("stopped", StringComparison.OrdinalIgnoreCase))
             {

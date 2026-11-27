@@ -22,6 +22,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     private SpeechRecognitionEngine? _engine;
     private Grammar? _wakeGrammar;
     private bool _disposed;
+    private DateTime _lastHypothesisStatusAt = DateTime.MinValue;
     private ListeningState _state = ListeningState.Stopped;
 
     public event Action<string>? StatusChanged;
@@ -68,6 +69,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engine.InitialSilenceTimeout = TimeSpan.FromSeconds(30);
                 engine.BabbleTimeout = TimeSpan.FromSeconds(5);
                 engine.SpeechRecognized += OnSpeechRecognized;
+                engine.SpeechHypothesized += OnSpeechHypothesized;
                 engine.RecognizeCompleted += OnRecognizeCompleted;
 
                 _engine = engine;
@@ -78,6 +80,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             catch
             {
                 engine.SpeechRecognized -= OnSpeechRecognized;
+                engine.SpeechHypothesized -= OnSpeechHypothesized;
                 engine.RecognizeCompleted -= OnRecognizeCompleted;
                 try { engine.SetInputToNull(); } catch { }
                 engine.Dispose();
@@ -105,7 +108,9 @@ public sealed class HandsFreeVoiceService : IDisposable
                 phrase.Equals("AURIX", StringComparison.OrdinalIgnoreCase) ||
                 phrase.Equals("Hey AURIX", StringComparison.OrdinalIgnoreCase);
 
-            if (!isWakePhrase || e.Result.Confidence < 0.68)
+            // Keep the wake grammar narrow, but avoid rejecting a clearly spoken
+            // wake phrase because the installed Windows recognizer scores it slightly low.
+            if (!isWakePhrase || e.Result.Confidence < 0.55)
                 return;
 
             _state = ListeningState.SwitchingToCommand;
@@ -124,6 +129,39 @@ public sealed class HandsFreeVoiceService : IDisposable
             // microphone listener is healthy when the recognizer is not.
             StopAfterRecognitionFailure(engine, $"AURIX could not switch into command mode: {ex.Message}");
         }
+    }
+
+    private void OnSpeechHypothesized(object? sender, SpeechHypothesizedEventArgs e)
+    {
+        var hypothesis = e.Result?.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(hypothesis))
+            return;
+
+        string statusPrefix;
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+
+            statusPrefix = _state switch
+            {
+                ListeningState.WaitingForWakeWord => "Checking wake phrase",
+                ListeningState.ListeningForCommand => "Hearing",
+                _ => string.Empty
+            };
+            if (string.IsNullOrEmpty(statusPrefix))
+                return;
+
+            // Avoid flooding the UI while the recognizer revises its partial transcript.
+            var now = DateTime.UtcNow;
+            if (now - _lastHypothesisStatusAt < TimeSpan.FromMilliseconds(300))
+                return;
+            _lastHypothesisStatusAt = now;
+        }
+
+        // During wake mode this is only a partial hypothesis, not an accepted
+        // wake phrase, so it updates the status text but does not show the orb.
+        StatusChanged?.Invoke($"{statusPrefix}: {hypothesis}");
     }
 
     private void OnRecognizeCompleted(object? sender, RecognizeCompletedEventArgs e)
@@ -154,9 +192,13 @@ public sealed class HandsFreeVoiceService : IDisposable
                     _engine.UnloadAllGrammars();
                     var dictation = new DictationGrammar { Name = "AURIX one-command dictation" };
                     _engine.LoadGrammar(dictation);
-                    _engine.InitialSilenceTimeout = TimeSpan.FromSeconds(8);
-                    _engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(1100);
-                    _engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1600);
+                    // A short one-command window prevents the orb remaining visible
+                    // when no instruction follows the wake phrase.
+                    _engine.InitialSilenceTimeout = TimeSpan.FromSeconds(6);
+                    _engine.BabbleTimeout = TimeSpan.FromSeconds(4);
+                    _engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(900);
+                    _engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1300);
+                    _engine.MaxAlternates = 3;
                     _state = ListeningState.ListeningForCommand;
                     _engine.RecognizeAsync(RecognizeMode.Single);
                     status = "AURIX is listening for one instruction…";
@@ -164,7 +206,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                 else if (_state == ListeningState.ListeningForCommand)
                 {
                     var recognitionResult = e.Result;
-                    if (recognitionResult is not null && recognitionResult.Confidence >= 0.42)
+                    if (recognitionResult is not null && recognitionResult.Confidence >= 0.30)
                         command = recognitionResult.Text?.Trim();
 
                     // Return to the narrow wake grammar immediately after one command.
@@ -178,7 +220,9 @@ public sealed class HandsFreeVoiceService : IDisposable
                     _engine.RecognizeAsync(RecognizeMode.Multiple);
 
                     status = string.IsNullOrWhiteSpace(command)
-                        ? "I didn't catch that instruction. Say “AURIX” when you're ready to try again."
+                        ? recognitionResult is null
+                            ? "No speech detected within 6 seconds. The orb is closing. Say “AURIX” when you're ready to try again."
+                            : "I heard speech, but couldn't recognise the instruction clearly. The orb is closing. Say “AURIX” when you're ready to try again."
                         : $"I heard: “{command}”. Say “AURIX” again whenever you need me.";
                 }
             }
@@ -231,6 +275,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     private void DisposeEngine(SpeechRecognitionEngine engine)
     {
         engine.SpeechRecognized -= OnSpeechRecognized;
+        engine.SpeechHypothesized -= OnSpeechHypothesized;
         engine.RecognizeCompleted -= OnRecognizeCompleted;
         try { engine.RecognizeAsyncCancel(); } catch { }
         try { engine.SetInputToNull(); } catch { }
