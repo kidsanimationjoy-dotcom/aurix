@@ -117,7 +117,7 @@ export class HiggsfieldAdapter implements MediaAdapter {
   }
 
   /** A direct submit is intentionally blocked: callers must quote and confirm first. */
-  async submitJob(_request: MediaJobRequest): Promise<Result<MediaJob>> {
+  async submitJob(_request?: MediaJobRequest): Promise<Result<MediaJob>> {
     return {
       ok: false,
       error: {
@@ -152,7 +152,8 @@ export class HiggsfieldAdapter implements MediaAdapter {
     }
   }
 
-  async getJob(id: string): Promise<Result<MediaJob>> {
+  async getJob(id?: string): Promise<Result<MediaJob>> {
+    if (!id) return { ok: false, error: { code: 'NOT_CONNECTED', message: 'Provide a Higgsfield job ID to look up.' } };
     try {
       const raw = await getHiggsfieldJob(this.getConfig(), id);
       const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
