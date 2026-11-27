@@ -1,6 +1,15 @@
 # Provider and Authentication Matrix
 
-This matrix is a design constraint. It prevents AURIX from confusing account sign-in, API access, local CLI access and permission to reuse proprietary services.
+This matrix is a design constraint. It prevents AURIX from confusing account sign-in, API access, local CLI access and permission to reuse proprietary services. 
+
+## Current implementation status in this repository
+
+- **Codex:** local chat and project-scoped coding tasks are implemented through the paired companion and official local Codex CLI. Project-root preflight and a fresh OS sandbox canary are required. Specialist agents use saved profile snapshots and explicit instructions. Per-agent terminal/file-write restrictions are enforced; AURIX globally denies network approval requests. One-time command/file approvals are shown in Task Center.
+- **REA:** local application and browser inspection are implemented through the paired companion for explicitly approved project roots and loopback browser endpoints. This does not expose inaccessible private server source or private model weights.
+- **Higgsfield:** official CLI account status, model discovery, cost estimates, paid-job confirmation and job polling are implemented. Live generation still needs acceptance testing against a real user account.
+- **Claude, Grok and 21st.dev:** current AURIX adapters are interface-only; live provider execution/component search is not connected.
+
+A listed provider or adapter does not prove a user's account is connected. Runtime status and end-to-end acceptance tests must be completed before advertising a live integration.
 
 | Provider/system | Best AURIX role | Supported route to investigate | API key? | Important boundary |
 |---|---|---|---|---|
@@ -75,8 +84,8 @@ AURIX must distinguish Grok Build interactive sign-in from xAI API credentials. 
 
 - rea-agents is a local CLI/MCP tool.
 - It requires a supported Node runtime and, for some analysis families, external analysis tools/providers.
-- The current AURIX-REA investigation console is not itself a connected REA runtime; its EngineStatus component explicitly records that the engine is pending.
-- Connect and test REA in a local worker before advertising analysis as live.
+- This AURIX repository now includes local REA inspection through the paired companion, using explicitly approved application roots and loopback browser endpoints.
+- Some REA analysis families may still require external tools/providers; report those capabilities as unavailable until installed and verified.
 
 ## Credential architecture
 
