@@ -227,4 +227,4 @@ export class HiggsfieldAdapter implements MediaAdapter {
       return { ok: false, error: { code: 'PROVIDER_ERROR', message: error instanceof Error ? error.message : 'Could not retrieve Higgsfield job.' } };
     }
   }
-}}
+}
