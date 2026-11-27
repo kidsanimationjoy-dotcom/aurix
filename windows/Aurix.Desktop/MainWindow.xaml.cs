@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private SpeechSynthesizer? _speechSynthesizer;
     private string _companionToken = string.Empty;
     private bool _codexReady;
+    private readonly List<LocalCodexMessage> _voiceConversation = new();
 
     public event Action<bool>? UpdateTrayWakeState;
 
@@ -125,6 +126,12 @@ public partial class MainWindow : Window
         {
             CodexLoginButton.IsEnabled = true;
         }
+    }
+
+    private void ClearVoiceChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        _voiceConversation.Clear();
+        TaskOutputText.Text = "Voice conversation cleared from this session's memory.";
     }
 
     private void UpdateCodexStatus(LocalCodexStatus status)
@@ -387,19 +394,27 @@ public partial class MainWindow : Window
                 return;
             }
 
+            _voiceConversation.Add(new LocalCodexMessage("user", prompt));
             TaskOutputText.Text = "AURIX is thinking…";
-            var answer = await _localCodexChat.ChatAsync(token, prompt, cancellationToken);
+            var answer = await _localCodexChat.ChatAsync(token, _voiceConversation, cancellationToken);
+            _voiceConversation.Add(new LocalCodexMessage("assistant", answer.Length > 4_000 ? answer[..4_000] : answer));
+            while (_voiceConversation.Count > 12)
+                _voiceConversation.RemoveAt(0);
             TaskOutputText.Text = answer;
             ListeningStatusText.Text = "AI response ready. Say “AURIX” for another instruction.";
             SpeakAnswer(answer);
         }
         catch (OperationCanceledException)
         {
+            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
+                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
             TaskOutputText.Text = "AI request stopped. No further response will be requested.";
             ListeningStatusText.Text = "Emergency stop activated.";
         }
         catch (Exception ex)
         {
+            if (_voiceConversation.Count > 0 && _voiceConversation[^1].Role == "user" && _voiceConversation[^1].Content == prompt)
+                _voiceConversation.RemoveAt(_voiceConversation.Count - 1);
             TaskOutputText.Text = $"AI chat could not complete: {ex.Message}";
         }
         finally
