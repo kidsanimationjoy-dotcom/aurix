@@ -127,7 +127,8 @@ export interface HiggsfieldQuote {
   expiresAt: number;
   modelId: string;
   prompt: string;
-  settings: { duration: number; resolution: string; aspectRatio: string; mode: 'std' | 'fast' };
+  kind: 'video' | 'image';
+  settings: Record<string, string | number>;
   raw: unknown;
   pricing: Record<string, string | number>;
 }
