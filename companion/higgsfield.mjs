@@ -288,6 +288,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
     async quote(spec) {
       const catalog = await this.listModels();
       const normalized = normalizeSpec(spec);
+      if (spec.kind !== undefined && spec.kind !== normalized.kind) throw new Error('The requested media type does not match the selected Higgsfield model.');
       if (!catalog.models.some((model) => model.id === normalized.modelId && (model.kinds.length === 0 || model.kinds.some((kind) => new RegExp(normalized.kind, 'iu').test(String(kind)))))) {
         throw new Error('The requested model is not present in the live Higgsfield ' + normalized.kind + '-model catalog.');
       }
@@ -330,7 +331,7 @@ export function createHiggsfieldManager({ command = 'higgsfield' } = {}) {
       const created = parseJson(await cli(makeArgs('create', spec), 90_000), 'generation job creation');
       const jobId = findJobId(created);
       if (!jobId) throw new Error('Higgsfield accepted a generation request but did not return a recognised job ID. Check the account job list before retrying to avoid duplicate charges.');
-      return { jobId, submittedAt: new Date().toISOString(), raw: created };
+      return { jobId, submittedAt: new Date().toISOString() };
     },
 
     async getJob(jobId) {
