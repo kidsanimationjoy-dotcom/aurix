@@ -160,6 +160,7 @@ test('aborting a Codex chat request terminates its active CLI process', async ()
     "if (args[0] === 'sandbox') {",
     "  const separator = args.indexOf('--');",
     "  if (separator >= 0 && args[separator + 2] === 'exec') {",
+    "    process.on('SIGTERM', () => {});",
     "    fs.writeFileSync(" + JSON.stringify(markerPath) + ", String(process.pid));",
     "    setInterval(() => {}, 1000);",
     "    return;",
@@ -206,7 +207,7 @@ test('aborting a Codex chat request terminates its active CLI process', async ()
         error instanceof Error && error.name === 'AbortError');
 
       let exited = false;
-      for (let attempt = 0; attempt < 80; attempt++) {
+      for (let attempt = 0; attempt < 120; attempt++) {
         try {
           process.kill(pid!, 0);
           await new Promise((resolve) => setTimeout(resolve, 25));
