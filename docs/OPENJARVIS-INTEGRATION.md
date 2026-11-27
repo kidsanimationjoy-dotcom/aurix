@@ -1,6 +1,38 @@
 # Stanford OpenJarvis integration
 
-Stanford OpenJarvis is AURIX's **primary local AI reasoning engine**. It handles the natural-language understanding for spoken and typed AI requests. AURIX remains the computer-control layer: it independently validates every proposed action, displays the plan, and asks the user for approval before performing supported actions. Codex remains available as an optional backup provider.
+Stanford OpenJarvis is AURIX's **primary local AI reasoning engine**. It handles natural-language understanding for spoken and typed AI requests. AURIX remains the computer-control layer: it independently validates every proposed action, displays the plan, and asks the user for approval before performing supported actions. Codex remains available as an optional backup provider.
+
+## Native Windows setup
+
+OpenJarvis provides a native Windows installation path. Start with Stanford's official [Native Windows installation guide](https://open-jarvis.github.io/OpenJarvis/getting-started/windows-native/).
+
+The current native Windows guide lists these prerequisites:
+
+- Windows 10 version 1809 or newer.
+- Python 3.11–3.13.
+- Git on PATH.
+- Microsoft C++ build tools (MSVC linker).
+- Approximately 5 GB of free disk space.
+
+The official installer clones OpenJarvis to `%LOCALAPPDATA%\OpenJarvis\src` by default, prepares its desktop/server Python environment, installs `uv`, and creates a `jarvis.cmd` command shim. The installer may offer to register a separate Windows scheduled task. When using AURIX's on-demand server controls, skip that separate scheduled task to avoid running two server managers. Restart AURIX after installation so it can read the updated user PATH.
+
+The installation is performed by Stanford's installer, not by AURIX. AURIX does not download or run the install script itself.
+
+## Start and stop the server from AURIX
+
+1. Open AURIX Desktop.
+2. Select **OpenJarvis setup guide** if installation has not been completed.
+3. Select **Start local server**. AURIX looks for the native installation under `%LOCALAPPDATA%\OpenJarvis\src` (or the `OPENJARVIS_HOME` location) and the installed `uv.exe`.
+4. AURIX launches the fixed command:
+
+   ```powershell
+   uv run --project "$env:LOCALAPPDATA\OpenJarvis\src" jarvis serve --host 127.0.0.1 --port 8000 --agent simple
+   ```
+
+5. AURIX waits for the local API, checks its health and available model, and selects OpenJarvis as the active provider.
+6. Use **Stop local server** when finished. AURIX only stops the server process it started itself. Exiting AURIX stops that process; closing the window to the system tray leaves it running.
+
+If the server is already responding on port 8000, AURIX checks it instead of starting a duplicate. If OpenJarvis was started by its own scheduled task or another terminal, AURIX does not take ownership of it and will not stop it.
 
 ## How the integration works
 
@@ -14,44 +46,17 @@ Stanford OpenJarvis is AURIX's **primary local AI reasoning engine**. It handles
 - The existing emergency stop cancels the active OpenJarvis request or remaining approved task steps.
 - Codex remains selectable as a backup and continues to use the authenticated AURIX companion and its verified sandbox.
 
-OpenJarvis is not granted direct access to AURIX's desktop-control tools by this connector. It does not receive shell, arbitrary script, general file, browser-navigation, or unrestricted keyboard/mouse capabilities. OpenJarvis's built-in agent tools are not used by this AURIX connection.
+OpenJarvis is not granted direct access to AURIX's desktop-control tools by this connector. It does not receive shell, arbitrary script, general file, browser-navigation, or unrestricted keyboard/mouse capabilities. OpenJarvis's built-in agent tools are not used by this AURIX connection. AURIX launches only the installed `uv.exe` with fixed arguments; it does not accept command text from the model or user for this startup operation.
 
-## Start the local OpenJarvis API
+## Troubleshooting
 
-Install OpenJarvis using its official Windows desktop release or its documented CLI setup. The AURIX connector requires the local API server to be available at `127.0.0.1:8000`.
+- **Installation not found:** complete the official native Windows setup and restart AURIX.
+- **uv.exe not found:** confirm the official installer completed and added its user-local bin directory to PATH, then restart AURIX.
+- **API starts but no model is available:** complete the OpenJarvis inference-engine/model setup in its official guide, then select **Check OpenJarvis**.
+- **Port 8000 is already in use:** close the other local service or check whether OpenJarvis is already running. AURIX will not start a duplicate server if something is responding on that port.
 
-For a CLI installation with the server dependencies installed, start the API in PowerShell:
-
-```powershell
-jarvis serve --host 127.0.0.1 --port 8000 --agent simple
-```
-
-The `server` extra is required when installing the CLI from source:
-
-```powershell
-uv sync --extra server
-```
-
-Use `127.0.0.1`, not `0.0.0.0`, so the API remains available only to processes on this computer. The `simple` agent keeps this AURIX integration from using OpenJarvis's separate built-in tool agents. Keep the API server running while AURIX uses OpenJarvis.
-
-Official project resources:
-
-- https://github.com/open-jarvis/OpenJarvis
-- https://openjarvis.stanford.edu/
-- https://open-jarvis.github.io/OpenJarvis/deployment/api-server/
-
-## Use OpenJarvis in AURIX
-
-1. Start the OpenJarvis API server on the same Windows computer.
-2. Open AURIX Desktop. **Stanford OpenJarvis** is selected by default.
-3. Select **Check OpenJarvis** to verify that the API and a local model are available.
-4. Enter a request or say **“AURIX”** followed by one instruction.
-5. Review any proposed desktop plan. AURIX will perform no AI-proposed desktop action unless you approve it.
-
-To use the backup, select **Codex (backup AI provider)**, connect the local AURIX companion, verify its sandbox, and complete the official Codex sign-in if required.
-
-If OpenJarvis is not ready, check that its API server is running, a model is installed, and it is bound to `127.0.0.1:8000`. If API authentication is configured, set `OPENJARVIS_API_KEY` in the environment inherited by AURIX. Do not put API keys in chat messages, source files, or audit logs.
+Do not expose the local API on `0.0.0.0` or a public network. AURIX intentionally binds to `127.0.0.1`.
 
 ## Current limits
 
-This is a local OpenJarvis reasoning integration with AURIX's own validated desktop-action pipeline. It does not automatically install OpenJarvis, download model weights, or bundle a model with AURIX. OpenJarvis does not bypass AURIX's app allowlist, action parser, separate approvals, task audit boundaries, or emergency stop. Do not expose the API server to a public or untrusted network.
+AURIX can start and stop the local OpenJarvis API when its native Windows installation is found. It does not install OpenJarvis, automatically download model weights, or bundle the model with AURIX. OpenJarvis does not bypass AURIX's app allowlist, action parser, separate approvals, task audit boundaries, or emergency stop.
