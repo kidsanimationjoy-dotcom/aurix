@@ -311,6 +311,140 @@ test('interrupted tasks are marked failed after a reload rather than shown as st
 });
 
 
+
+async function waitForTaskStatus(db: Db, taskId: string, status: string, attempts = 60) {
+  for (let index = 0; index < attempts; index += 1) {
+    const current = db.get('tasks', taskId);
+    if (current?.status === status) return current;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return db.get('tasks', taskId) ?? null;
+}
+
+test('Task Center pauses a running task for a one-time local action approval and resumes after acceptance', async () => {
+  const db = await freshDb();
+  let decision: string | null = null;
+  const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => {
+    decision = await context.requestApproval({
+      kind: 'command',
+      reason: 'Codex needs to run the project test command.',
+      command: ['npm test'],
+      cwd: '/approved/project',
+      changes: [],
+      requestedPermissions: null,
+    });
+    if (decision === 'accept') await context.emitOutput('Tests completed.');
+    return { output: decision === 'accept' ? 'Tests completed.' : 'The command was declined.' };
+  };
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({ projectId: 'project-1', prompt: 'Hello there', preferredProvider: 'claude' });
+  assert.equal(task.status, 'awaiting_approval');
+  await engine.approve(task.id);
+  const waiting = await waitForTaskStatus(db, task.id, 'awaiting_action_approval');
+  assert.equal(waiting?.pendingActionApproval?.kind, 'command');
+  assert.deepEqual(waiting?.pendingActionApproval?.command, ['npm test']);
+  const approvalId = waiting?.pendingActionApproval?.id ?? '';
+  assert.ok(approvalId);
+
+  assert.equal(await engine.resolveActionApproval(task.id, approvalId, 'accept'), true);
+  assert.equal(await engine.resolveActionApproval(task.id, approvalId, 'accept'), false);
+  const completed = await waitForTaskStatus(db, task.id, 'succeeded');
+  assert.equal(completed?.status, 'succeeded');
+  assert.equal(completed?.pendingActionApproval, null);
+  assert.equal(decision, 'accept');
+  assert.ok(db.snapshot('taskEvents').some((event) => event.type === 'task.action_approval.requested'));
+  assert.ok(db.snapshot('taskEvents').some((event) => event.type === 'task.action_approval.granted'));
+});
+
+test('declining a Codex local action is recorded and the task can continue without that action', async () => {
+  const db = await freshDb();
+  let decision: string | null = null;
+  const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => {
+    decision = await context.requestApproval({
+      kind: 'file_change',
+      reason: 'Codex proposes a file update.',
+      command: [],
+      cwd: '/approved/project',
+      changes: [{ path: 'src/index.ts', kind: 'update', diff: '--- a/src/index.ts\n+++ b/src/index.ts' }],
+    });
+    return { output: decision === 'decline' ? 'No file changes were applied.' : 'File change approved.' };
+  };
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({ projectId: 'project-1', prompt: 'Hello there', preferredProvider: 'claude' });
+  await engine.approve(task.id);
+  const waiting = await waitForTaskStatus(db, task.id, 'awaiting_action_approval');
+  const approvalId = waiting?.pendingActionApproval?.id ?? '';
+  assert.ok(approvalId);
+  assert.equal(await engine.resolveActionApproval(task.id, approvalId, 'decline'), true);
+  const completed = await waitForTaskStatus(db, task.id, 'succeeded');
+  assert.equal(completed?.status, 'succeeded');
+  assert.equal(decision, 'decline');
+  assert.equal(completed?.output, 'No file changes were applied.');
+  assert.ok(db.snapshot('taskEvents').some((event) => event.type === 'task.action_approval.denied'));
+});
+
+test('cancelling Task Center while a local action approval is pending interrupts the adapter', async () => {
+  const db = await freshDb();
+  let decision: string | null = null;
+  const executor: TaskExecutionAdapter['executeTask'] = async (_request, context) => {
+    decision = await context.requestApproval({
+      kind: 'command',
+      reason: 'A command needs approval.',
+      command: ['npm test'],
+      cwd: '/approved/project',
+      changes: [],
+    });
+    return { output: 'stopped' };
+  };
+  const engine = new TaskEngine(db, [adapter(executor, true)]);
+  const task = await engine.submit({ projectId: 'project-1', prompt: 'Hello there', preferredProvider: 'claude' });
+  await engine.approve(task.id);
+  const waiting = await waitForTaskStatus(db, task.id, 'awaiting_action_approval');
+  assert.ok(waiting?.pendingActionApproval?.id);
+  assert.equal(await engine.cancel(task.id), true);
+  const finished = await waitForTaskStatus(db, task.id, 'cancelled');
+  assert.equal(finished?.status, 'cancelled');
+  assert.equal(finished?.pendingActionApproval, null);
+  assert.equal(decision, 'cancel');
+});
+
+test('a task waiting for a local action approval is failed safely after app reload', async () => {
+  const db = await freshDb();
+  const approval = {
+    id: 'approval-stale',
+    kind: 'command' as const,
+    reason: 'Pending command',
+    command: ['npm test'],
+    cwd: '/approved/project',
+    changes: [],
+  };
+  const task = await db.create('tasks', {
+    projectId: 'project-1',
+    prompt: 'Reloaded task',
+    intent: 'coding',
+    intentReason: 'test',
+    preferredProvider: 'openai',
+    selectedProviderId: 'openai',
+    status: 'awaiting_action_approval',
+    approvalStatus: 'approved',
+    approvedAt: Date.now(),
+    pendingActionApproval: approval,
+    plan: [],
+    progress: 20,
+    output: '',
+    errorCode: '',
+    errorMessage: '',
+    timeoutMs: 10_000,
+    startedAt: Date.now(),
+    finishedAt: null,
+  });
+  const engine = new TaskEngine(db, []);
+  assert.equal(await engine.recoverInterruptedTasks(), 1);
+  assert.equal(db.get('tasks', task.id)?.status, 'failed');
+  assert.equal(db.get('tasks', task.id)?.pendingActionApproval, null);
+  assert.equal(db.get('tasks', task.id)?.errorCode, 'INTERRUPTED_AFTER_RELOAD');
+});
+
 test('retry re-checks provider availability for the same saved task', async () => {
   const db = await freshDb();
   let connected = false;
