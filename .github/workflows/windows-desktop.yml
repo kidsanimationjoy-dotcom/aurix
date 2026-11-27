@@ -34,7 +34,7 @@ jobs:
         run: dotnet build windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release
 
       - name: Verify AI desktop proposal policy
-        run: dotnet run windows/Aurix.Desktop.Tests/Aurix.Desktop.Tests.csproj --configuration Release
+        run: dotnet run --project windows/Aurix.Desktop.Tests/Aurix.Desktop.Tests.csproj --configuration Release
 
       - name: Publish self-contained Windows x64 application
         run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"
