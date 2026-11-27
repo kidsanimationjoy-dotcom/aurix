@@ -262,7 +262,7 @@ export function Tasks() {
                         if (retried) await audit({ action: 'task.retry', target: task.id, outcome: 'info' });
                       }}>Check provider again</button>
                     )}
-                    {!isTerminal(task.status) && task.status !== 'awaiting_approval' && (
+                    {!isTerminal(task.status) && (
                       <button className="btn sm" onClick={async () => {
                         const ok = await engine.cancel(task.id);
                         if (ok) await audit({ action: 'task.cancel', target: task.id, outcome: 'info' });

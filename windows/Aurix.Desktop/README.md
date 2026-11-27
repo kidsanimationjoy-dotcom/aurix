@@ -44,6 +44,22 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - Startup registration can be enabled or disabled from the AURIX window.
 - Microsoft Defender status query and user-confirmed quick-scan request.
 
+## Connect the Windows app to local Codex reasoning
+
+The Windows desktop companion can use the AURIX Node companion's existing read-only Codex chat endpoint to interpret natural-language instructions that do not match the built-in command patterns.
+
+1. On the same computer, open the AURIX repository folder in PowerShell and run \`npm install\`, then \`npm run companion\`.
+2. Keep that terminal open. It prints a local URL and a pairing token. Do not share the token publicly.
+3. In the Windows app, expand **Connect local AI reasoning**, enter the loopback URL (normally \`http://127.0.0.1:4317\`) and the pairing token, then select **Pair / refresh status**.
+4. Select **Prepare / verify Codex**. AURIX creates its separate Codex profile and runs the actual local sandbox canary. A green result is required before AI chat is enabled.
+5. Select **Sign in with ChatGPT** and complete the official Codex sign-in in the companion terminal. Return to AURIX and select **Pair / refresh status** again.
+
+The pairing token is encrypted with Windows DPAPI for the current Windows account. The desktop app accepts only HTTP loopback URLs, requires the companion's bearer token, and calls only its health, Codex status, profile preparation, sign-in and read-only chat routes. It does not read the user's normal Codex credentials or send audio recordings. The companion must remain running while AI reasoning is used.
+
+When a spoken or typed instruction is outside the exact built-in command patterns, AURIX asks local Codex for a JSON proposal. AURIX rejects unknown fields, unknown applications, unsupported action types, oversized values and malformed responses. Only the following native actions can be proposed: launch a supported app, inspect visible windows, inspect named controls, click an exact named button, or replace an exact named editable field. An AI-proposed plan is displayed and requires a separate approval before execution; button clicks and text entry still have their own approval prompts. Password/secret fields and destructive controls remain blocked. No arbitrary shell command, script, general filesystem operation, network action or unrestricted mouse/keyboard control is exposed by this bridge.
+
+Read-only chat can also return a normal answer when the requested task is outside these supported desktop actions. A successful chat response is not proof that AURIX has carried out an action.
+
 ## First supported task commands
 
 - `Open Notepad`
