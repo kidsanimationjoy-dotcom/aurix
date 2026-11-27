@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private HandsFreeVoiceService? _handsFreeVoice;
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
+    private readonly LocalOpenJarvisChatService _localOpenJarvisChat = new();
     private SpeechSynthesizer? _speechSynthesizer;
     private ActiveOrbWindow? _activeOrb;
     private bool _microphoneTestRunning;
@@ -58,6 +59,8 @@ public partial class MainWindow : Window
             (nameof(VoiceDiagnosticsButton), VoiceDiagnosticsButton),
             (nameof(TestMicrophoneButton), TestMicrophoneButton),
             (nameof(ListeningStatusText), ListeningStatusText),
+            (nameof(AiProviderCombo), AiProviderCombo),
+            (nameof(CheckOpenJarvisButton), CheckOpenJarvisButton),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
             (nameof(PairCompanionButton), PairCompanionButton),
@@ -301,6 +304,25 @@ public partial class MainWindow : Window
         AiConnectionStatusText.Text = status.CanChat
             ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI-generated clicks and text entry are limited to Notepad."
             : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
+    }
+
+    private async void CheckOpenJarvisButton_Click(object sender, RoutedEventArgs e)
+    {
+        CheckOpenJarvisButton.IsEnabled = false;
+        AiConnectionStatusText.Text = "Checking the local Stanford OpenJarvis service…";
+        try
+        {
+            AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync();
+            AiProviderCombo.SelectedIndex = 1;
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "OpenJarvis is not ready: " + ex.Message;
+        }
+        finally
+        {
+            CheckOpenJarvisButton.IsEnabled = true;
+        }
     }
 
     private void StartHandsFreeListening(bool savePreference)
@@ -589,6 +611,11 @@ public partial class MainWindow : Window
 
     private async Task RunAiChatAsync(string prompt)
     {
+        if (AiProviderCombo.SelectedIndex == 1)
+        {
+            await RunOpenJarvisChatAsync(prompt);
+            return;
+        }
         var token = CurrentCompanionToken();
         const string actionContract = """
 You are translating a user's voice request into either an answer or a proposed AURIX desktop plan.
@@ -730,6 +757,58 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             {
                 TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
                 ListeningStatusText.Text = "AI request finished with an issue.";
+            }
+        }
+        finally
+        {
+            FinishTaskRun(taskRun);
+        }
+    }
+
+    private async Task RunOpenJarvisChatAsync(string prompt)
+    {
+        var taskRun = _taskRuns.BeginRun();
+        var cancellationToken = taskRun.Token;
+        RunTaskButton.IsEnabled = false;
+        EmergencyStopButton.IsEnabled = true;
+        PlanText.Text = "STANFORD OPENJARVIS — LOCAL CHAT ONLY\nOpenJarvis can answer questions, but it has no direct desktop-control tools in this integration.";
+        TaskOutputText.Text = "Checking the local OpenJarvis model…";
+
+        try
+        {
+            var status = await _localOpenJarvisChat.CheckAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
+
+            AiConnectionStatusText.Text = status;
+            var messages = _voiceConversation.TakeLast(8).ToList();
+            messages.Add(new LocalCodexMessage("user", prompt));
+            TaskOutputText.Text = "AURIX is asking the local OpenJarvis model…";
+            var answer = await _localOpenJarvisChat.ChatAsync(messages, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_taskRuns.IsCurrent(taskRun))
+                return;
+
+            AddVoiceConversationTurn(prompt, answer);
+            TaskOutputText.Text = answer;
+            ListeningStatusText.Text = "OpenJarvis answer ready. Computer actions remain under AURIX's separate approval controls.";
+            SpeakAnswer(answer);
+        }
+        catch (OperationCanceledException)
+        {
+            if (_taskRuns.IsCurrent(taskRun))
+            {
+                TaskOutputText.Text = "OpenJarvis request stopped.";
+                ListeningStatusText.Text = "Emergency stop activated.";
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_taskRuns.IsCurrent(taskRun))
+            {
+                TaskOutputText.Text = "OpenJarvis could not answer: " + ex.Message;
+                ListeningStatusText.Text = "OpenJarvis request finished with an issue.";
             }
         }
         finally
