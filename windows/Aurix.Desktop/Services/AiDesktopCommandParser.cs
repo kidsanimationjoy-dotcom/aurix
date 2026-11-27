@@ -82,7 +82,7 @@ public static class AiDesktopCommandParser
         // Require an action verb followed by the exact button label. This
         // prevents "open Notepad" from authorizing a click on a button named "Open".
         if (Regex.IsMatch(userPrompt,
-            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:click|press|select|activate)\b",
+            @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not)\b[\s\S]{0,40}\b(?:click|press|select|activate)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
@@ -100,7 +100,7 @@ public static class AiDesktopCommandParser
             return false;
 
         if (Regex.IsMatch(userPrompt,
-            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:type|enter|write|paste|fill|put|insert|replace)\b",
+            @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not)\b[\s\S]{0,40}\b(?:type|enter|write|paste|fill|put|insert|replace)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
