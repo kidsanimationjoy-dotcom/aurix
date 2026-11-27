@@ -164,6 +164,20 @@ Reject("negated text-entry request with conversational wording rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
     "I don't want you to type Hello into Text Editor in Notepad");
 
+
+var taskRuns = new TaskRunCoordinator();
+var firstRun = taskRuns.BeginRun();
+Check("first desktop task becomes active", taskRuns.IsCurrent(firstRun));
+var secondRun = taskRuns.BeginRun();
+Check("new desktop task cancels the previous task", firstRun.IsCancellationRequested);
+Check("new desktop task becomes active", taskRuns.IsCurrent(secondRun));
+taskRuns.CompleteRun(firstRun);
+Check("older task completion cannot clear the newer task", taskRuns.IsCurrent(secondRun));
+taskRuns.CancelCurrent();
+Check("emergency stop cancels the active task", secondRun.IsCancellationRequested);
+taskRuns.CompleteRun(secondRun);
+Check("completed desktop task is no longer active", !taskRuns.IsCurrent(secondRun));
+
 if (failed > 0)
 {
     Console.Error.WriteLine($"{failed} of {passed + failed} proposal-policy checks failed.");
