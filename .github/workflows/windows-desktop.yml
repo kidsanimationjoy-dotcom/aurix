@@ -56,6 +56,7 @@ jobs:
           $exe = Join-Path $publish "Aurix.Desktop.exe"
           if (!(Test-Path -LiteralPath $exe)) { throw "Published executable was not found." }
           Copy-Item "windows/Aurix.Desktop/README.md" (Join-Path $publish "README.txt")
+          Copy-Item "windows/Aurix.Desktop/Run-AURIX-Readiness.cmd" (Join-Path $publish "Run-AURIX-Readiness.cmd")
           $diagnostics = Join-Path $publish "diagnostics"
           New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
           Copy-Item "windows/Aurix.Desktop/diagnostics/Test-AurixReadiness.ps1" $diagnostics
