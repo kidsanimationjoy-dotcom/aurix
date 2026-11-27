@@ -1,21 +1,18 @@
 # AURIX launch readiness
 
-**Decision: NOT READY for public launch.** A Windows x64 preview package has been built and its automated checks pass, but legal, signing, device-validation and broader product gates remain open.
+**Decision: NOT READY for public launch.** The Windows desktop companion is merged into `main` and all three fresh CI workflows passed. Legal, trusted-signing, real-device acceptance and broader product gates remain open.
 
-## Verified Windows preview
+## Latest merged Windows preview evidence
 
-- Current main base: `859bed74bdf842b471b1c1f8b7f70dd71fff184b`
-- PR source head: `3880ca2d38756728de558f084cd9f15eeb0b36bf`
-- Windows x64 build and packaging: [run 45920383886](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383886) — WPF compile, self-contained publish, release status, executable checksum generation and artifact upload all passed.
-- Application verification: [run 45920383862](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383862) — TypeScript, unit tests, production build and browser smoke tests all passed.
-- Repository CI: [run 45920383906](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920383906) — dependency installation, typecheck, unit tests, production build and browser smoke tests all passed.
-- Artifact ID: `15164501756`; ZIP SHA-256: `ac7029046bfa09f5217a346be004c0deb2c39fdcb541fa10b92afdff8e6408fd`.
-- Executable SHA-256: `e163fdd460325fa1b0f2c83292d008fff030c00d7f522c444647939be3109cdb`; independently verified against `SHA256SUMS.txt` inside the downloaded ZIP.
-- ZIP inspection confirmed a single-level portable Windows x64 package containing the executable, PDB, README, release-status notice and checksum manifest.
-- PE inspection confirms the Authenticode certificate-table offset and size are both zero. The executable has **no embedded Authenticode certificate** and is not signed.
-- The packaged `RELEASE-STATUS.txt` records build ref `afadec2efa80fea09ddc66145391e63712d37cea`; the GitHub Actions run metadata ties this artifact to PR head `3880ca2d38756728de558f084cd9f15eeb0b36bf`.
+- Main merge commit: [`2cae59ab4c865aca4b52700828c41b197bc99f50`](https://github.com/kidsanimationjoy-dotcom/aurix/commit/2cae59ab4c865aca4b52700828c41b197bc99f50).
+- Reviewed PR source head: `bfe5b33c67a82f8f36c7b88c6e793a2a7e7b50fc`; PR [#19](https://github.com/kidsanimationjoy-dotcom/aurix/pull/19) was merged after the checks below passed.
+- Windows x64 compile, self-contained publish, release notice/checksum generation and artifact upload: [run 45920986046](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986046) — passed.
+- Application TypeScript, unit tests, production build and browser smoke tests: [run 45920986048](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986048) — passed. The browser test now waits for the asynchronous provider retry to settle before testing persistence and cancellation.
+- Repository CI: [run 45920986069](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45920986069) — passed.
+- Windows artifact: `AURIX-Windows-x64`, artifact ID `15163894688`, GitHub artifact digest `sha256:b0e92d73b4194a7b2dbfcddcf2e6c871b19ccc7e452e5b974de65815ecb319d4`. The artifact is retained until 2026-12-11.
+- The workflow labels this preview UNSIGNED. The artifact is not a trusted-publisher release and must not be used as a reason to disable SmartScreen or Microsoft Defender.
 
-## What the Windows companion currently does
+#### What the Windows companion currently does
 
 - Native .NET 8 WPF application with system tray and close-to-tray behavior.
 - Optional, explicitly enabled local wake-word listening for “AURIX” / “Hey AURIX”, followed by one spoken instruction and a return to wake-only mode.
