@@ -206,6 +206,7 @@ export function Tasks() {
                         )}
                         {isUnreviewableFileChange && <Notice tone="warn">No exact changed-file list was supplied, so AURIX will not approve this request.</Notice>}
                         <Notice tone="info">This decision applies to this request only. File-system grants are limited to the selected project and current task turn. No session-wide grants are saved.</Notice>
+                        <small>Expires: {fmtTime(approval.expiresAt)}. AURIX automatically declines if no decision is made before expiry.</small>
                         <div className="row">
                           <button
                             className="btn primary sm"
