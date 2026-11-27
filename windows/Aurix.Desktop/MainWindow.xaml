@@ -97,6 +97,33 @@
         </StackPanel>
         <TextBlock Text="While waiting, AURIX uses a local wake-word-only grammar. It switches to speech dictation only after it recognises “AURIX” or “Hey AURIX”. After one instruction it returns to wake-word mode."
                    Foreground="#839BB9" FontSize="11" TextWrapping="Wrap" Margin="0,12,0,14"/>
+        <Border Background="#10253B" BorderBrush="#2B5577" BorderThickness="1"
+                CornerRadius="12" Padding="12" Margin="0,0,0,14">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="LOCAL AI CHAT" FontSize="11" FontWeight="Bold" Foreground="#70C7FF"/>
+              <PasswordBox x:Name="CompanionTokenBox" Height="38" Margin="0,7,12,5"
+                           Padding="10,7" Background="#0A1728" Foreground="#F1F7FF"
+                           BorderBrush="#34516F" BorderThickness="1"
+                           ToolTip="Pairing token printed by the local AURIX companion"/>
+              <TextBlock Text="Recognised speech is sent as text to your locally signed-in Codex CLI; microphone audio stays on this PC. AI chat is read-only and cannot control apps."
+                         Foreground="#839BB9" FontSize="10" TextWrapping="Wrap" Margin="0,0,12,5"/>
+              <TextBlock x:Name="AiConnectionStatusText"
+                         Text="Optional: connect the local AURIX companion for read-only AI conversation."
+                         Foreground="#9CB0CC" FontSize="11" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <Button x:Name="PairCompanionButton" Content="Connect" Click="PairCompanionButton_Click"
+                      Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
+              <Button x:Name="PrepareCodexButton" Content="Verify AI sandbox" Click="PrepareCodexButton_Click"/>
+              <Button x:Name="CodexLoginButton" Content="Sign in to Codex" Click="CodexLoginButton_Click" Margin="0"/>
+            </StackPanel>
+          </Grid>
+        </Border>
         <TextBlock Text="Manual task entry" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
         <TextBox x:Name="CommandInput" Height="48" VerticalContentAlignment="Center"
                  ToolTip="Try: Open Notepad, Inspect controls in Notepad, Click button &quot;Save&quot; in Notepad"
