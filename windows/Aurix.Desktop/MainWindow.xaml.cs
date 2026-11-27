@@ -39,6 +39,41 @@ public partial class MainWindow : Window
         };
     }
 
+    internal bool HasRequiredStartupControls(out string missingControls)
+    {
+        var required = new (string Name, object? Control)[]
+        {
+            (nameof(DefenderStatusText), DefenderStatusText),
+            (nameof(DefenderDetailsText), DefenderDetailsText),
+            (nameof(RefreshButton), RefreshButton),
+            (nameof(ScanButton), ScanButton),
+            (nameof(HandsFreeButton), HandsFreeButton),
+            (nameof(ListeningStatusText), ListeningStatusText),
+            (nameof(CompanionTokenBox), CompanionTokenBox),
+            (nameof(AiConnectionStatusText), AiConnectionStatusText),
+            (nameof(PairCompanionButton), PairCompanionButton),
+            (nameof(DisconnectCompanionButton), DisconnectCompanionButton),
+            (nameof(PrepareCodexButton), PrepareCodexButton),
+            (nameof(CodexLoginButton), CodexLoginButton),
+            (nameof(ClearVoiceChatButton), ClearVoiceChatButton),
+            (nameof(CommandInput), CommandInput),
+            (nameof(RunTaskButton), RunTaskButton),
+            (nameof(InspectWindowsButton), InspectWindowsButton),
+            (nameof(EmergencyStopButton), EmergencyStopButton),
+            (nameof(PlanText), PlanText),
+            (nameof(TaskOutputText), TaskOutputText),
+            (nameof(StartupButton), StartupButton)
+        };
+
+        var missing = required
+            .Where(item => item.Control is null)
+            .Select(item => item.Name)
+            .ToArray();
+
+        missingControls = string.Join(", ", missing);
+        return missing.Length == 0;
+    }
+
     public void InitializeVoiceFromSavedPreference()
     {
         if (WakeWordSettings.IsEnabled)
