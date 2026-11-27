@@ -52,7 +52,7 @@ jobs:
       - name: Smoke-test published Windows desktop startup
         shell: pwsh
         run: |
-          $exe = Join-Path "$env:RUNNER_TEMP\\aurix-publish" "Aurix.Desktop.exe"
+          $exe = Join-Path "$env:RUNNER_TEMP\aurix-publish" "Aurix.Desktop.exe"
           if (!(Test-Path -LiteralPath $exe)) { throw "Published executable was not found for startup smoke test." }
           $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -PassThru
           if (!$process.WaitForExit(20000)) {
