@@ -12,6 +12,11 @@ function readLastHiggsfieldJobId(): string {
   catch { return ''; }
 }
 
+function readLastHiggsfieldJobKind(): 'video' | 'image' {
+  try { return window.localStorage.getItem('aurix.higgsfield.lastJobKind') === 'image' ? 'image' : 'video'; }
+  catch { return 'video'; }
+}
+
 function accountCredits(account: Record<string, unknown>): string | null {
   for (const key of ['available_credits', 'credits', 'credit_balance', 'remaining_credits', 'balance']) {
     const value = account[key];
@@ -27,6 +32,7 @@ export function Media() {
   const drafts = useCollection('mediaDrafts');
   const higgsfield = adapters.find((adapter) => adapter.meta.id === 'higgsfield') as HiggsfieldAdapter | undefined;
   const [prompt, setPrompt] = useState('');
+  const [mediaKind, setMediaKind] = useState<'video' | 'image'>('video');
   const [queue, setQueue] = useState<Q>('active');
   const [models, setModels] = useState<MediaModel[]>([]);
   const [account, setAccount] = useState<HiggsfieldStatus | null>(null);
@@ -35,6 +41,10 @@ export function Media() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginMessage, setLoginMessage] = useState('');
   const [modelId, setModelId] = useState('seedance_2_0');
+  const [imageResolution, setImageResolution] = useState<'1k' | '2k' | '4k'>('2k');
+  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
+  const [imageQuality, setImageQuality] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('high');
+  const [imageVariant, setImageVariant] = useState<'flare' | 'sunburst'>('flare');
   const [duration, setDuration] = useState(5);
   const [mode, setMode] = useState<'std' | 'fast'>('std');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p' | '4k'>('720p');
@@ -42,6 +52,7 @@ export function Media() {
   const [quote, setQuote] = useState<HiggsfieldQuote | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [jobId, setJobId] = useState(readLastHiggsfieldJobId);
+  const [jobKind, setJobKind] = useState<'video' | 'image'>(readLastHiggsfieldJobKind);
   const [job, setJob] = useState<MediaJob | null>(null);
   const [jobError, setJobError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,7 +70,8 @@ export function Media() {
         if (!result.ok) throw new Error(result.error.message);
         setModels(result.value);
         if (!result.value.some((item) => item.id === modelId)) {
-          const supported = result.value.find((item) => item.id === 'seedance_2_0');
+          const desired = mediaKind === 'video' ? 'seedance_2_0' : 'gpt_image_2_5';
+          const supported = result.value.find((item) => item.id === desired);
           if (supported) setModelId(supported.id);
         }
       } else {
@@ -71,7 +83,7 @@ export function Media() {
     } finally {
       setLoading(false);
     }
-  }, [higgsfield, modelId, refreshStatuses, status?.state]);
+  }, [higgsfield, modelId, mediaKind, refreshStatuses, status?.state]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -86,7 +98,7 @@ export function Media() {
     let active = true;
     const poll = async () => {
       if (!higgsfield) return;
-      const result = await higgsfield.getJob(jobId);
+      const result = await higgsfield.getJob(jobId, jobKind);
       if (!active) return;
       if (result.ok) {
         setJob(result.value);
@@ -100,9 +112,10 @@ export function Media() {
     void poll();
     const timer = window.setInterval(() => { void poll(); }, 7000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [higgsfield, jobId, job?.status]);
+  }, [higgsfield, jobId, jobKind, job?.status]);
 
-  const supportedModel = models.find((item) => item.id === 'seedance_2_0' && item.kinds.includes('video'));
+  const enabledModelId = mediaKind === 'video' ? 'seedance_2_0' : 'gpt_image_2_5';
+  const supportedModel = models.find((item) => item.id === enabledModelId && item.kinds.includes(mediaKind));
   const currentModel = models.find((item) => item.id === modelId);
   const hasCredits = account ? accountCredits(account.account) : null;
 
@@ -120,13 +133,15 @@ export function Media() {
     setBusy(true); setLoadError(''); setQuote(null); setConfirmed(false); setJobError('');
     const result = await higgsfield.quoteJob({
       modelId,
-      kind: 'video',
+      kind: mediaKind,
       prompt: prompt.trim(),
-      settings: { duration, resolution, aspectRatio, mode },
+      settings: mediaKind === 'video'
+        ? { duration, resolution, aspectRatio, mode }
+        : { resolution: imageResolution, aspectRatio: imageAspectRatio, quality: imageQuality, variant: imageVariant },
     });
     if (result.ok) {
       setQuote(result.value);
-      await audit({ action: 'media.cost.quoted', target: result.value.quoteId, detail: modelId });
+      await audit({ action: 'media.cost.quoted', target: result.value.quoteId, detail: modelId + ' · ' + mediaKind });
     } else {
       setLoadError(result.error.message);
     }
@@ -139,7 +154,11 @@ export function Media() {
     const result = await higgsfield.confirmAndSubmitJob(quote.quoteId, true);
     if (result.ok) {
       setJobId(result.value.jobId);
-      try { window.localStorage.setItem('aurix.higgsfield.lastJobId', result.value.jobId); } catch { /* local job tracking remains session-only */ }
+      setJobKind(quote.kind);
+      try {
+        window.localStorage.setItem('aurix.higgsfield.lastJobId', result.value.jobId);
+        window.localStorage.setItem('aurix.higgsfield.lastJobKind', quote.kind);
+      } catch { /* local job tracking remains session-only */ }
       setJob({ id: result.value.jobId, status: 'queued' });
       setQuote(null);
       setConfirmed(false);
@@ -151,8 +170,8 @@ export function Media() {
   }
 
   async function saveDraft() {
-    const d = await db.create('mediaDrafts', { kind: 'video', prompt: prompt.trim(), notes: '' });
-    await audit({ action: 'media.draft.save', target: d.id, detail: 'video' });
+    const d = await db.create('mediaDrafts', { kind: mediaKind, prompt: prompt.trim(), notes: '' });
+    await audit({ action: 'media.draft.save', target: d.id, detail: mediaKind });
     setPrompt('');
   }
 
@@ -160,7 +179,7 @@ export function Media() {
 
   return (
     <>
-      <PageHeader title="Media Studio" subtitle="Higgsfield video generation through the official local CLI." actions={status && <StatusPill state={status.state} />} />
+      <PageHeader title="Media Studio" subtitle="Higgsfield image and video generation through the official local CLI." actions={status && <StatusPill state={status.state} />} />
       {!account?.signedIn ? (
         <Panel title="Connect Higgsfield">
           <Notice tone="warn">
@@ -191,24 +210,40 @@ export function Media() {
             <small>Generation uses credits from the signed-in Higgsfield account. No job is submitted until you approve a fresh cost estimate.</small>
           </Panel>
           <div className="grid g2">
-            <Panel title="Video prompt">
-              <Field label="Model">
-                <select value={modelId} onChange={(e) => { setModelId(e.target.value); setQuote(null); setConfirmed(false); }}>
-                  {supportedModel ? <option value="seedance_2_0">{supportedModel.name} ({supportedModel.id})</option> : <option value="">No enabled video model found</option>}
+            <Panel title={mediaKind === 'video' ? 'Video prompt' : 'Image prompt'}>
+              <Field label="Media type">
+                <select value={mediaKind} onChange={(e) => {
+                  const next = e.target.value as 'video' | 'image';
+                  setMediaKind(next);
+                  setModelId(next === 'video' ? 'seedance_2_0' : 'gpt_image_2_5');
+                  setQuote(null); setConfirmed(false); setLoadError('');
+                }}>
+                  <option value="video">Video</option>
+                  <option value="image">Image</option>
                 </select>
               </Field>
-              <Field label="Describe the video"><textarea value={prompt} onChange={(e) => { setPrompt(e.target.value); setQuote(null); setConfirmed(false); }} placeholder="Describe subject, movement, camera and visual style." rows={6} /></Field>
-              <div className="grid g2">
+              <Field label="Model">
+                <select value={modelId} onChange={(e) => { setModelId(e.target.value); setQuote(null); setConfirmed(false); }}>
+                  {supportedModel ? <option value={supportedModel.id}>{supportedModel.name} ({supportedModel.id})</option> : <option value="">No enabled {mediaKind} model found</option>}
+                </select>
+              </Field>
+              <Field label={mediaKind === 'video' ? 'Describe the video' : 'Describe the image'}><textarea value={prompt} onChange={(e) => { setPrompt(e.target.value); setQuote(null); setConfirmed(false); }} placeholder={mediaKind === 'video' ? 'Describe subject, movement, camera and visual style.' : 'Describe the image composition, subject, lighting and visual style.'} rows={6} /></Field>
+              {mediaKind === 'video' ? <div className="grid g2">
                 <Field label="Duration"><select value={duration} onChange={(e) => { setDuration(Number(e.target.value)); setQuote(null); setConfirmed(false); }}><option value={5}>5 seconds</option><option value={10}>10 seconds</option></select></Field>
                 <Field label="Resolution"><select value={resolution} onChange={(e) => { const next = e.target.value as '480p' | '720p' | '1080p' | '4k'; setResolution(next); if (mode === 'fast' && !['480p', '720p'].includes(next)) setMode('std'); setQuote(null); setConfirmed(false); }}><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4k">4K</option></select></Field>
                 <Field label="Mode"><select value={mode} onChange={(e) => { setMode(e.target.value as 'std' | 'fast'); setQuote(null); setConfirmed(false); }}><option value="std">Standard</option><option value="fast" disabled={!['480p', '720p'].includes(resolution)}>Fast (480p / 720p)</option></select></Field>
                 <Field label="Aspect ratio"><select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value as 'auto' | '16:9' | '9:16' | '4:3' | '3:4' | '1:1' | '21:9'); setQuote(null); setConfirmed(false); }}><option value="auto">Auto</option><option value="16:9">16:9 landscape</option><option value="9:16">9:16 vertical</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="1:1">1:1 square</option><option value="21:9">21:9 ultrawide</option></select></Field>
-              </div>
+              </div> : <div className="grid g2">
+                <Field label="Resolution"><select value={imageResolution} onChange={(e) => { setImageResolution(e.target.value as '1k' | '2k' | '4k'); setQuote(null); setConfirmed(false); }}><option value="1k">1K</option><option value="2k">2K</option><option value="4k">4K</option></select></Field>
+                <Field label="Aspect ratio"><select value={imageAspectRatio} onChange={(e) => { setImageAspectRatio(e.target.value); setQuote(null); setConfirmed(false); }}><option value="auto">Auto</option><option value="1:1">1:1</option><option value="3:2">3:2</option><option value="2:3">2:3</option><option value="4:3">4:3</option><option value="3:4">3:4</option><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="21:9">21:9</option><option value="27:16">27:16</option><option value="16:27">16:27</option><option value="9:8">9:8</option><option value="8:9">8:9</option><option value="4:5">4:5</option><option value="5:4">5:4</option></select></Field>
+                <Field label="Quality"><select value={imageQuality} onChange={(e) => { setImageQuality(e.target.value as 'low' | 'medium' | 'high' | 'xhigh' | 'max'); setQuote(null); setConfirmed(false); }}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option></select></Field>
+                <Field label="Variant"><select value={imageVariant} onChange={(e) => { setImageVariant(e.target.value as 'flare' | 'sunburst'); setQuote(null); setConfirmed(false); }}><option value="flare">Flare</option><option value="sunburst">Sunburst</option></select></Field>
+              </div>}
               <div className="row">
                 <button className="btn primary" disabled={!supportedModel || !prompt.trim() || busy} onClick={() => void requestQuote()}>{busy ? 'Estimating…' : 'Estimate credit cost'}</button>
                 <button className="btn" disabled={!prompt.trim()} onClick={() => void saveDraft()}>Save as draft</button>
               </div>
-              {!supportedModel && <Notice tone="warn">AURIX enables only Seedance 2.0 video generation in this first release. The live model catalog did not return that model, so generation remains disabled.</Notice>}
+              {!supportedModel && <Notice tone="warn">AURIX currently enables Seedance 2.0 for video and GPT Image 2.5 for images. The selected model is not available in the live account catalog, so generation remains disabled.</Notice>}
               {currentModel && <small>Model details are from the live Higgsfield catalog. Generation options are validated again by the companion before a quote is requested.</small>}
             </Panel>
             <Panel title="Cost estimate and confirmation">
@@ -218,7 +253,8 @@ export function Media() {
                 <div className="stack">
                   <Notice tone="warn">Review this estimate before generating. It expires in approximately {quoteExpiry} seconds. The companion checks the price again when you confirm.</Notice>
                   <p><b>Model:</b> {quote.modelId}</p>
-                  <p><b>Settings:</b> {quote.settings.duration}s · {quote.settings.resolution} · {quote.settings.aspectRatio} · {quote.settings.mode}</p>
+                  <p><b>Media type:</b> {quote.kind}</p>
+                  <p><b>Settings:</b> {Object.entries(quote.settings).map(([key, value]) => key + ': ' + String(value)).join(' · ')}</p>
                   <h3>Credit estimate returned by Higgsfield</h3>
                   {Object.entries(quote.pricing).map(([key, value]) => <p key={key}><b>{key}:</b> {String(value)}</p>)}
                   <pre className="code-block">{JSON.stringify(quote.raw, null, 2)}</pre>
@@ -243,7 +279,7 @@ export function Media() {
         ) : (
           <div className="stack">
             <p>Job <code>{job.id}</code> · Status: <b>{job.status}</b></p>
-            {job.status === 'completed' && job.outputs.map((output, index) => <p key={index}><a href={output.url} target="_blank" rel="noreferrer">Open generated video {index + 1}</a></p>)}
+            {job.status === 'completed' && job.outputs.map((output, index) => <p key={index}><a href={output.url} target="_blank" rel="noreferrer">Open generated {jobKind} {index + 1}</a></p>)}
             {job.status === 'failed' && <Notice tone="bad">{job.error}</Notice>}
             {jobError && <Notice tone="warn">{jobError}</Notice>}
             {job.status === 'queued' || job.status === 'running' ? <small>Checking job status automatically while this page is open. You can leave and return later using the job ID: {jobId}.</small> : null}
