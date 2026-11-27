@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Aurix.Desktop.Services;
 
@@ -11,6 +12,9 @@ public sealed record AiDesktopInterpretation(bool IsPlan, string Message, Deskto
 public static class AiDesktopCommandParser
 {
     private const int MaxSteps = 5;
+    private static readonly Regex ExternalImpactButton = new(
+        @"\b(send|submit|publish|post|share|pay|purchase|buy|transfer|checkout|order|subscribe|confirm)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public static AiDesktopInterpretation Parse(string response)
     {
@@ -38,7 +42,7 @@ public static class AiDesktopCommandParser
             if (type == "answer")
             {
                 RequireOnlyProperties(root, "type", "message");
-                var message = RequiredString(root, "message", 1, 5_000);
+                var message = RequiredString(root, "message", 1, 5_000).Trim();
                 return new AiDesktopInterpretation(false, message, null);
             }
 
@@ -46,7 +50,9 @@ public static class AiDesktopCommandParser
                 throw new InvalidOperationException("Codex proposed an unsupported response type. No desktop action was taken.");
 
             RequireOnlyProperties(root, "type", "summary", "steps");
-            var summary = RequiredString(root, "summary", 1, 500);
+            var summary = RequiredString(root, "summary", 1, 500).Trim();
+            if (summary.Length == 0)
+                throw new InvalidOperationException("The desktop proposal summary cannot be blank.");
             if (!root.TryGetProperty("steps", out var stepsElement) ||
                 stepsElement.ValueKind != JsonValueKind.Array ||
                 stepsElement.GetArrayLength() is < 1 or > MaxSteps)
@@ -100,6 +106,10 @@ public static class AiDesktopCommandParser
                 RequireOnlyProperties(item, "kind", "app", "button");
                 var app = ResolveApp(RequiredString(item, "app", 1, 80));
                 var button = RequiredString(item, "button", 1, 100).Trim();
+                if (button.Length == 0)
+                    throw new InvalidOperationException("The proposed button name cannot be blank.");
+                if (ExternalImpactButton.IsMatch(button))
+                    throw new InvalidOperationException("AURIX refuses AI-proposed buttons that could send, publish, share, pay, purchase, transfer, order, subscribe or confirm an external action.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.ClickButton,
                     "Click button “" + button + "” in " + app.DisplayName,
@@ -112,6 +122,8 @@ public static class AiDesktopCommandParser
                 var app = ResolveApp(RequiredString(item, "app", 1, 80));
                 var control = RequiredString(item, "control", 1, 100).Trim();
                 var text = RequiredString(item, "text", 1, 1_000);
+                if (control.Length == 0)
+                    throw new InvalidOperationException("The proposed editable field name cannot be blank.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.TypeText,
                     "Type approved text into “" + control + "” in " + app.DisplayName,
@@ -136,7 +148,10 @@ public static class AiDesktopCommandParser
         if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
             throw new InvalidOperationException("The Codex proposal is missing the required " + name + " field.");
         var text = value.GetString() ?? string.Empty;
-        if (text.Length < minLength || text.Length > maxLength || text.Any(char.IsControl) && name != "text")
+        var hasForbiddenControl = text.Any(character =>
+            char.IsControl(character) &&
+            !(name == "text" && (character == '\r' || character == '\n' || character == '\t')));
+        if (text.Length < minLength || text.Length > maxLength || hasForbiddenControl)
             throw new InvalidOperationException("The Codex proposal contains an invalid " + name + " field.");
         return text;
     }
@@ -144,10 +159,13 @@ public static class AiDesktopCommandParser
     private static void RequireOnlyProperties(JsonElement element, params string[] allowed)
     {
         var set = new HashSet<string>(allowed, StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
         {
             if (!set.Contains(property.Name))
                 throw new InvalidOperationException("The Codex proposal contains an unexpected field. No desktop action was taken.");
+            if (!seen.Add(property.Name))
+                throw new InvalidOperationException("The Codex proposal contains a duplicate field. No desktop action was taken.");
         }
         foreach (var name in allowed)
         {

@@ -90,13 +90,17 @@ public sealed class LocalCodexChatService
         if (messages.Count == 0)
             throw new ArgumentException("Add a voice chat message before sending.", nameof(messages));
 
-        var boundedInput = messages.TakeLast(12)
-            .Where(message => (message.Role == "system" || message.Role == "user" || message.Role == "assistant") &&
+        var systemContext = messages
+            .Where(message => message.Role == "system" && !string.IsNullOrWhiteSpace(message.Content))
+            .TakeLast(1)
+            .Select(message => new LocalCodexMessage("system", message.Content.Trim()))
+            .ToList();
+        var dialogue = messages
+            .Where(message => (message.Role == "user" || message.Role == "assistant") &&
                 !string.IsNullOrWhiteSpace(message.Content))
+            .TakeLast(11)
             .Select(message => new LocalCodexMessage(message.Role, message.Content.Trim()))
             .ToList();
-        var systemContext = boundedInput.Where(message => message.Role == "system").TakeLast(1).ToList();
-        var dialogue = boundedInput.Where(message => message.Role != "system").ToList();
         var totalCharacters = systemContext.Sum(message => message.Content.Length) +
             dialogue.Sum(message => message.Content.Length);
         while (dialogue.Count > 1 && totalCharacters > 5_000)
