@@ -80,6 +80,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             catch
             {
                 engine.SpeechRecognized -= OnSpeechRecognized;
+                engine.SpeechHypothesized -= OnSpeechHypothesized;
                 engine.RecognizeCompleted -= OnRecognizeCompleted;
                 try { engine.SetInputToNull(); } catch { }
                 engine.Dispose();
