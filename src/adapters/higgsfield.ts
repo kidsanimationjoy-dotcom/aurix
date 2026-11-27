@@ -100,7 +100,7 @@ export class HiggsfieldAdapter implements MediaAdapter {
       const models = normaliseModels(await listHiggsfieldModels(this.getConfig()));
       return [
         'model_discovery',
-        ...(models.some((model) => model.id === 'seedance_2_0' && model.kinds.includes('video')) ? ['media_video' as const] : []),
+        ...(models.some((model) => ['seedance_2_0', 'seedance_2_5'].includes(model.id) && model.kinds.includes('video')) ? ['media_video' as const] : []),
         ...(models.some((model) => model.id === 'gpt_image_2_5' && model.kinds.includes('image')) ? ['media_image' as const] : []),
       ];
     } catch {
