@@ -77,6 +77,7 @@ export function runCodexReadOnlyChat({
     let stdout = '';
     let stderr = '';
     let settled = false;
+    let terminationRequested = false;
     let timer;
     let onAbort;
     const finish = (fn, value) => {
@@ -86,38 +87,59 @@ export function runCodexReadOnlyChat({
       if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       fn(value);
     };
-    const terminateChild = () => {
+    const terminateChild = () => new Promise<void>((resolve) => {
+      let completed = false;
+      let hardKillTimer: NodeJS.Timeout | undefined;
+      const complete = () => {
+        if (completed) return;
+        completed = true;
+        if (hardKillTimer) clearTimeout(hardKillTimer);
+        child.off('close', complete);
+        resolve();
+      };
+
+      child.once('close', complete);
+      if (child.exitCode !== null || child.signalCode !== null) {
+        complete();
+        return;
+      }
+
       try { child.kill('SIGTERM'); } catch { /* The process may already have exited. */ }
-      const hardKillTimer = setTimeout(() => {
-        if (child.exitCode !== null || child.signalCode !== null)
+      hardKillTimer = setTimeout(() => {
+        if (child.exitCode !== null || child.signalCode !== null) {
+          complete();
           return;
+        }
         try { child.kill('SIGKILL'); } catch { /* The process may already have exited. */ }
       }, 750);
       hardKillTimer.unref?.();
-      child.once('close', () => clearTimeout(hardKillTimer));
-    };
+    });
     onAbort = () => {
-      terminateChild();
+      terminationRequested = true;
       const error = new Error('Codex chat was cancelled by the caller.');
       error.name = 'AbortError';
-      finish(reject, error);
+      void terminateChild().then(() => finish(reject, error));
     };
 
     child.stdout.on('data', (chunk) => {
       if (settled) return;
       stdout += chunk.toString('utf8');
       if (stdout.length > MAX_STDOUT_CHARS) {
-        terminateChild();
-        finish(reject, new Error('Codex output exceeded the one-megabyte safety limit.'));
+        terminationRequested = true;
+        const error = new Error('Codex output exceeded the one-megabyte safety limit.');
+        void terminateChild().then(() => finish(reject, error));
       }
     });
     child.stderr.on('data', (chunk) => {
       if (settled) return;
       if (stderr.length < MAX_STDERR_CHARS) stderr += chunk.toString('utf8').slice(0, MAX_STDERR_CHARS - stderr.length);
     });
-    child.once('error', (error) => finish(reject, error));
+    child.once('error', (error) => {
+      if (!terminationRequested)
+        finish(reject, error);
+    });
     child.once('close', (code) => {
-      if (settled) return;
+      if (settled || terminationRequested) return;
       if (code !== 0) {
         finish(reject, new Error('Codex exited with code ' + String(code) + '. Check the local companion terminal for diagnostics.'));
         return;
@@ -156,8 +178,9 @@ export function runCodexReadOnlyChat({
 
     signal?.addEventListener('abort', onAbort, { once: true });
     timer = setTimeout(() => {
-      terminateChild();
-      finish(reject, new Error('Codex did not complete the read-only chat before the time limit.'));
+      terminationRequested = true;
+      const error = new Error('Codex did not complete the read-only chat before the time limit.');
+      void terminateChild().then(() => finish(reject, error));
     }, Math.max(1_000, Math.min(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)));
 
     // Check again after listener registration to close the spawn/subscribe race.
