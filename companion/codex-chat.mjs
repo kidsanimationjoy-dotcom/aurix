@@ -46,6 +46,7 @@ export function runCodexReadOnlyChat({
   platform = process.platform,
   messages,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  signal,
 } = {}) {
   if (typeof workspaceRoot !== 'string' || !path.isAbsolute(workspaceRoot)) {
     return Promise.reject(new Error('The AURIX read-only workspace must be an absolute path.'));
@@ -59,6 +60,13 @@ export function runCodexReadOnlyChat({
     executableArgs: ['exec', '--ephemeral', '--json', '--cd', workspaceRoot, prompt],
   });
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      const error = new Error('Codex chat was cancelled by the caller.');
+      error.name = 'AbortError';
+      reject(error);
+      return;
+    }
+
     const child = spawn(command, args, {
       cwd: workspaceRoot,
       env,
@@ -69,16 +77,22 @@ export function runCodexReadOnlyChat({
     let stdout = '';
     let stderr = '';
     let settled = false;
+    let timer;
+    let onAbort;
     const finish = (fn, value) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       fn(value);
     };
-    const timer = setTimeout(() => {
-      child.kill();
-      finish(reject, new Error('Codex did not complete the read-only chat before the time limit.'));
-    }, Math.max(1_000, Math.min(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)));
+    onAbort = () => {
+      try { child.kill(); } catch { /* The process may already have exited. */ }
+      const error = new Error('Codex chat was cancelled by the caller.');
+      error.name = 'AbortError';
+      finish(reject, error);
+    };
+
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString('utf8');
       if (stdout.length > MAX_STDOUT_CHARS) {
@@ -98,7 +112,7 @@ export function runCodexReadOnlyChat({
       let sessionId = randomUUID();
       let content = '';
       let streamError = '';
-      for (const line of stdout.split(/\r?\n/)) {
+      for (const line of stdout.split(/\\r?\\n/)) {
         if (!line.trim()) continue;
         let event;
         try { event = JSON.parse(line); }
@@ -125,6 +139,17 @@ export function runCodexReadOnlyChat({
         return;
       }
       finish(resolve, { sessionId, content: content.slice(0, 100_000) });
+    });
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timer = setTimeout(() => {
+      try { child.kill(); } catch { /* The process may already have exited. */ }
+      finish(reject, new Error('Codex did not complete the read-only chat before the time limit.'));
+    }, Math.max(1_000, Math.min(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TIMEOUT_MS)));
+
+    // Check again after listener registration to close the spawn/subscribe race.
+    if (signal?.aborted)
+      onAbort();
     });
   });
 }
