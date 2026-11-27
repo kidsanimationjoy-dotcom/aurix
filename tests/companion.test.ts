@@ -227,6 +227,93 @@ test('aborting a Codex chat request terminates its active CLI process', async ()
   }
 });
 
+test('companion shutdown aborts active Codex chat and closes the response', async () => {
+  if (process.platform === 'win32') return;
+  const profile = await makeCodexProfile();
+  const markerPath = path.join(profile.root, 'shutdown-chat.pid');
+  const fakeScript = [
+    "const fs = require('node:fs');",
+    "const args = process.argv.slice(2);",
+    "if (args[0] === '--version') { console.log('codex 1.0.0'); process.exit(0); }",
+    "if (args[0] === 'login' && args[1] === 'status') { console.log('Logged in with ChatGPT'); process.exit(0); }",
+    "if (args[0] === 'sandbox') {",
+    "  const separator = args.indexOf('--');",
+    "  if (separator >= 0 && args[separator + 2] === 'exec') {",
+    "    process.on('SIGTERM', () => {});",
+    "    fs.writeFileSync(" + JSON.stringify(markerPath) + ", String(process.pid));",
+    "    setInterval(() => {}, 1000);",
+    "    return;",
+    "  } else {",
+    "    console.log('AURIX_SANDBOX_CANARY_OK');",
+    "    process.exit(0);",
+    "  }",
+    "}",
+    "process.exit(2);",
+  ].join('\n');
+  const fake = await makeFakeCodex(fakeScript);
+  const server = createCompanionServer({
+    token: 'secret-token',
+    origin: 'http://localhost:5173',
+    codexCommand: fake.command,
+    codexPaths: profile.paths,
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+
+  try {
+    const headers = { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' };
+    const prepared = await fetch(url + '/v1/codex/prepare', {
+      method: 'POST', headers, body: '{}',
+    });
+    assert.equal(prepared.status, 200);
+
+    const request = fetch(url + '/v1/codex/chat', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'Keep running until shutdown.' }] }),
+    });
+
+    let pid: number | undefined;
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && pid === undefined) {
+      try {
+        const value = Number(await readFile(markerPath, 'utf8'));
+        if (Number.isSafeInteger(value) && value > 0)
+          pid = value;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+    assert.ok(pid !== undefined, 'the Codex child should be active before shutdown');
+
+    const closeCompanion = (server as unknown as { closeCompanion: () => Promise<void> }).closeCompanion;
+    await closeCompanion();
+    await assert.rejects(request, 'companion shutdown should close the active HTTP response');
+
+    let exited = false;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      try {
+        process.kill(pid!, 0);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') {
+          exited = true;
+          break;
+        }
+        throw error;
+      }
+    }
+    assert.equal(exited, true, 'companion shutdown should force-stop the active Codex child');
+  } finally {
+    if (server.listening) {
+      const closeCompanion = (server as unknown as { closeCompanion: () => Promise<void> }).closeCompanion;
+      await closeCompanion();
+    }
+    await rm(fake.directory, { recursive: true, force: true });
+    await rm(profile.root, { recursive: true, force: true });
+  }
+});
+
 test('AURIX Codex paths keep the canary outside CODEX_HOME and the workspace inside it', () => {
   const paths = resolveCodexPaths({ HOME: '/home/tester', XDG_DATA_HOME: '/home/tester/.local/share' }, 'linux', '/home/tester');
   assert.equal(paths.platform, 'linux');
