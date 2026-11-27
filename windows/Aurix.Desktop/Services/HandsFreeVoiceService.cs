@@ -137,9 +137,19 @@ public sealed class HandsFreeVoiceService : IDisposable
         if (string.IsNullOrWhiteSpace(hypothesis))
             return;
 
+        string statusPrefix;
         lock (_gate)
         {
-            if (_disposed || _state != ListeningState.ListeningForCommand)
+            if (_disposed)
+                return;
+
+            statusPrefix = _state switch
+            {
+                ListeningState.WaitingForWakeWord => "Checking wake phrase",
+                ListeningState.ListeningForCommand => "Hearing",
+                _ => string.Empty
+            };
+            if (string.IsNullOrEmpty(statusPrefix))
                 return;
 
             // Avoid flooding the UI while the recognizer revises its partial transcript.
@@ -149,7 +159,9 @@ public sealed class HandsFreeVoiceService : IDisposable
             _lastHypothesisStatusAt = now;
         }
 
-        StatusChanged?.Invoke($"Hearing: {hypothesis}");
+        // During wake mode this is only a partial hypothesis, not an accepted
+        // wake phrase, so it updates the status text but does not show the orb.
+        StatusChanged?.Invoke($"{statusPrefix}: {hypothesis}");
     }
 
     private void OnRecognizeCompleted(object? sender, RecognizeCompletedEventArgs e)
