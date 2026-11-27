@@ -412,6 +412,7 @@ test('a task waiting for a local action approval is failed safely after app relo
   const db = await freshDb();
   const approval = {
     id: 'approval-stale',
+    expiresAt: Date.now() + 60_000,
     kind: 'command' as const,
     reason: 'Pending command',
     command: ['npm test'],
