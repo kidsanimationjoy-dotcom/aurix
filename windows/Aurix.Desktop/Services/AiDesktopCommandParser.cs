@@ -74,6 +74,96 @@ public static class AiDesktopCommandParser
     }
 
 
+
+    private static string[] GetApplicationAliases(string displayName)
+        => displayName switch
+        {
+            "Notepad" => new[] { "Notepad" },
+            "Calculator" => new[] { "Calculator", "Calc" },
+            "Paint" => new[] { "Paint" },
+            "File Explorer" => new[] { "File Explorer", "Explorer" },
+            "Microsoft Edge" => new[] { "Microsoft Edge", "Edge" },
+            "Google Chrome" => new[] { "Google Chrome", "Chrome" },
+            "Windows Terminal" => new[] { "Windows Terminal", "Terminal" },
+            "Discord" => new[] { "Discord" },
+            "Spotify" => new[] { "Spotify" },
+            _ => Array.Empty<string>()
+        };
+
+    private static bool HasNegationBeforeAction(string userPrompt, int actionIndex)
+    {
+        var clauseStart = userPrompt.LastIndexOfAny(new[] { '.', '!', '?', ';', '\r', '\n' },
+            Math.Max(0, actionIndex - 1));
+        var prefix = userPrompt[(clauseStart + 1)..actionIndex];
+        return Regex.IsMatch(prefix,
+            @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not|not)\b[\s\S]{0,40}$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool ExplicitlyRequestedAppLaunch(string displayName, string userPrompt)
+    {
+        foreach (var alias in GetApplicationAliases(displayName))
+        {
+            var escapedAlias = Regex.Escape(alias);
+            var pattern = @"\b(?:open|launch|start)\b(?<between>[^.!?;\r\n]{0,72})(?<![\p{L}\p{N}_])" +
+                escapedAlias + @"(?![\p{L}\p{N}_])";
+
+            foreach (Match match in Regex.Matches(userPrompt, pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                if (HasNegationBeforeAction(userPrompt, match.Index))
+                    continue;
+                if (Regex.IsMatch(match.Groups["between"].Value,
+                    @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not|not)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    continue;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ExplicitlyRequestedWindowInspection(string userPrompt)
+    {
+        var asked =
+            Regex.IsMatch(userPrompt,
+                @"\b(?:show|list|inspect)\b[^.!?;\r\n]{0,40}\b(?:open\s+)?(?:windows|apps|applications)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+            Regex.IsMatch(userPrompt,
+                @"\bwhat\s+(?:apps|windows|applications)\s+are\s+(?:currently\s+)?open\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        if (!asked)
+            return false;
+
+        var action = Regex.Match(userPrompt, @"\b(?:show|list|inspect|what)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return action.Success && !HasNegationBeforeAction(userPrompt, action.Index);
+    }
+
+    private static bool ExplicitlyRequestedControlInspection(string displayName, string userPrompt)
+    {
+        foreach (var alias in GetApplicationAliases(displayName))
+        {
+            var escapedAlias = Regex.Escape(alias);
+            var pattern = @"\b(?:inspect|show|list)\b[^.!?;\r\n]{0,48}\b(?:accessible\s+)?(?:controls|buttons|fields)\b" +
+                @"[^.!?;\r\n]{0,56}(?<![\p{L}\p{N}_])" + escapedAlias + @"(?![\p{L}\p{N}_])";
+
+            foreach (Match match in Regex.Matches(userPrompt, pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                var action = Regex.Match(match.Value, @"\b(?:inspect|show|list)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (!action.Success || HasNegationBeforeAction(userPrompt, match.Index + action.Index))
+                    continue;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool ExplicitlyRequestedButton(string button, string userPrompt)
     {
         if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase))
@@ -169,6 +259,8 @@ public static class AiDesktopCommandParser
             {
                 RequireOnlyProperties(item, "kind", "app");
                 var app = ResolveApp(RequiredString(item, "app", 1, 80));
+                if (!ExplicitlyRequestedAppLaunch(app.DisplayName, userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to launch an app unless the user explicitly asked to open that app in the latest instruction.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.LaunchApplication,
                     "Open " + app.DisplayName,
@@ -176,6 +268,8 @@ public static class AiDesktopCommandParser
             }
             case "inspect_windows":
                 RequireOnlyProperties(item, "kind");
+                if (!ExplicitlyRequestedWindowInspection(userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to inspect open windows unless the user explicitly requested that inspection.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.InspectWindows,
                     "Inspect visible open windows");
@@ -183,6 +277,8 @@ public static class AiDesktopCommandParser
             {
                 RequireOnlyProperties(item, "kind", "app");
                 var app = ResolveApp(RequiredString(item, "app", 1, 80));
+                if (!ExplicitlyRequestedControlInspection(app.DisplayName, userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to inspect controls unless the user explicitly requested controls in that app.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.InspectControls,
                     "Inspect controls in " + app.DisplayName,

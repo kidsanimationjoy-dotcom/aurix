@@ -42,11 +42,38 @@ Check("allowlisted application launch accepted",
     launch.Plan.Steps[0].Kind == DesktopTaskStepKind.LaunchApplication &&
     launch.Plan.Steps[0].Executable == "calc.exe");
 
+Reject("unrequested app launch rejected",
+    """{"type":"desktop_plan","summary":"Open another app","steps":[{"kind":"launch_application","app":"Discord"}]}""",
+    "Open Calculator");
+Reject("app mention without launch request rejected",
+    """{"type":"desktop_plan","summary":"Open Discord","steps":[{"kind":"launch_application","app":"Discord"}]}""",
+    "Discord is installed on this computer");
+Reject("negated app launch rejected",
+    """{"type":"desktop_plan","summary":"Open Calculator","steps":[{"kind":"launch_application","app":"Calculator"}]}""",
+    "Do not open Calculator");
+
 var inspection = AiDesktopCommandParser.Parse(
     """{"type":"desktop_plan","summary":"Inspect open windows","steps":[{"kind":"inspect_windows"}]}""",
     "Show me the open windows");
 Check("read-only window inspection accepted",
     inspection.Plan?.Steps.Single().Kind == DesktopTaskStepKind.InspectWindows);
+
+Reject("unrequested open-window inspection rejected",
+    """{"type":"desktop_plan","summary":"Inspect open windows","steps":[{"kind":"inspect_windows"}]}""",
+    "Open Calculator");
+Reject("negated open-window inspection rejected",
+    """{"type":"desktop_plan","summary":"Inspect open windows","steps":[{"kind":"inspect_windows"}]}""",
+    "Do not show the open windows");
+
+var inspectControls = AiDesktopCommandParser.Parse(
+    """{"type":"desktop_plan","summary":"Inspect controls","steps":[{"kind":"inspect_controls","app":"Notepad"}]}""",
+    "Inspect controls in Notepad");
+Check("explicit control inspection accepted",
+    inspectControls.Plan?.Steps.Single().Kind == DesktopTaskStepKind.InspectControls);
+
+Reject("unrequested control inspection rejected",
+    """{"type":"desktop_plan","summary":"Inspect controls","steps":[{"kind":"inspect_controls","app":"Notepad"}]}""",
+    "Open Notepad");
 
 var clickJson =
     """{"type":"desktop_plan","summary":"Save a file","steps":[{"kind":"click_button","app":"Notepad","button":"Save"}]}""";
