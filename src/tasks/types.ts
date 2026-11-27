@@ -132,6 +132,8 @@ export interface TaskExecutionResult {
 }
 
 export interface TaskExecutionAdapter {
+  /** Returns a user-facing blocker before the task is offered for approval. */
+  checkTaskReadiness?(request: TaskExecutionRequest): Promise<string | null>;
   executeTask(
     request: TaskExecutionRequest,
     context: TaskExecutionContext,
