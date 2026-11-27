@@ -29,6 +29,16 @@
 - Bounded local task audit history that records action type, application, UTC time and outcome, but does not record dictated instructions, entered text, window titles or exception messages.
 - Reversible current-user startup registration.
 
+## Latest merged AI voice extension
+
+- Main merge commit: [`e37bf46129518cc281d9209374e3f3332ab2c23c`](https://github.com/kidsanimationjoy-dotcom/aurix/commit/e37bf46129518cc281d9209374e3f3332ab2c23c).
+- PR [#20](https://github.com/kidsanimationjoy-dotcom/aurix/pull/20) added read-only Codex chat to the Windows voice path and was merged after the checks below passed.
+- Windows x64 compile, self-contained publish and artifact upload: [run 45922086971](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086971) — passed.
+- Application TypeScript, unit tests, production build and browser smoke tests: [run 45922086918](https://github.com/kidsanimationjoy-dotcom/aurix/actions/runs/45922086918) — passed.
+- Windows artifact: `AURIX-Windows-x64`, artifact ID `15164677193`, GitHub artifact digest `sha256:2bd30f1bcafeec060a791b63c8f9be4aca38128128cedfe7aa2a51885847cd53`; retained until 2026-12-11.
+- The voice bridge uses the authenticated loopback companion and separately signed-in Codex CLI. Recognised speech is sent as text; microphone audio remains local. AI chat is read-only and cannot control desktop apps.
+- Pairing tokens are protected with Windows DPAPI. Up to 12 bounded conversation turns remain in process memory only and can be cleared.
+
 ## Remaining launch blockers
 
 ### Device validation
