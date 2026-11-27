@@ -120,7 +120,8 @@
               <Button x:Name="PairCompanionButton" Content="Connect" Click="PairCompanionButton_Click"
                       Background="#176B9C" BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
               <Button x:Name="PrepareCodexButton" Content="Verify AI sandbox" Click="PrepareCodexButton_Click"/>
-              <Button x:Name="CodexLoginButton" Content="Sign in to Codex" Click="CodexLoginButton_Click" Margin="0"/>
+              <Button x:Name="CodexLoginButton" Content="Sign in to Codex" Click="CodexLoginButton_Click"/>
+              <Button x:Name="ClearVoiceChatButton" Content="Clear conversation" Click="ClearVoiceChatButton_Click" Margin="0"/>
             </StackPanel>
           </Grid>
         </Border>
