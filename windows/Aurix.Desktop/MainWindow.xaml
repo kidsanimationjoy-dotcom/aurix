@@ -85,6 +85,35 @@
       </Grid.RowDefinitions>
 
       <StackPanel Grid.Row="0">
+        <Expander Header="CONNECT LOCAL AI REASONING" IsExpanded="False"
+                  Margin="0,0,0,14" Foreground="#70C7FF" FontWeight="SemiBold">
+          <Border Background="#101F33" BorderBrush="#315474" BorderThickness="1"
+                  CornerRadius="10" Padding="13" Margin="0,8,0,0">
+            <StackPanel>
+              <TextBlock Text="Start the AURIX local companion on this same PC, then pair it here. The pairing token is protected for your Windows account."
+                         Foreground="#A9B9D2" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <TextBlock Text="Local companion URL" Foreground="#9CB0CC" FontSize="11"/>
+              <TextBox x:Name="LocalCompanionUrlInput" Text="http://127.0.0.1:4317"
+                       Height="38" VerticalContentAlignment="Center" FontSize="13" Margin="0,4,0,8"/>
+              <TextBlock Text="Pairing token (from the companion terminal)" Foreground="#9CB0CC" FontSize="11"/>
+              <PasswordBox x:Name="LocalCompanionTokenInput" Height="38" Padding="10,7"
+                           Background="#0A1728" Foreground="#F1F7FF" BorderBrush="#34516F"
+                           BorderThickness="1" FontSize="13" Margin="0,4,0,10"/>
+              <WrapPanel>
+                <Button x:Name="ConnectLocalCompanionButton" Content="Pair / refresh status"
+                        Click="ConnectLocalCompanionButton_Click" Background="#176B9C"
+                        BorderBrush="#2B9DD9" FontWeight="SemiBold"/>
+                <Button x:Name="PrepareCodexButton" Content="Prepare / verify Codex"
+                        Click="PrepareCodexButton_Click"/>
+                <Button x:Name="SignInCodexButton" Content="Sign in with ChatGPT"
+                        Click="SignInCodexButton_Click" Margin="0"/>
+              </WrapPanel>
+              <TextBlock x:Name="LocalCodexStatusText"
+                         Text="AI reasoning is not paired. Exact supported commands still work locally."
+                         Foreground="#F0C58C" FontSize="11" TextWrapping="Wrap" Margin="0,9,0,0"/>
+            </StackPanel>
+          </Border>
+        </Expander>
         <TextBlock Text="Hands-free AURIX" FontSize="21" FontWeight="SemiBold"/>
         <TextBlock Text="Enable this once. AURIX stays in the system tray and listens locally for its name. Say “AURIX”, pause briefly, then give your instruction."
                    Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap" Margin="0,5,0,12"/>
