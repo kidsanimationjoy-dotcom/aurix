@@ -124,7 +124,7 @@ export interface TaskExecutionContext {
   signal: AbortSignal;
   emitProgress: (message: string, progress?: number) => Promise<void>;
   emitOutput: (delta: string) => Promise<void>;
-  requestApproval: (request: Omit<TaskActionApproval, 'id'>) => Promise<TaskActionApprovalDecision>;
+  requestApproval: (request: Omit<TaskActionApproval, 'id' | 'expiresAt'>) => Promise<TaskActionApprovalDecision>;
 }
 
 export interface TaskExecutionResult {
