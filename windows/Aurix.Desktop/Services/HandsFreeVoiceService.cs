@@ -14,6 +14,7 @@ public sealed class HandsFreeVoiceService : IDisposable
         Stopped,
         WaitingForWakeWord,
         SwitchingToCommand,
+        WaitingForGreeting,
         ListeningForCommand,
         SwitchingToWakeWord
     }
@@ -101,7 +102,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             }
         }
 
-        StatusChanged?.Invoke("HANDS-FREE ACTIVE — say “AURIX”, pause briefly, then speak your instruction. Wake-word detection stays local.");
+        StatusChanged?.Invoke("HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Clap and wake detection stay local.");
     }
 
     private void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
@@ -187,6 +188,7 @@ public sealed class HandsFreeVoiceService : IDisposable
         string? status = null;
         var wakePhraseAccepted = false;
         SpeechRecognitionEngine? engineToDispose = null;
+        ClapWakeGate? gateToDispose = null;
 
         lock (_gate)
         {
@@ -244,12 +246,15 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engineToDispose = _engine;
                 _engine = null;
                 _wakeGrammar = null;
+                gateToDispose = _clapWakeGate;
+                _clapWakeGate = null;
                 status = $"Hands-free voice stopped and the microphone was released: {ex.Message}";
             }
         }
 
         if (engineToDispose is not null)
             DisposeEngine(engineToDispose);
+        DisposeClapGate(gateToDispose);
 
         if (!string.IsNullOrWhiteSpace(status))
             StatusChanged?.Invoke(status);
@@ -358,7 +363,7 @@ public sealed class HandsFreeVoiceService : IDisposable
 
         lock (_gate)
         {
-            if (_disposed && _engine is null)
+            if (_disposed && _engine is null && _clapWakeGate is null)
                 return;
 
             _disposed = true;
