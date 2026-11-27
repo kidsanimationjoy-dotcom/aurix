@@ -67,9 +67,17 @@ check('task can re-check the provider without creating a duplicate', (await page
 await page.reload();
 await page.waitForSelector('h1');
 await page.getByText('Waiting for provider', { exact: true }).waitFor();
-check('task persists after reload', await page.getByText('Build a responsive website dashboard').isVisible());
-await page.getByRole('button', { name: 'Cancel task' }).click();
-await page.getByText('Cancelled', { exact: true }).waitFor();
+const taskCard = page.locator('.task-card').filter({ hasText: 'Build a responsive website dashboard' });
+await taskCard.waitFor();
+const cardStatus = await taskCard.locator('.task-status').innerText();
+const cardButtons = (await taskCard.getByRole('button').allTextContents()).map((value) => value.trim());
+console.log('TASK CARD AFTER RELOAD status=' + JSON.stringify(cardStatus) + ' buttons=' + JSON.stringify(cardButtons));
+check('task persists after reload', await taskCard.getByText('Build a responsive website dashboard').isVisible());
+if (!cardButtons.includes('Cancel task')) {
+  throw new Error('Waiting task did not expose its cancel control after reload (status=' + cardStatus + '; buttons=' + JSON.stringify(cardButtons) + ').');
+}
+await taskCard.getByRole('button', { name: 'Cancel task' }).click();
+await taskCard.getByText('Cancelled', { exact: true }).waitFor();
 check('waiting task can be cancelled', await page.getByText('Cancelled', { exact: true }).isVisible());
 
 // Coding: file create, edit, diff, save

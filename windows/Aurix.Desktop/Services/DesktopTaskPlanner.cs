@@ -159,7 +159,7 @@ public static class DesktopTaskPlanner
                 steps.ToArray());
     }
 
-    private static bool TryGetApplication(
+    public static bool TryGetApplication(
         string name,
         out (string DisplayName, string Executable, string[] ProcessNames) app)
     {
