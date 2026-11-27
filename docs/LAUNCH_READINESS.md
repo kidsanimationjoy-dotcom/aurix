@@ -64,6 +64,12 @@
 - Test Defender status and quick-scan behavior against the real Windows Security installation.
 - Test the exact downloaded ZIP on a clean Windows machine. CI compilation does not establish runtime compatibility on a user's laptop.
 
+### Hands-free microphone failure recovery (PR #38)
+- The Windows listener now treats recognition errors and unexpected cancellation as a failed hands-free session, releases the microphone, and reports the stopped state instead of remaining falsely marked as active.
+- If the wake-word-to-command transition fails, AURIX fails closed and releases the recognizer. The desktop controls return to **Enable hands-free** while retaining the user's saved opt-in for a later app launch retry.
+- PR [#38](https://github.com/kidsanimationjoy-dotcom/aurix/pull/38) is merged. The Windows build, desktop-action policy tests, portable x64 packaging, unsigned MSIX packaging, TypeScript checks, unit tests, production build and browser smoke tests all passed on commit `37eaf72defb83a50038b6912f7f59fc6b9a688b7`.
+- This is code/CI validation only. It does not replace real microphone, wake phrase, reconnect, CPU/battery or Windows 11 laptop acceptance testing.
+
 ### Publisher identity and safe distribution
 - The preview ZIP is portable, **unsigned**, and not an installer. It has no automatic update or uninstall mechanism.
 - Do not disable SmartScreen or Microsoft Defender to run an unrecognised build. Wait for a verified signed distribution or use a separately reviewed test environment.
