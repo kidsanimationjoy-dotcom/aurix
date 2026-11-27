@@ -112,7 +112,7 @@ export function runCodexReadOnlyChat({
       let sessionId = randomUUID();
       let content = '';
       let streamError = '';
-      for (const line of stdout.split(/\\r?\\n/)) {
+      for (const line of stdout.split(/\r?\n/)) {
         if (!line.trim()) continue;
         let event;
         try { event = JSON.parse(line); }
@@ -150,6 +150,5 @@ export function runCodexReadOnlyChat({
     // Check again after listener registration to close the spawn/subscribe race.
     if (signal?.aborted)
       onAbort();
-    });
   });
 }
