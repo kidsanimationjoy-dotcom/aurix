@@ -82,25 +82,42 @@ public static class AiDesktopCommandParser
         // Require an action verb followed by the exact button label. This
         // prevents "open Notepad" from authorizing a click on a button named "Open".
         if (Regex.IsMatch(userPrompt,
-            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:click|press|select|activate)\b",
+            @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not)\b[\s\S]{0,40}\b(?:click|press|select|activate)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
-        var label = Regex.Escape(button.Trim());
-        var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}\b" + label + @"\b";
+        return ContainsExactTargetLabel(button, userPrompt, @"(?:button|in|on|within|at)");
+    }
+
+
+    private static bool ContainsExactTargetLabel(string label, string userPrompt, string allowedContinuation)
+    {
+        var escapedLabel = Regex.Escape(label.Trim());
+        var pattern = @"(?<![\p{L}\p{N}_])" + escapedLabel +
+            @"(?=(?:[""']?\s*(?:" + allowedContinuation + @")\b|[""']?\s*(?:[.,!?;:]|$)))";
         return Regex.IsMatch(userPrompt, pattern,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool ContainsExactTextValue(string text, string userPrompt)
+    {
+        // The full supplied value must end at a phrase boundary. This rejects
+        // model-truncated values such as "Hello" when the user said "Hello World".
+        var escapedText = Regex.Escape(text);
+        var pattern = @"(?<![\p{L}\p{N}_])" + escapedText +
+            @"(?=(?:[""']?\s*(?:into|in|to|inside|within|for|as)\b|[""']?\s*(?:[.,!?;:]|$)))";
+        return Regex.IsMatch(userPrompt, pattern, RegexOptions.CultureInvariant);
     }
 
     private static bool ExplicitlyRequestedTextEntry(string control, string text, string userPrompt)
     {
         if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase) ||
-            !userPrompt.Contains(control, StringComparison.OrdinalIgnoreCase) ||
-            !userPrompt.Contains(text, StringComparison.Ordinal))
+            !ContainsExactTargetLabel(control, userPrompt, @"(?:field|control|box|in|on|within|at)") ||
+            !ContainsExactTextValue(text, userPrompt))
             return false;
 
         if (Regex.IsMatch(userPrompt,
-            @"\b(?:don't|do not|never|avoid)\s+(?:please\s+)?(?:type|enter|write|paste|fill|put|insert|replace)\b",
+            @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not)\b[\s\S]{0,40}\b(?:type|enter|write|paste|fill|put|insert|replace)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 

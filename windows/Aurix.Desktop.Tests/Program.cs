@@ -106,12 +106,27 @@ Reject("text not supplied by user rejected", typeJson, "Type text into Text Edit
 Reject("editable field not named by user rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
     "Type Hello into Notepad");
+Reject("button name must match the complete spoken label",
+    """{"type":"desktop_plan","summary":"Save a file","steps":[{"kind":"click_button","app":"Notepad","button":"Save"}]}""",
+    "Click the Save As button in Notepad");
+Reject("field name must match the complete spoken label",
+    """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text","text":"Hello"}]}""",
+    "Type Hello into Text Editor in Notepad");
+Reject("entered text must match the complete supplied value",
+    """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
+    "Type Hello World into Text Editor in Notepad");
 Reject("Notepad target not named by user rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
     "Type Hello into Text Editor");
 Reject("negated text-entry request rejected",
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
     "Do not type Hello into Text Editor in Notepad");
+Reject("negated click request rejected",
+    """{"type":"desktop_plan","summary":"Save a file","steps":[{"kind":"click_button","app":"Notepad","button":"Save"}]}""",
+    "I don't want you to click Save in Notepad");
+Reject("negated text-entry request with conversational wording rejected",
+    """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello"}]}""",
+    "I don't want you to type Hello into Text Editor in Notepad");
 
 if (failed > 0)
 {
