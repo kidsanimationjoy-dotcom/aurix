@@ -14,6 +14,39 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // CI startup validation constructs the real WPF window without showing it,
+        // starting the tray listener, reading the saved wake-word opt-in, or touching
+        // the microphone. This verifies the published single-file app can initialise.
+        if (e.Args.Any(argument =>
+            argument.Equals("--self-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            var exitCode = 0;
+            try
+            {
+                _aurixWindow = new MainWindow();
+                MainWindow = _aurixWindow;
+
+                if (!_aurixWindow.HasRequiredStartupControls(out var missingControls))
+                {
+                    Console.Error.WriteLine("AURIX startup self-test failed. Missing controls: " + missingControls);
+                    exitCode = 2;
+                }
+                else
+                {
+                    Console.WriteLine("AURIX startup self-test passed. WPF window and required controls initialised; microphone was not started.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("AURIX startup self-test failed: " + ex.GetType().Name);
+                exitCode = 1;
+            }
+
+            Environment.ExitCode = exitCode;
+            Shutdown(exitCode);
+            return;
+        }
+
         _aurixWindow = new MainWindow();
         MainWindow = _aurixWindow;
 
