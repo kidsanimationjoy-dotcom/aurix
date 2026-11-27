@@ -6,10 +6,12 @@ on:
       - main
     paths:
       - "windows/Aurix.Desktop/**"
+      - "windows/Aurix.Desktop.Tests/**"
       - ".github/workflows/windows-desktop.yml"
   pull_request:
     paths:
       - "windows/Aurix.Desktop/**"
+      - "windows/Aurix.Desktop.Tests/**"
       - ".github/workflows/windows-desktop.yml"
   workflow_dispatch:
 
@@ -30,6 +32,9 @@ jobs:
 
       - name: Build native Windows companion
         run: dotnet build windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release
+
+      - name: Verify AI desktop proposal policy
+        run: dotnet run windows/Aurix.Desktop.Tests/Aurix.Desktop.Tests.csproj --configuration Release
 
       - name: Publish self-contained Windows x64 application
         run: dotnet publish windows/Aurix.Desktop/Aurix.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true --output "$env:RUNNER_TEMP\aurix-publish"

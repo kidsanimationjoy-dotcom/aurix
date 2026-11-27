@@ -71,10 +71,10 @@ const taskCard = page.locator('.task-card').filter({ hasText: 'Build a responsiv
 await taskCard.waitFor();
 const cardStatus = await taskCard.locator('.task-status').innerText();
 const cardButtons = (await taskCard.getByRole('button').allTextContents()).map((value) => value.trim());
-console.log(\`TASK CARD AFTER RELOAD status=\${JSON.stringify(cardStatus)} buttons=\${JSON.stringify(cardButtons)}\`);
+console.log('TASK CARD AFTER RELOAD status=' + JSON.stringify(cardStatus) + ' buttons=' + JSON.stringify(cardButtons));
 check('task persists after reload', await taskCard.getByText('Build a responsive website dashboard').isVisible());
 if (!cardButtons.includes('Cancel task')) {
-  throw new Error(\`Waiting task did not expose its cancel control after reload (status=\${cardStatus}; buttons=\${JSON.stringify(cardButtons)}).\`);
+  throw new Error('Waiting task did not expose its cancel control after reload (status=' + cardStatus + '; buttons=' + JSON.stringify(cardButtons) + ').');
 }
 await taskCard.getByRole('button', { name: 'Cancel task' }).click();
 await taskCard.getByText('Cancelled', { exact: true }).waitFor();
