@@ -142,8 +142,8 @@ function stablePricing(value) {
 }
 
 function makeArgs(action, spec) {
-  if (spec.modelId !== 'seedance_2_5') {
-    throw new Error('AURIX currently enables generation only for the live Seedance 2.5 video model.');
+  if (spec.modelId !== 'seedance_2_0') {
+    throw new Error('AURIX currently enables generation only for the live Seedance 2.0 video model.');
   }
   const prompt = typeof spec.prompt === 'string' ? spec.prompt.trim() : '';
   if (!prompt || prompt.length > 8000) throw new Error('Enter a prompt of 1–8,000 characters.');
@@ -155,7 +155,7 @@ function makeArgs(action, spec) {
   if (!['16:9', '9:16', '1:1'].includes(aspectRatio)) throw new Error('Choose a supported aspect ratio.');
   return [
     'generate', action, spec.modelId,
-    '--mode', 't2v',
+    '--mode', 'std',
     '--prompt', prompt,
     '--duration', String(duration),
     '--resolution', resolution,
