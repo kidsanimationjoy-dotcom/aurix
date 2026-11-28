@@ -22,16 +22,16 @@ public partial class ActiveOrbWindow : Window
     {
         InitializeComponent();
 
-        Core.RenderTransformOrigin = new Point(0.5, 0.5);
+        Core.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
         Core.RenderTransform = _coreScale;
 
-        Ring.RenderTransformOrigin = new Point(0.5, 0.5);
+        Ring.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
         Ring.RenderTransform = _ringRotation;
 
-        FlowA.RenderTransformOrigin = new Point(0.5, 0.5);
+        FlowA.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
         FlowA.RenderTransform = CreateTransformGroup(_flowARotation, _flowAScale, _flowATranslation);
 
-        FlowB.RenderTransformOrigin = new Point(0.5, 0.5);
+        FlowB.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
         FlowB.RenderTransform = CreateTransformGroup(_flowBRotation, _flowBScale, _flowBTranslation);
 
         _animationTimer = new DispatcherTimer(DispatcherPriority.Render)
