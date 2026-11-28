@@ -321,7 +321,7 @@ public partial class MainWindow : Window
     {
         _codexReady = status.CanChat;
         AiConnectionStatusText.Text = status.CanChat
-            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI-generated clicks and text entry are limited to Notepad."
+            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI button actions are limited to Notepad, Paint and Calculator; text entry is limited to Notepad."
             : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
     }
 
@@ -781,7 +781,7 @@ Supported formats:
 
 Use only these exact action kinds and fields. Use only these apps:
 Notepad, Calculator, Paint, File Explorer, Microsoft Edge, Google Chrome, Windows Terminal, Discord, Spotify.
-Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks and text entry are restricted to Notepad only; use "answer" when a requested UI change targets any other app.
+Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks are limited to Notepad, Paint and Calculator, require exact user-named targets and individual approval, and are blocked for destructive or external-impact controls. Text entry remains Notepad-only. Use "answer" for other UI changes.
 A plan may contain one to five steps. Use "answer" for anything outside this exact capability set.
 Only propose an application launch if the user explicitly asks to open, launch or start that exact app. Only propose open-window inspection when the user asks to show/list/inspect open windows or apps. Only propose control inspection when the user explicitly asks to inspect/show/list controls, buttons or fields in that exact app. Do not add extra apps or inspection steps just because they seem useful or because an app is mentioned in another context.
 Only propose a click when the exact button label appears in the user's latest instruction as the target of a click/press/select/activate request. Only propose text entry when the exact text and exact field label both appear in the user's latest instruction together with an affirmative type/enter/write/paste request. Do not infer or invent a button, text value, or field name: AURIX independently checks these values against that latest instruction.
@@ -886,7 +886,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             PlanText.Text = plan.Summary;
             var approval = System.Windows.MessageBox.Show(
                 "Review the exact desktop actions proposed by local " + providerName + ":\n\n" + plan.Summary +
-                "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text will still require separate approval.",
+                "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text still requires separate approval for each action.",
                 "Approve AI-proposed desktop plan",
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning);
