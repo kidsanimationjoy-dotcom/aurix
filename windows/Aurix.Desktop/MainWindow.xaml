@@ -86,7 +86,7 @@
 
       <StackPanel Grid.Row="0">
         <TextBlock Text="Hands-free AURIX" FontSize="21" FontWeight="SemiBold"/>
-        <TextBlock Text="Enable this once. AURIX stays in the system tray and listens locally for its name. Say “AURIX”, pause briefly, then give your instruction."
+        <TextBlock Text="Enable this once. AURIX stays in the system tray and listens locally for “AURIX” or “Hey AURIX”. No clap is needed. It greets you, then listens for your instruction."
                    Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap" Margin="0,5,0,12"/>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="HandsFreeButton" Content="Enable hands-free" Click="HandsFreeButton_Click"
@@ -100,7 +100,7 @@
                      Foreground="#9CB0CC" FontSize="12" TextWrapping="Wrap"
                      VerticalAlignment="Center" Margin="8,0,0,0"/>
         </StackPanel>
-        <TextBlock Text="While waiting, AURIX uses a local wake-word-only grammar. It switches to speech dictation only after it recognises “AURIX” or “Hey AURIX”. After one instruction it returns to wake-word mode."
+        <TextBlock Text="While waiting, AURIX uses a local wake-word-only grammar. Say “AURIX” or “Hey AURIX” directly; it replies “Yes, boss” and then listens for one instruction. Afterward it returns to wake-word mode."
                    Foreground="#839BB9" FontSize="11" TextWrapping="Wrap" Margin="0,12,0,14"/>
         <Border Background="#10253B" BorderBrush="#2B5577" BorderThickness="1"
                 CornerRadius="12" Padding="12" Margin="0,0,0,14">
@@ -122,7 +122,7 @@
                            Padding="10,7" Background="#0A1728" Foreground="#F1F7FF"
                            BorderBrush="#34516F" BorderThickness="1"
                            ToolTip="Pairing token printed by the local AURIX companion"/>
-              <TextBlock Text="Recognised speech is sent as text to the selected local AI provider; microphone audio stays on this PC. Stanford OpenJarvis is the primary AURIX reasoning engine and may propose only allowlisted actions. AURIX validates every proposal, asks before running a plan, and keeps separate approval for each Notepad change. Codex remains available as a backup."
+              <TextBlock Text="Recognised speech is sent as text to the selected local AI provider; microphone audio stays on this PC. Stanford OpenJarvis is the primary reasoning engine, with an automatic fallback to a connected Codex provider when OpenJarvis is unavailable. AURIX validates every proposal and asks before running a plan. Button actions are limited to Notepad, Paint and Calculator; text entry is limited to Notepad."
                          Foreground="#839BB9" FontSize="10" TextWrapping="Wrap" Margin="0,0,12,5"/>
               <TextBlock x:Name="AiConnectionStatusText"
                          Text="Primary: Stanford OpenJarvis on this PC. Codex is available as a separately paired backup provider."
@@ -176,7 +176,7 @@
                 CornerRadius="12" Padding="16" Margin="9,0,0,0">
           <StackPanel>
             <TextBlock Text="TASK RESULT" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
-            <TextBlock x:Name="TaskOutputText" Text="AURIX is ready. It can launch apps, inspect visible controls, and perform approved UI actions."
+            <TextBlock x:Name="TaskOutputText" Text="AURIX is ready. It can answer questions when a local AI provider is ready, launch supported apps, inspect windows and approved controls, and perform bounded UI actions after your approval."
                        TextWrapping="Wrap" FontSize="14" Margin="0,9,0,0"/>
           </StackPanel>
         </Border>
@@ -186,9 +186,10 @@
               CornerRadius="12" Padding="17">
         <StackPanel>
           <TextBlock Text="WHAT THIS BUILD CAN DO" FontSize="11" FontWeight="Bold" Foreground="#8EA6C7"/>
-          <TextBlock Text="• Wait for “AURIX” or “Hey AURIX” locally while the app is in the system tray&#10;• Listen for one spoken instruction after the wake phrase, then return to wake mode&#10;• Launch supported Windows applications and open several as one task&#10;• Inspect visible window titles and accessible controls in supported apps&#10;• Click exact named buttons or enter text only after your approval&#10;• Block destructive button names and refuse password or secret fields&#10;• Stop the remaining steps of a running task&#10;• Keep a local task action history that omits spoken and typed content&#10;• Check Microsoft Defender status and request a confirmed quick scan"
+          <TextBlock Text="• Wait for “AURIX” or “Hey AURIX” locally while the app is in the system tray&#10;• Listen for one spoken instruction after the wake phrase, then return to wake mode&#10;• Launch supported Windows applications and open several as one task&#10;• Inspect visible window titles and accessible controls in supported apps&#10;• Click exact named buttons in Notepad, Paint or Calculator only after your approval
+• Enter text only into approved Notepad fields after your approval&#10;• Block destructive button names and refuse password or secret fields&#10;• Stop the remaining steps of a running task&#10;• Keep a local task action history that omits spoken and typed content&#10;• Check Microsoft Defender status and request a confirmed quick scan"
                      TextWrapping="Wrap" LineHeight="24" FontSize="13" Margin="0,10,0,0"/>
-          <TextBlock Text="Hands-free requires a locally installed English Windows speech recognizer and microphone permission. Wake-word detection is local; it does not save room audio or upload it. The current task engine still supports only the commands and applications listed in the project guide."
+          <TextBlock Text="Hands-free requires a locally installed English Windows speech recognizer and microphone permission. Wake-word detection is local, requires no clap, and does not save room audio or upload it. General questions require a configured local AI provider; computer actions remain bounded to documented apps and explicit approvals."
                      TextWrapping="Wrap" Foreground="#F0C58C" FontSize="12" Margin="0,14,0,0"/>
         </StackPanel>
       </Border>
