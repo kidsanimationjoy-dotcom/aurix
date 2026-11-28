@@ -126,7 +126,7 @@
               <TextBlock Text="Recognised speech is sent as text to your selected local AI provider; microphone audio stays on this PC. OpenJarvis is primary; Ollama is a direct local model option and automatic fallback, with Codex available when paired. AURIX validates every proposed action and asks before running it. Button actions are limited to Notepad, Paint and Calculator; text entry is limited to Notepad."
                          Foreground="#839BB9" FontSize="10" TextWrapping="Wrap" Margin="0,0,12,5"/>
               <TextBlock x:Name="AiConnectionStatusText"
-                         Text="Primary: Stanford OpenJarvis on this PC. Codex is available as a separately paired backup provider."
+                         Text="Primary: Stanford OpenJarvis. Local Ollama is the no-key fallback; Codex is available when the AURIX companion is paired."
                          Foreground="#9CB0CC" FontSize="11" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
