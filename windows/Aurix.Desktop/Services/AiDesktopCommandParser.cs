@@ -113,6 +113,24 @@ public static class AiDesktopCommandParser
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
+    private static bool ExplicitlyRequestedAppClose(string displayName, string userPrompt)
+    {
+        if (displayName is not ("Notepad" or "Paint" or "Calculator"))
+            return false;
+
+        foreach (var alias in GetApplicationAliases(displayName))
+        {
+            var pattern = @"\bclose\b[^.!?;\r\n]{0,40}(?<![\p{L}\p{N}_])" +
+                Regex.Escape(alias) + @"(?![\p{L}\p{N}_])";
+            foreach (Match match in Regex.Matches(userPrompt, pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                if (!HasNegationBeforeAction(userPrompt, match.Index))
+                    return true;
+            }
+        }
+        return false;
+    }
     private static bool ExplicitlyRequestedAppLaunch(string displayName, string userPrompt)
     {
         foreach (var alias in GetApplicationAliases(displayName))
@@ -276,6 +294,17 @@ public static class AiDesktopCommandParser
         var kind = RequiredString(item, "kind", 1, 40);
         switch (kind)
         {
+            case "close_application":
+            {
+                RequireOnlyProperties(item, "kind", "app");
+                var app = ResolveApp(RequiredString(item, "app", 1, 80));
+                if (!ExplicitlyRequestedAppClose(app.DisplayName, userPrompt))
+                    throw new InvalidOperationException("AURIX refuses to close an app unless the user explicitly named that app in a close request.");
+                return new DesktopTaskStep(
+                    DesktopTaskStepKind.CloseApplication,
+                    "Close " + app.DisplayName,
+                    TargetApp: app.DisplayName);
+            }
             case "launch_application":
             {
                 RequireOnlyProperties(item, "kind", "app");
