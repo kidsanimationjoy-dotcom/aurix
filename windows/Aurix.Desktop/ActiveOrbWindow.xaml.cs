@@ -47,7 +47,7 @@ public partial class ActiveOrbWindow : Window
     private void PositionOrb()
     {
         Left = Math.Max(0, (SystemParameters.PrimaryScreenWidth - Width) / 2);
-        Top = Math.Max(0, (SystemParameters.PrimaryScreenHeight - Height) / 2);
+        Top = Math.Max(0, SystemParameters.PrimaryScreenHeight - Height - 54);
     }
 
     private void AnimateOrb(object? sender, EventArgs e)
