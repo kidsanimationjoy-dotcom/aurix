@@ -46,6 +46,26 @@
           <DropShadowEffect Color="#A58BFF" BlurRadius="18" ShadowDepth="0" Opacity="0.92"/>
         </Ellipse.Effect>
       </Ellipse>
+      <Ellipse x:Name="FlowA" Width="92" Height="46" Opacity="0.42">
+        <Ellipse.Fill>
+          <RadialGradientBrush GradientOrigin="0.28,0.32">
+            <GradientStop Color="#DFFFFFFF" Offset="0"/>
+            <GradientStop Color="#A5A7FFFF" Offset="0.42"/>
+            <GradientStop Color="#0067BFFF" Offset="1"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+        <Ellipse.Effect><BlurEffect Radius="7"/></Ellipse.Effect>
+      </Ellipse>
+      <Ellipse x:Name="FlowB" Width="62" Height="94" Opacity="0.30">
+        <Ellipse.Fill>
+          <RadialGradientBrush GradientOrigin="0.68,0.70">
+            <GradientStop Color="#B9FFC8ED" Offset="0"/>
+            <GradientStop Color="#9978B7FF" Offset="0.44"/>
+            <GradientStop Color="#0078B7FF" Offset="1"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+        <Ellipse.Effect><BlurEffect Radius="8"/></Ellipse.Effect>
+      </Ellipse>
       <Ellipse Width="34" Height="15" Fill="#DFFFFFFF" Opacity="0.82"
                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,34,0,0">
         <Ellipse.RenderTransform><RotateTransform Angle="-28"/></Ellipse.RenderTransform>
