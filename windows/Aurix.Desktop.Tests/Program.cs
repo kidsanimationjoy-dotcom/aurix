@@ -34,6 +34,11 @@ var answer = AiDesktopCommandParser.Parse(
     "What can you help me do?");
 Check("plain answer accepted", !answer.IsPlan && answer.Message == "Hello." && answer.Plan is null);
 
+var fencedAnswer = AiDesktopCommandParser.Parse(
+    "```json\\n{\\\"type\\\":\\\"answer\\\",\\\"message\\\":\\\"Hello from a local model.\\\"}\\n```",
+    "What can you help me do?");
+Check("fenced JSON answer accepted", !fencedAnswer.IsPlan && fencedAnswer.Message == "Hello from a local model.");
+
 Check("AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("AURIX", 0.65));
 Check("Hey AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("Hey AURIX", 0.65));
 Check("wake phrase punctuation is normalized", WakePhrasePolicy.IsAccepted("AURIX.", 0.65));
@@ -41,6 +46,8 @@ Check("wake phrase matching is case-insensitive", WakePhrasePolicy.IsAccepted("h
 Check("ordinary speech cannot wake AURIX", !WakePhrasePolicy.IsAccepted("open calculator", 0.95));
 Check("low-confidence wake phrase is rejected", !WakePhrasePolicy.IsAccepted("AURIX", 0.20));
 Check("invalid wake confidence is rejected", !WakePhrasePolicy.IsAccepted("AURIX", double.NaN));
+Check("common Orix pronunciation is accepted", WakePhrasePolicy.IsAccepted("ORIX", 0.65));
+Check("Hey Auricks pronunciation is accepted", WakePhrasePolicy.IsAccepted("Hey AURICKS", 0.65));
 
 var launch = AiDesktopCommandParser.Parse(
     """{"type":"desktop_plan","summary":"Open Calculator","steps":[{"kind":"launch_application","app":"Calculator"}]}""",
