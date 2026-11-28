@@ -164,24 +164,32 @@ public static class AiDesktopCommandParser
         return false;
     }
 
-    private static bool ExplicitlyRequestedButton(string button, string userPrompt)
+    private static bool ExplicitlyRequestedButton(string button, string displayName, string userPrompt)
     {
-        if (!userPrompt.Contains("Notepad", StringComparison.OrdinalIgnoreCase))
+        if (displayName is not ("Notepad" or "Paint" or "Calculator"))
             return false;
 
-        // Require an action verb followed by the exact button label. This
-        // prevents "open Notepad" from authorizing a click on a button named "Open".
+        // Require an action verb followed by the exact button label and app.
+        // Browser, messaging, terminal and file-management actions remain blocked.
         if (Regex.IsMatch(userPrompt,
             @"\b(?:don't|do not|never|avoid|shouldn't|should not|can't|cannot|must not)\b[\s\S]{0,40}\b(?:click|press|select|activate)\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             return false;
 
         var escapedButton = Regex.Escape(button.Trim());
-        var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}(?<![\p{L}\p{N}_])" +
-            escapedButton +
-            @"(?:[""']?\s*button)?\s+(?:in|on|within|inside)\s+(?:the\s+)?Notepad\b";
-        return Regex.IsMatch(userPrompt, pattern,
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        foreach (var alias in GetApplicationAliases(displayName))
+        {
+            var escapedAlias = Regex.Escape(alias);
+            var pattern = @"\b(?:click|press|select|activate)\b[\s\S]{0,48}(?<![\p{L}\p{N}_])" +
+                escapedButton +
+                @"(?:[""']?\s*button)?\s+(?:in|on|within|inside)\s+(?:the\s+)?" +
+                escapedAlias + @"\b";
+            if (Regex.IsMatch(userPrompt, pattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return true;
+        }
+
+        return false;
     }
 
 
@@ -293,7 +301,7 @@ public static class AiDesktopCommandParser
                     throw new InvalidOperationException("The proposed button name cannot be blank.");
                 if (ExternalImpactButton.IsMatch(button))
                     throw new InvalidOperationException("AURIX refuses AI-proposed buttons that could send, publish, share, pay, purchase, transfer, order, subscribe or confirm an external action.");
-                if (!ExplicitlyRequestedButton(button, userPrompt))
+                if (!ExplicitlyRequestedButton(button, app.DisplayName, userPrompt))
                     throw new InvalidOperationException("AURIX refuses to click a button unless the user explicitly named that button in the latest instruction.");
                 return new DesktopTaskStep(
                     DesktopTaskStepKind.ClickButton,
@@ -327,12 +335,11 @@ public static class AiDesktopCommandParser
     private static (string DisplayName, string Executable, string[] ProcessNames) ResolveUiApp(string name, string action)
     {
         var app = ResolveApp(name);
-        // AI-proposed UI mutations are restricted to Notepad in this release.
-        // Browser and messaging clients can navigate, submit forms, or transmit
-        // content through controls that are difficult to classify safely.
-        if (!string.Equals(app.DisplayName, "Notepad", StringComparison.Ordinal))
-            throw new InvalidOperationException("AI-proposed UI actions are currently limited to Notepad. " +
-                "AURIX will not " + action + " in browsers, messaging apps, or other connected applications.");
+        // AI-proposed UI actions are limited to local apps with reviewable controls.
+        // Text entry remains separately restricted to Notepad by policy.
+        if (app.DisplayName is not ("Notepad" or "Paint" or "Calculator"))
+            throw new InvalidOperationException("AI-proposed UI actions are currently limited to Notepad, Paint and Calculator. " +
+                "AURIX will not " + action + " in browsers, messaging apps, terminals or file-management surfaces.");
         return app;
     }
 
