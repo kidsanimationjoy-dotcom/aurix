@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private readonly LocalOpenJarvisChatService _localOpenJarvisChat = new();
+    private readonly LocalOllamaChatService _localOllamaChat = new();
     private readonly LocalOpenJarvisRuntimeService _localOpenJarvisRuntime = new();
     private CancellationTokenSource? _openJarvisStartupCancellation;
     private SpeechSynthesizer? _speechSynthesizer;
@@ -34,8 +35,8 @@ public partial class MainWindow : Window
         _companionToken = CompanionSettingsStore.LoadToken();
         CompanionTokenBox.Password = _companionToken;
         AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
-            ? "Stanford OpenJarvis is the primary AI. Start its local server or check its status here. Codex is an optional backup."
-            : "Stanford OpenJarvis is primary. A saved Codex pairing token is available for backup.";
+            ? "Local AI choices: OpenJarvis (primary), Ollama (no API key), or the optional paired Codex backup. Install a local model and start its local service."
+            : "OpenJarvis is primary. Ollama is available as a direct local fallback; a saved Codex pairing token is also available as backup.";
         try
         {
             _speechSynthesizer = new SpeechSynthesizer();
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
             (nameof(StopOpenJarvisButton), StopOpenJarvisButton),
             (nameof(CheckOpenJarvisButton), CheckOpenJarvisButton),
             (nameof(OpenJarvisSetupGuideButton), OpenJarvisSetupGuideButton),
+            (nameof(OllamaSetupGuideButton), OllamaSetupGuideButton),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
             (nameof(PairCompanionButton), PairCompanionButton),
