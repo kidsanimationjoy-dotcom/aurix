@@ -20,7 +20,8 @@ public static class VoiceOrbStatusPolicy
         if (string.IsNullOrWhiteSpace(message))
             return VoiceOrbDisposition.None;
 
-        if (message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase) ||
+        if (message.Contains("Clap detected", StringComparison.OrdinalIgnoreCase) ||
+            message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase) ||
             message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("AURIX heard you", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("Yes, boss", StringComparison.OrdinalIgnoreCase) ||
