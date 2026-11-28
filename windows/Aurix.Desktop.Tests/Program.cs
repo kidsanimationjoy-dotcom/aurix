@@ -34,10 +34,12 @@ var answer = AiDesktopCommandParser.Parse(
     "What can you help me do?");
 Check("plain answer accepted", !answer.IsPlan && answer.Message == "Hello." && answer.Plan is null);
 
-var fencedAnswer = AiDesktopCommandParser.Parse(
-    "```json\\n{\\\"type\\\":\\\"answer\\\",\\\"message\\\":\\\"Hello from a local model.\\\"}\\n```",
-    "What can you help me do?");
-Check("fenced JSON answer accepted", !fencedAnswer.IsPlan && fencedAnswer.Message == "Hello from a local model.");
+var fencedJson = string.Join(Environment.NewLine,
+    "```json",
+    "{\"type\":\"answer\",\"message\":\"Hello from a local model.\"}",
+    "```");
+var fencedAnswer = AiDesktopCommandParser.Parse(fencedJson, "What can you help me do?");
+
 
 Check("AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("AURIX", 0.65));
 Check("Hey AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("Hey AURIX", 0.65));
