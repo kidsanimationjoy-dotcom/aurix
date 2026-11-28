@@ -191,6 +191,8 @@ Check("invalid audio measurement is rejected", !ClapDetectionPolicy.IsClap(doubl
 
 Check("orb opens after wake phrase", 
     VoiceOrbStatusPolicy.Classify("AURIX heard you. Listening for your instruction…") == VoiceOrbDisposition.Listening);
+Check("orb stays visible for the Yes boss greeting",
+    VoiceOrbStatusPolicy.Classify("Yes, boss. What would you like me to do?") == VoiceOrbDisposition.Listening);
 Check("orb shows partial speech while listening",
     VoiceOrbStatusPolicy.Classify("Hearing: open Notepad") == VoiceOrbDisposition.Listening);
 Check("partial wake phrase does not prematurely show the orb",
