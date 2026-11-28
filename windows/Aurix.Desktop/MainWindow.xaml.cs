@@ -765,7 +765,8 @@ public partial class MainWindow : Window
     private async Task RunAiChatAsync(string prompt)
     {
         var useOpenJarvis = AiProviderCombo.SelectedIndex == 0;
-        var providerName = useOpenJarvis ? "Stanford OpenJarvis" : "Codex";
+        var useOllama = AiProviderCombo.SelectedIndex == 2;
+        var providerName = useOpenJarvis ? "Stanford OpenJarvis" : useOllama ? "Local Ollama" : "Codex";
         var token = CurrentCompanionToken();
         const string actionContract = """
 You are translating a user's voice request into either an answer or a proposed AURIX desktop plan. Address the user as “boss” when conversationally appropriate.
@@ -808,52 +809,62 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
                 }
                 catch (Exception openJarvisError) when (!cancellationToken.IsCancellationRequested)
                 {
-                    if (string.IsNullOrWhiteSpace(token))
+                    var codexAvailable = false;
+                    string? codexIssue = null;
+                    if (!string.IsNullOrWhiteSpace(token))
                     {
-                        throw new InvalidOperationException(
-                            "Stanford OpenJarvis is not ready: " + openJarvisError.Message +
-                            " Complete the official OpenJarvis Windows setup, install a local inference model, then start the local server. Alternatively connect the AURIX companion and sign in to the Codex backup.",
-                            openJarvisError);
+                        try
+                        {
+                            var backupStatus = await _localCodexChat.CheckAsync(token, cancellationToken);
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (!_taskRuns.IsCurrent(taskRun)) return;
+                            if (backupStatus.CanChat)
+                            {
+                                useOpenJarvis = false;
+                                providerName = "Codex backup";
+                                UpdateCodexStatus(backupStatus);
+                                AiConnectionStatusText.Text = "OpenJarvis was unavailable. AURIX switched to your connected local Codex backup.";
+                                codexAvailable = true;
+                            }
+                            else codexIssue = backupStatus.Message;
+                        }
+                        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+                        {
+                            codexIssue = ex.Message;
+                        }
                     }
-
-                    var backupStatus = await _localCodexChat.CheckAsync(token, cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (!_taskRuns.IsCurrent(taskRun))
-                        return;
-                    if (!backupStatus.CanChat)
+                    if (!codexAvailable)
                     {
-                        throw new InvalidOperationException(
-                            "OpenJarvis is not ready (" + openJarvisError.Message + "). The Codex backup is also not ready: " +
-                            backupStatus.Message + " Pair the companion, verify its sandbox and complete official Codex sign-in.",
-                            openJarvisError);
+                        try
+                        {
+                            AiConnectionStatusText.Text = await _localOllamaChat.CheckAsync(cancellationToken);
+                            useOpenJarvis = false;
+                            useOllama = true;
+                            providerName = "Local Ollama";
+                            AiConnectionStatusText.Text = "OpenJarvis was unavailable. Using your local Ollama model. " + AiConnectionStatusText.Text;
+                        }
+                        catch (Exception ollamaError) when (!cancellationToken.IsCancellationRequested)
+                        {
+                            var codexDetail = string.IsNullOrWhiteSpace(token) ? "Codex backup is not paired." : "Codex backup is not ready: " + (codexIssue ?? "status could not be checked.");
+                            throw new InvalidOperationException("No local AI provider is ready. OpenJarvis: " + openJarvisError.Message + " Ollama: " + ollamaError.Message + " " + codexDetail + " Install Ollama for Windows and a local model such as qwen3.5:2b, or finish OpenJarvis model setup. No API key is needed for these local options.", openJarvisError);
+                        }
                     }
-
-                    useOpenJarvis = false;
-                    providerName = "Codex backup";
-                    UpdateCodexStatus(backupStatus);
-                    AiConnectionStatusText.Text =
-                        "OpenJarvis was unavailable. AURIX has safely switched to your connected local Codex backup.";
                 }
             }
-
-            if (!useOpenJarvis)
+            else if (useOllama)
+            {
+                AiConnectionStatusText.Text = await _localOllamaChat.CheckAsync(cancellationToken);
+            }
+            else
             {
                 if (string.IsNullOrWhiteSpace(token))
-                {
-                    throw new InvalidOperationException(
-                        "No AI provider is ready. Install and start Stanford OpenJarvis with a local model, or connect the local AURIX companion and complete Codex sign-in. Simple allowlisted app-launch commands still work without an AI provider.");
-                }
-
+                    throw new InvalidOperationException("Codex backup is not paired. Connect the local AURIX companion, verify its sandbox and complete official Codex sign-in, or choose a local OpenJarvis/Ollama provider.");
                 var status = await _localCodexChat.CheckAsync(token, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!_taskRuns.IsCurrent(taskRun))
-                    return;
+                if (!_taskRuns.IsCurrent(taskRun)) return;
                 UpdateCodexStatus(status);
                 if (!status.CanChat)
-                {
-                    throw new InvalidOperationException(
-                        "Codex backup is not ready. Pair the companion, prepare and verify its sandbox, and complete official Codex sign-in. No prompt was sent.");
-                }
+                    throw new InvalidOperationException("Codex backup is not ready. Pair the companion, prepare and verify its sandbox, and complete official Codex sign-in.");
             }
 
             var messages = new List<LocalCodexMessage>
