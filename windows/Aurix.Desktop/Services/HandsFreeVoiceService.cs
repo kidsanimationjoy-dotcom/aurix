@@ -113,13 +113,8 @@ public sealed class HandsFreeVoiceService : IDisposable
             if (_disposed || _state != ListeningState.WaitingForWakeWord)
                 return;
 
-            var isWakePhrase =
-                phrase.Equals("AURIX", StringComparison.OrdinalIgnoreCase) ||
-                phrase.Equals("Hey AURIX", StringComparison.OrdinalIgnoreCase);
-
-            // Keep the wake grammar narrow, but avoid rejecting a clearly spoken
-            // wake phrase because the installed Windows recognizer scores it slightly low.
-            if (!isWakePhrase || e.Result.Confidence < 0.55)
+            // Wake recognition is direct: no clap or other physical trigger is required.
+            if (!WakePhrasePolicy.IsAccepted(phrase, e.Result.Confidence))
                 return;
 
             wakeAccepted = true;
@@ -199,7 +194,13 @@ public sealed class HandsFreeVoiceService : IDisposable
                 if (e.Cancelled && _state != ListeningState.SwitchingToCommand)
                     throw new InvalidOperationException("Windows speech recognition was interrupted. Check the microphone connection and enable hands-free again.");
 
-                if (_state == ListeningState.SwitchingToCommand)
+                if (_state == ListeningState.WaitingForWakeWord && !e.Cancelled)
+                {
+                    // Recover from a recognizer cycle that completed after prolonged silence.
+                    _engine.RecognizeAsync(RecognizeMode.Multiple);
+                    status = "Wake listener is active. Say “AURIX” or “Hey AURIX” whenever you need me.";
+                }
+                else if (_state == ListeningState.SwitchingToCommand)
                 {
                     // Pause recognition while AURIX speaks its greeting. The
                     // microphone is not in dictation mode until that greeting ends.
