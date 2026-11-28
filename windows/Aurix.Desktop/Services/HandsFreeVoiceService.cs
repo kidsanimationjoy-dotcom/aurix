@@ -129,7 +129,7 @@ public sealed class HandsFreeVoiceService : IDisposable
 
         if (!authorisedByClap)
         {
-            StatusChanged?.Invoke("Clap first, then say “AURIX” within five seconds.");
+            StatusChanged?.Invoke("Clap first, then say “AURIX” within eight seconds.");
             return;
         }
 
@@ -296,7 +296,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     }
 
     private void OnClapDetected()
-        => StatusChanged?.Invoke("Clap detected. Say “AURIX” within five seconds.");
+        => StatusChanged?.Invoke("Clap detected. Say “AURIX” within eight seconds.");
 
     private void OnMicrophoneInputLevelChanged(int inputLevel)
     {

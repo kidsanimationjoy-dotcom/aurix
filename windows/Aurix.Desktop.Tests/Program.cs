@@ -214,9 +214,10 @@ Reject("negated text-entry request with conversational wording rejected",
     "I don't want you to type Hello into Text Editor in Notepad");
 
 
+Check("software microphone signal boost is enabled", ClapDetectionPolicy.SoftwareSignalBoost == 2.0);
 Check("near clap qualifies", ClapDetectionPolicy.IsClap(0.78, 0.11));
-Check("quieter distant clap qualifies at increased sensitivity", ClapDetectionPolicy.IsClap(0.075, 0.004));
-Check("low-level room noise does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.04, 0.002));
+Check("quiet distant clap qualifies at high sensitivity", ClapDetectionPolicy.IsClap(0.04, 0.003));
+Check("low-level room noise remains below the trigger threshold", !ClapDetectionPolicy.IsClap(0.025, 0.001));
 Check("steady speech energy does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.29, 0.12));
 Check("steady loud noise does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.40, 0.20));
 Check("invalid audio measurement is rejected", !ClapDetectionPolicy.IsClap(double.NaN, 0.1));
