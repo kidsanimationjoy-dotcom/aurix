@@ -448,6 +448,21 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OllamaSetupGuideButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://ollama.com/download/windows",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "Could not open the official Ollama Windows download page: " + ex.Message;
+        }
+    }
     private void StartHandsFreeListening(bool savePreference)
     {
         if (_handsFreeVoice?.IsRunning == true)
