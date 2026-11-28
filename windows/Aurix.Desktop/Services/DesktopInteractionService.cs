@@ -119,6 +119,54 @@ public static class DesktopInteractionService
         }
     }
 
+    public static DesktopUiActionResult CloseApplication(
+        string appName,
+        Func<string, bool>? requestApproval,
+        CancellationToken cancellationToken)
+    {
+        if (appName is not ("Notepad" or "Paint" or "Calculator"))
+            return new(false, "AURIX can only request a graceful close of Notepad, Paint or Calculator in this preview.");
+
+        var targetResult = FindTargetWindow(appName);
+        if (!targetResult.Success || targetResult.Window is null)
+            return new(false, targetResult.Message);
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var prompt = $"Approve a normal close request?\n\nApplication: {appName}\nWindow: {targetResult.Window.Title}\n\nAURIX will ask Windows to close the app normally. The app may show its own save prompt. AURIX will not force-terminate it.";
+            if (requestApproval is null || !requestApproval(prompt))
+                return new(false, $"Close cancelled. {appName} remains open.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var refreshedTarget = FindTargetWindow(appName);
+            if (!refreshedTarget.Success || refreshedTarget.Window is null ||
+                refreshedTarget.Window.ProcessId != targetResult.Window.ProcessId ||
+                !string.Equals(refreshedTarget.Window.Title, targetResult.Window.Title, StringComparison.Ordinal))
+                return new(false, "The approved app window changed before AURIX could close it. No close request was sent.");
+
+            using var process = Process.GetProcessById(refreshedTarget.Window.ProcessId);
+            if (process.HasExited || process.MainWindowHandle == IntPtr.Zero)
+                return new(false, "The approved app no longer has an open main window. No close request was sent.");
+
+            var accepted = process.CloseMainWindow();
+            return accepted
+                ? new(true, $"Windows accepted a normal close request for {appName}. The app may still ask you to save changes; AURIX did not force-close it.")
+                : new(false, $"Windows did not accept a normal close request for {appName}. The app was not force-terminated.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException)
+        {
+            return new(false, $"The {appName} process ended before AURIX could send the close request.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new(false, $"AURIX could not request a normal close for {appName}: {ex.Message}");
+        }
+    }
     public static DesktopUiActionResult ClickButton(
         string appName,
         string buttonName,

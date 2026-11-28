@@ -1,16 +1,16 @@
 <Window x:Class="Aurix.Desktop.ActiveOrbWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="92" Height="104" WindowStyle="None" AllowsTransparency="True"
+        Width="196" Height="218" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" ShowActivated="False"
         Topmost="True" ResizeMode="NoResize" IsHitTestVisible="False">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="76"/>
+      <RowDefinition Height="176"/>
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
-    <Grid Width="72" Height="72" HorizontalAlignment="Center" VerticalAlignment="Center">
-      <Ellipse x:Name="OuterGlow" Width="68" Height="68" Opacity="0.48">
+    <Grid Width="164" Height="164" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Ellipse x:Name="OuterGlow" Width="158" Height="158" Opacity="0.48">
         <Ellipse.Fill>
           <RadialGradientBrush GradientOrigin="0.42,0.36">
             <GradientStop Color="#A5F8FFFF" Offset="0"/>
@@ -20,7 +20,7 @@
         </Ellipse.Fill>
         <Ellipse.Effect><BlurEffect Radius="12"/></Ellipse.Effect>
       </Ellipse>
-      <Ellipse x:Name="Ring" Width="60" Height="60" StrokeThickness="2" Opacity="0.9">
+      <Ellipse x:Name="Ring" Width="142" Height="142" StrokeThickness="2" Opacity="0.9">
         <Ellipse.Stroke>
           <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#9CFBFF" Offset="0"/>
@@ -31,7 +31,7 @@
           </LinearGradientBrush>
         </Ellipse.Stroke>
       </Ellipse>
-      <Ellipse x:Name="Core" Width="48" Height="48">
+      <Ellipse x:Name="Core" Width="116" Height="116">
         <Ellipse.Fill>
           <RadialGradientBrush GradientOrigin="0.28,0.22">
             <GradientStop Color="#FFFFFFFF" Offset="0"/>
@@ -46,16 +46,36 @@
           <DropShadowEffect Color="#A58BFF" BlurRadius="18" ShadowDepth="0" Opacity="0.92"/>
         </Ellipse.Effect>
       </Ellipse>
-      <Ellipse Width="15" Height="7" Fill="#DFFFFFFF" Opacity="0.82"
-               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0">
+      <Ellipse x:Name="FlowA" Width="92" Height="46" Opacity="0.42">
+        <Ellipse.Fill>
+          <RadialGradientBrush GradientOrigin="0.28,0.32">
+            <GradientStop Color="#DFFFFFFF" Offset="0"/>
+            <GradientStop Color="#A5A7FFFF" Offset="0.42"/>
+            <GradientStop Color="#0067BFFF" Offset="1"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+        <Ellipse.Effect><BlurEffect Radius="7"/></Ellipse.Effect>
+      </Ellipse>
+      <Ellipse x:Name="FlowB" Width="62" Height="94" Opacity="0.30">
+        <Ellipse.Fill>
+          <RadialGradientBrush GradientOrigin="0.68,0.70">
+            <GradientStop Color="#B9FFC8ED" Offset="0"/>
+            <GradientStop Color="#9978B7FF" Offset="0.44"/>
+            <GradientStop Color="#0078B7FF" Offset="1"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+        <Ellipse.Effect><BlurEffect Radius="8"/></Ellipse.Effect>
+      </Ellipse>
+      <Ellipse Width="34" Height="15" Fill="#DFFFFFFF" Opacity="0.82"
+               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,34,0,0">
         <Ellipse.RenderTransform><RotateTransform Angle="-28"/></Ellipse.RenderTransform>
       </Ellipse>
     </Grid>
     <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,-1,0,0">
       <TextBlock x:Name="StateText" Text="AURIX" Foreground="#F3FAFF"
-                 FontSize="8" FontWeight="Bold" TextAlignment="Center"/>
+                 FontSize="13" FontWeight="Bold" TextAlignment="Center"/>
       <TextBlock x:Name="HintText" Text="Listening" Foreground="#BBDFFF"
-                 FontSize="7" TextAlignment="Center" Margin="0,1,0,0"/>
+                 FontSize="11" TextAlignment="Center" Margin="0,1,0,0"/>
     </StackPanel>
   </Grid>
 </Window>

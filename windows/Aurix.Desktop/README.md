@@ -13,11 +13,10 @@ The report cannot prove that the microphone works, that Windows consent is enabl
 AURIX can stay in the Windows system tray with hands-free wake-word listening enabled:
 
 1. Enable **hands-free** once in the AURIX window.
-2. Clap once. AURIX opens a short, local five-second wake window.
-3. Within that window, say **“AURIX”** or **“Hey AURIX”**.
-4. AURIX displays its compact multicolour orb at the centre of the primary display and says, **“What would you like me to do, boss?”**
-5. After the greeting finishes, speak one instruction. AURIX sends the recognised text to its local task planner.
-6. After one command, AURIX returns to clap-gated wake mode; the orb stays hidden while idle.
+2. Say **“AURIX”** or **“Hey AURIX”** at a normal speaking volume. No clap or other physical trigger is required.
+3. AURIX displays its larger multicolour orb near the bottom centre of the primary display and says, **“Yes, boss. What would you like me to do?”**
+4. After the greeting finishes, speak one instruction. AURIX sends the recognised text to its selected local AI provider or bounded local task planner.
+5. After one command, AURIX returns to wake-only mode; the orb stays hidden while idle.
 
 You do not need to reopen the window or press a microphone button for each task. Closing the window hides it to the tray; it does not stop an enabled wake-word listener. The tray menu lets you pause or resume listening. The tray tooltip indicates whether the wake-word listener is active. **Exit AURIX** stops the process and releases the microphone.
 
@@ -25,36 +24,47 @@ Hands-free opt-in is saved for the current Windows user. If you also press **Ena
 
 ## Local AI conversation
 
-Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles ordinary questions and proposes supported desktop tasks. AURIX—not OpenJarvis—validates any plan and controls whether an action can run.
+Stanford OpenJarvis is the default AI reasoning engine for AURIX. It handles ordinary questions and proposes supported desktop tasks. AURIX—not the model—validates every plan and controls whether an action can run.
 
 ### One-time OpenJarvis setup
 
 1. Select **OpenJarvis setup guide** in AURIX. This opens Stanford's official [native Windows installation guide](https://open-jarvis.github.io/OpenJarvis/getting-started/windows-native/).
 2. Check the prerequisites listed there: Windows 10 1809 or newer, Python 3.11–3.13, Git, MSVC build tools, and roughly 5 GB free disk space.
-3. Complete the official installation. The native installer places the source under `%LOCALAPPDATA%\OpenJarvis\src` by default and prepares the `uv` environment. If asked about registering OpenJarvis as a separate scheduled task, choose **No** when you want AURIX to manage the server for the current AURIX session.
-4. Close and reopen AURIX after installation so Windows PATH changes are visible to the app.
+3. Complete the official installation. The native installer places the source under `%LOCALAPPDATA%\\OpenJarvis\\src` by default and prepares the `uv` environment. Skip its separate scheduled task when AURIX should manage the server for the current session.
+4. Install a supported inference backend and model using the official OpenJarvis guide. Installing the OpenJarvis runtime alone does not mean a model is ready.
+5. Close and reopen AURIX after installation so Windows PATH changes are visible to the app.
+
+### Direct Ollama local model option
+
+Ollama is an additional direct local provider and a no-API-key fallback. AURIX only connects to `127.0.0.1:11434`; it does not use Ollama Cloud.
+
+1. Select **Install local Ollama model** in AURIX, or use the official [Ollama for Windows download](https://ollama.com/download/windows).
+2. Open Ollama and let its local service start.
+3. In Windows Terminal, run `ollama run qwen3.5:2b` once to download and start the small Qwen 3.5 2B model. The model download takes disk space; actual speed depends on the laptop's memory and hardware. The [Ollama model page](https://ollama.com/library/qwen3.5:2b) lists the current model details.
+4. In AURIX, select **Ollama (direct local AI, no API key)** to use it directly. AURIX detects installed models and prefers `qwen3.5:2b` when present; otherwise it uses an installed local model.
+
+Ollama's local OpenAI-compatible endpoint is used only on loopback. Prompts are sent as text; audio is never sent to Ollama. AURIX does not download models in the background or install Ollama for you.
 
 ### Daily use
 
-1. Open AURIX Desktop.
-2. Select **Start local server**. AURIX launches the installed OpenJarvis CLI with fixed arguments, using `uv run --project ... jarvis serve --host 127.0.0.1 --port 8000 --agent simple`.
-3. Wait for AURIX to confirm that the local health endpoint and model are ready.
-4. Clap once, say **“AURIX”**, and answer the greeting, or type a request.
-5. Select **Stop local server** when finished. Exiting AURIX also stops a server process that AURIX itself started. Closing the main window to the system tray does not stop it.
+1. Open AURIX Desktop and enable **hands-free** once.
+2. Say **“AURIX”** or **“Hey AURIX”**. No clap is required. AURIX says **“Yes, boss. What would you like me to do?”**
+3. Speak one instruction after the greeting, or type it into the manual task box.
+4. For OpenJarvis, select **Start local server** and wait until the health check and model are ready. For Ollama, make sure the Ollama desktop service is running and a local model is installed.
+5. AURIX uses OpenJarvis first by default. If its local readiness check fails, AURIX tries a paired and ready Codex backup, then checks for local Ollama. You can also select Ollama or Codex directly in the provider list.
+6. Select **Stop local server** when finished. Exiting AURIX stops only an OpenJarvis server process AURIX started itself.
 
-If an OpenJarvis server was started outside AURIX and is already responding on port 8000, AURIX detects it rather than starting a second copy. AURIX only offers its Stop button for a server process that it launched itself. It does not stop or alter an independently installed OpenJarvis scheduled task.
+AURIX sends recognised speech as text to the selected local AI provider; microphone audio stays on this PC. The model returns an answer or a proposed plan. AURIX independently validates the result against its action schema, supported applications, and the user's latest instruction. It displays a proposed plan and asks for approval before execution.
 
-AURIX sends recognised speech as text to the local OpenJarvis service; microphone audio stays on this PC. OpenJarvis returns a JSON answer or proposed plan. AURIX independently validates the response against its strict action schema, supported application allowlist, and the user's latest instruction. AURIX displays a proposed plan and asks for approval before execution. AI-proposed button clicks and text entry remain restricted to Notepad, and each UI change has its own approval prompt. The emergency stop cancels the active AI request or remaining approved task steps.
+AI-proposed button actions are limited to Notepad, Paint and Calculator, require exact user-named targets and individual approval, and are blocked for destructive or external-impact controls. Text entry remains limited to Notepad, with a separate approval. Browser navigation, messaging, arbitrary shell commands and unrestricted keyboard/mouse control are not exposed to the model.
 
-OpenJarvis is not given direct desktop-control tools, shell access, arbitrary script execution, unrestricted file access, browser navigation, or general keyboard/mouse control. The API remains bound to `127.0.0.1`; do not expose it to a public or untrusted network. AURIX does not automatically install OpenJarvis or download/bundle model weights.
-
-**Codex remains as an optional backup provider.** Select **Codex (backup AI provider)** in the AI provider menu, connect the local AURIX companion, verify its operating-system sandbox, and complete the official Codex sign-in if required.
+**Codex remains an optional authenticated backup provider.** Select it in the AI provider menu, connect the local AURIX companion, verify its operating-system sandbox, and complete the official Codex sign-in if required.
 
 The last 12 user/assistant turns are kept in memory for the current desktop session only; use **Clear conversation** to erase this in-memory context. AURIX's audit log records bounded task metadata rather than dictated instructions or entered text.
 
 ## Voice privacy and requirements
 
-The hands-free service uses `System.Speech`, a locally installed English Windows speech recognizer, and NAudio shared-mode WASAPI capture for clap detection. The clap detector checks short audio buffers in memory for a sharp transient and opens a five-second, one-use wake window; it does not save or transmit audio. While waiting, the speech recognizer loads only the narrow AURIX wake phrase grammar and does not run general dictation. After both the clap gate and wake phrase are accepted, AURIX speaks its boss greeting; only when the greeting finishes does it load a one-command dictation grammar. The dictation grammar is unloaded after that command and the clap-gated wake grammar is restored.
+The hands-free service uses System.Speech and a locally installed English Windows speech recognizer. While waiting, it loads only the narrow AURIX / Hey AURIX wake grammar and does not run general dictation. Once the wake phrase is accepted, AURIX speaks its boss greeting; only when the greeting finishes does it load a one-command dictation grammar. After that command, dictation is unloaded and the wake grammar is restored. Audio is processed locally and is not saved or sent to an AURIX cloud service.
 
 AURIX itself does not save microphone recordings or send room audio to an AURIX cloud service. The microphone remains active for local wake-word detection while hands-free is enabled. You can pause it from the main window or the tray menu, and exiting AURIX releases it. Windows microphone privacy settings still apply. If an English offline recognizer or microphone device is unavailable, AURIX reports the problem and typed commands remain available.
 
@@ -66,6 +76,7 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - Close-to-tray behaviour and optional current-user startup registration.
 - Deterministic, allowlisted launcher for Notepad, Calculator, Paint, File Explorer, Edge, Chrome, Windows Terminal, Discord and Spotify.
 - Multi-app launch tasks.
+- Approval-gated normal close requests for Notepad, Paint and Calculator; AURIX never force-terminates an app, and the app may show its own save prompt.
 - Read-only inspection of visible window titles and process names.
 - Read-only inspection of named UI Automation controls in supported apps. Field contents and password controls are not read.
 - Exact-name button activation through UI Automation, only after an approval prompt.
@@ -89,12 +100,17 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - `Open Chrome`
 - `Open Windows Terminal`
 - `Open Discord and Spotify`
+- `Close Notepad`
+- `Close Paint`
+- `Close Calculator`
 - `Show open windows`
 - `Inspect controls in Notepad`
 - `Click button "Save" in Notepad`
 - `Type "Hello AURIX" into "Search" in Edge`
 
-Spoken commands are submitted after one wake phrase and one utterance. The local task planner accepts only its documented desktop command patterns. Other voice requests can use the local Codex reasoning path described above. AI-proposed clicks and text entry are limited to Notepad; the documented deterministic commands retain their own per-action approval prompts in the apps they explicitly support.
+Spoken commands are submitted after one wake phrase and one utterance. The local task planner accepts only its documented desktop command patterns. Other voice requests use the configured OpenJarvis, Ollama or paired Codex reasoning path described above. AI-proposed button actions are limited to Notepad, Paint and Calculator; text entry remains Notepad-only. All clicks, text changes and graceful close requests require explicit approval.
+
+For a close request, AURIX must find one visible window from the approved app, show the app and window name in an approval prompt, then send a normal Windows close request. It never kills the process; an app may show its own save or confirmation prompt.
 
 For a button click, AURIX must find exactly one visible, enabled button with that exact name. Buttons whose names suggest sending, sharing, purchasing, paying, transferring, submitting or publishing display an additional warning. Destructive button names are blocked.
 

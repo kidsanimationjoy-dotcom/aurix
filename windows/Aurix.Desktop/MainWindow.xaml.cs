@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly TaskRunCoordinator _taskRuns = new();
     private readonly LocalCodexChatService _localCodexChat = new();
     private readonly LocalOpenJarvisChatService _localOpenJarvisChat = new();
+    private readonly LocalOllamaChatService _localOllamaChat = new();
     private readonly LocalOpenJarvisRuntimeService _localOpenJarvisRuntime = new();
     private CancellationTokenSource? _openJarvisStartupCancellation;
     private SpeechSynthesizer? _speechSynthesizer;
@@ -34,8 +35,8 @@ public partial class MainWindow : Window
         _companionToken = CompanionSettingsStore.LoadToken();
         CompanionTokenBox.Password = _companionToken;
         AiConnectionStatusText.Text = string.IsNullOrEmpty(_companionToken)
-            ? "Stanford OpenJarvis is the primary AI. Start its local server or check its status here. Codex is an optional backup."
-            : "Stanford OpenJarvis is primary. A saved Codex pairing token is available for backup.";
+            ? "Local AI choices: OpenJarvis (primary), Ollama (no API key), or the optional paired Codex backup. Install a local model and start its local service."
+            : "OpenJarvis is primary. Ollama is available as a direct local fallback; a saved Codex pairing token is also available as backup.";
         try
         {
             _speechSynthesizer = new SpeechSynthesizer();
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
             (nameof(StopOpenJarvisButton), StopOpenJarvisButton),
             (nameof(CheckOpenJarvisButton), CheckOpenJarvisButton),
             (nameof(OpenJarvisSetupGuideButton), OpenJarvisSetupGuideButton),
+            (nameof(OllamaSetupGuideButton), OllamaSetupGuideButton),
             (nameof(CompanionTokenBox), CompanionTokenBox),
             (nameof(AiConnectionStatusText), AiConnectionStatusText),
             (nameof(PairCompanionButton), PairCompanionButton),
@@ -321,7 +323,7 @@ public partial class MainWindow : Window
     {
         _codexReady = status.CanChat;
         AiConnectionStatusText.Text = status.CanChat
-            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI-generated clicks and text entry are limited to Notepad."
+            ? "AI READY — local Codex is signed in and the sandbox is verified. Voice requests can receive answers or propose approved plans; AI button actions are limited to Notepad, Paint and Calculator; text entry is limited to Notepad."
             : $"Companion connected. Codex installed: {status.Installed}; signed in: {status.SignedIn}; profile prepared: {status.ProfilePrepared}; sandbox verified: {status.SandboxVerified}. {status.Message}";
     }
 
@@ -446,6 +448,21 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OllamaSetupGuideButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://ollama.com/download/windows",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            AiConnectionStatusText.Text = "Could not open the official Ollama Windows download page: " + ex.Message;
+        }
+    }
     private void StartHandsFreeListening(bool savePreference)
     {
         if (_handsFreeVoice?.IsRunning == true)
@@ -471,7 +488,7 @@ public partial class MainWindow : Window
 
             UpdateHandsFreeUi(
                 true,
-                "HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Listening stays local.");
+                "HANDS-FREE ACTIVE — say “AURIX” or “Hey AURIX”. No clap needed. Listening stays local.");
         }
         catch (Exception ex)
         {
@@ -566,7 +583,7 @@ public partial class MainWindow : Window
             if (voice?.IsRunning != true)
                 return;
 
-            ShowActiveOrb("Speaking", "What would you like me to do, boss?");
+            ShowActiveOrb("Speaking", "Yes, boss. What would you like me to do?");
             if (_speechSynthesizer is null)
             {
                 voice.BeginCommandListeningAfterGreeting();
@@ -577,7 +594,7 @@ public partial class MainWindow : Window
             {
                 _greetingPending = true;
                 _speechSynthesizer.SpeakAsyncCancelAll();
-                _speechSynthesizer.SpeakAsync("What would you like me to do, boss?");
+                _speechSynthesizer.SpeakAsync("Yes, boss. What would you like me to do?");
             }
             catch
             {
@@ -722,10 +739,10 @@ public partial class MainWindow : Window
                 return;
 
             TaskOutputText.Text = result.Output;
-            HideActiveOrb();
             ListeningStatusText.Text = result.Cancelled
                 ? "Task stopped. Already completed actions are not undone."
-                : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
+                 : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
+            SpeakAnswer(result.Output);
         }
         catch (OperationCanceledException)
         {
@@ -763,8 +780,9 @@ public partial class MainWindow : Window
     private async Task RunAiChatAsync(string prompt)
     {
         var useOpenJarvis = AiProviderCombo.SelectedIndex == 0;
-        var providerName = useOpenJarvis ? "Stanford OpenJarvis" : "Codex";
-        var token = useOpenJarvis ? string.Empty : CurrentCompanionToken();
+        var useOllama = AiProviderCombo.SelectedIndex == 2;
+        var providerName = useOpenJarvis ? "Stanford OpenJarvis" : useOllama ? "Local Ollama" : "Codex";
+        var token = CurrentCompanionToken();
         const string actionContract = """
 You are translating a user's voice request into either an answer or a proposed AURIX desktop plan. Address the user as “boss” when conversationally appropriate.
 Return exactly one raw JSON object. Do not use Markdown or code fences.
@@ -773,6 +791,7 @@ Supported formats:
 {"type":"answer","message":"Your normal conversational answer, or a clear explanation that the request is unsupported."}
 {"type":"desktop_plan","summary":"Short description","steps":[
   {"kind":"launch_application","app":"Calculator"},
+  {"kind":"close_application","app":"Notepad"},
   {"kind":"inspect_windows"},
   {"kind":"inspect_controls","app":"Notepad"},
   {"kind":"click_button","app":"Notepad","button":"Save"},
@@ -781,9 +800,9 @@ Supported formats:
 
 Use only these exact action kinds and fields. Use only these apps:
 Notepad, Calculator, Paint, File Explorer, Microsoft Edge, Google Chrome, Windows Terminal, Discord, Spotify.
-Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks and text entry are restricted to Notepad only; use "answer" when a requested UI change targets any other app.
+Application launching and read-only inspection may target any app in that allowlist. AI-proposed button clicks are limited to Notepad, Paint and Calculator, require exact user-named targets and individual approval, and are blocked for destructive or external-impact controls. Text entry remains Notepad-only. Use "answer" for other UI changes.
 A plan may contain one to five steps. Use "answer" for anything outside this exact capability set.
-Only propose an application launch if the user explicitly asks to open, launch or start that exact app. Only propose open-window inspection when the user asks to show/list/inspect open windows or apps. Only propose control inspection when the user explicitly asks to inspect/show/list controls, buttons or fields in that exact app. Do not add extra apps or inspection steps just because they seem useful or because an app is mentioned in another context.
+Only propose an application launch if the user explicitly asks to open, launch or start that exact app. Only propose a close_application step if the user explicitly asks to close the exact named Notepad, Paint or Calculator app; AURIX sends a normal Windows close request and never force-terminates the process. Only propose open-window inspection when the user asks to show/list/inspect open windows or apps. Only propose control inspection when the user explicitly asks to inspect/show/list controls, buttons or fields in that exact app. Do not add extra apps or inspection steps just because they seem useful or because an app is mentioned in another context.
 Only propose a click when the exact button label appears in the user's latest instruction as the target of a click/press/select/activate request. Only propose text entry when the exact text and exact field label both appear in the user's latest instruction together with an affirmative type/enter/write/paste request. Do not infer or invent a button, text value, or field name: AURIX independently checks these values against that latest instruction.
 Do not propose shell commands, scripts, arbitrary file access, network access, browser navigation, purchases, payments, message sending, publishing, account changes, password/secret fields, or destructive actions.
 AURIX will independently validate your JSON, display the exact plan, ask the user to approve it, and retain its own per-action approval gates. You cannot authorise or execute an action yourself. Never claim that a proposed action has already happened.
@@ -800,26 +819,68 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         {
             if (useOpenJarvis)
             {
-                AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(cancellationToken);
+                try
+                {
+                    AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(cancellationToken);
+                }
+                catch (Exception openJarvisError) when (!cancellationToken.IsCancellationRequested)
+                {
+                    var codexAvailable = false;
+                    string? codexIssue = null;
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        try
+                        {
+                            var backupStatus = await _localCodexChat.CheckAsync(token, cancellationToken);
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (!_taskRuns.IsCurrent(taskRun)) return;
+                            if (backupStatus.CanChat)
+                            {
+                                useOpenJarvis = false;
+                                providerName = "Codex backup";
+                                UpdateCodexStatus(backupStatus);
+                                AiConnectionStatusText.Text = "OpenJarvis was unavailable. AURIX switched to your connected local Codex backup.";
+                                codexAvailable = true;
+                            }
+                            else codexIssue = backupStatus.Message;
+                        }
+                        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+                        {
+                            codexIssue = ex.Message;
+                        }
+                    }
+                    if (!codexAvailable)
+                    {
+                        try
+                        {
+                            AiConnectionStatusText.Text = await _localOllamaChat.CheckAsync(cancellationToken);
+                            useOpenJarvis = false;
+                            useOllama = true;
+                            providerName = "Local Ollama";
+                            AiConnectionStatusText.Text = "OpenJarvis was unavailable. Using your local Ollama model. " + AiConnectionStatusText.Text;
+                        }
+                        catch (Exception ollamaError) when (!cancellationToken.IsCancellationRequested)
+                        {
+                            var codexDetail = string.IsNullOrWhiteSpace(token) ? "Codex backup is not paired." : "Codex backup is not ready: " + (codexIssue ?? "status could not be checked.");
+                            throw new InvalidOperationException("No local AI provider is ready. OpenJarvis: " + openJarvisError.Message + " Ollama: " + ollamaError.Message + " " + codexDetail + " Install Ollama for Windows and a local model such as qwen3.5:2b, or finish OpenJarvis model setup. No API key is needed for these local options.", openJarvisError);
+                        }
+                    }
+                }
+            }
+            else if (useOllama)
+            {
+                AiConnectionStatusText.Text = await _localOllamaChat.CheckAsync(cancellationToken);
             }
             else
             {
                 if (string.IsNullOrWhiteSpace(token))
-                {
-                    TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using the backup AI provider. Typed local commands remain available without AI.";
-                    return;
-                }
-
+                    throw new InvalidOperationException("Codex backup is not paired. Connect the local AURIX companion, verify its sandbox and complete official Codex sign-in, or choose a local OpenJarvis/Ollama provider.");
                 var status = await _localCodexChat.CheckAsync(token, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!_taskRuns.IsCurrent(taskRun))
-                    return;
+                if (!_taskRuns.IsCurrent(taskRun)) return;
                 UpdateCodexStatus(status);
                 if (!status.CanChat)
-                {
-                    TaskOutputText.Text = "Codex backup is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
-                    return;
-                }
+                    throw new InvalidOperationException("Codex backup is not ready. Pair the companion, prepare and verify its sandbox, and complete official Codex sign-in.");
             }
 
             var messages = new List<LocalCodexMessage>
@@ -832,7 +893,9 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             TaskOutputText.Text = $"AURIX is asking local {providerName} to understand your request…";
             var rawResponse = useOpenJarvis
                 ? await _localOpenJarvisChat.ChatAsync(messages, cancellationToken)
-                : await _localCodexChat.ChatAsync(token, messages, cancellationToken);
+                : useOllama
+                    ? await _localOllamaChat.ChatAsync(messages, cancellationToken)
+                    : await _localCodexChat.ChatAsync(token, messages, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!_taskRuns.IsCurrent(taskRun))
                 return;
@@ -854,7 +917,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             PlanText.Text = plan.Summary;
             var approval = System.Windows.MessageBox.Show(
                 "Review the exact desktop actions proposed by local " + providerName + ":\n\n" + plan.Summary +
-                "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text will still require separate approval.",
+                "\n\nAURIX will run only these validated actions if you approve. Clicking buttons or entering text still requires separate approval for each action.",
                 "Approve AI-proposed desktop plan",
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning);
@@ -914,6 +977,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             {
                 TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
                 ListeningStatusText.Text = "AI request finished with an issue.";
+                SpeakAnswer("Boss, I could not complete that request. " + ex.Message);
             }
         }
         finally

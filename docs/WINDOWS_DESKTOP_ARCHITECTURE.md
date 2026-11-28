@@ -58,6 +58,7 @@ Implemented capabilities:
 - Parse a narrow set of explicit local commands.
 - Launch only applications in a hard-coded allowlist (Notepad, Calculator, Paint, File Explorer, Edge, Chrome, Windows Terminal, Discord and Spotify).
 - Execute a multi-app launch plan in order.
+- Send a user-approved normal Windows close request to one visible Notepad, Paint or Calculator window; never force-terminate the process, and allow the app to show its own save prompt.
 - Inspect visible top-level window titles and process names.
 - Inspect named UI Automation controls in a selected supported application. Field values and password controls are not returned.
 - Activate one exact, uniquely named, visible, enabled button through the UI Automation Invoke pattern, after an explicit user approval prompt.
@@ -70,7 +71,7 @@ Implemented capabilities:
 - Cancel remaining steps with the emergency-stop control.
 - Append a bounded local task-audit event for each attempted task step, with UTC time, action kind, supported application and outcome. Dictated instructions, entered field contents, window titles and exception messages are excluded.
 
-The current slice does **not** read document contents, capture screenshots, click arbitrary screen coordinates, simulate keyboard input, handle password fields or execute arbitrary shell commands. UI Automation is provider-dependent: an application that does not expose a named button or editable field cannot be operated through this slice.
+The current slice does **not** read document contents, capture screenshots, click arbitrary screen coordinates, simulate keyboard input, handle password fields, close arbitrary apps or execute arbitrary shell commands. UI Automation is provider-dependent: an application that does not expose a named button or editable field cannot be operated through this slice.
 
 ## Computer-use engine roadmap
 
@@ -89,7 +90,7 @@ Coordinate-based input is a fallback only. Do not bypass Windows secure desktop,
 - Local layer: deterministic command parsing, device state, bounded desktop actions and policy checks.
 - Optional reasoning layer: the paired local Codex CLI can answer voice questions or return a structured proposal for the bounded desktop action schema.
 - AURIX rejects unknown action types, fields, applications and malformed proposals. Only the existing allowlisted desktop runner receives a validated plan.
-- AI-proposed app launches and read-only inspection may target the supported application allowlist. AI-proposed button clicks and text entry are restricted to Notepad; browsers, messaging clients and other connected apps are excluded from model-generated UI mutations in this release.
+- AI-proposed app launches and read-only inspection may target the supported application allowlist. AI-proposed button clicks are limited to Notepad, Paint and Calculator after exact target validation and individual approval. AI-proposed graceful close requests are limited to Notepad, Paint and Calculator and use the normal Windows close message, never a force kill. AI-proposed text entry remains restricted to Notepad; browsers, messaging clients, terminals and file-management surfaces remain excluded from model-generated UI mutations.
 - Every AI-proposed plan is displayed for user approval; Notepad button activation and text entry retain their own per-action approvals. The documented deterministic local command grammar remains separately bounded and retains its per-action approvals for explicitly named supported apps.
 - Network access, shell commands, scripts, arbitrary file access and general-purpose keyboard/mouse control are not exposed by this bridge.
 - Route according to user preference, data sensitivity, provider availability and usage limits.

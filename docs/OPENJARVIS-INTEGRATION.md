@@ -39,7 +39,7 @@ If the server is already responding on port 8000, AURIX checks it instead of sta
 - AURIX connects to the OpenJarvis API at the fixed loopback address `http://127.0.0.1:8000`. It does not connect to a remote host.
 - AURIX checks the local health endpoint and available model list before sending a request.
 - Only recognised speech text or typed text is sent to the local OpenJarvis service. Microphone audio stays in AURIX on this computer.
-- Hands-free wake now requires a local clap transient followed by the AURIX wake phrase; the orb greets the user before starting one-command dictation.
+- Hands-free wake listens locally for “AURIX” or “Hey AURIX” directly; no clap is required. AURIX says “Yes, boss” before starting one-command dictation.
 - AURIX sends its strict action contract with the conversation. OpenJarvis must return one JSON answer or an allowlisted AURIX desktop plan.
 - AURIX's existing `AiDesktopCommandParser` independently validates the response against the latest user instruction, exact supported action schema, and app allowlist.
 - AURIX shows the validated plan and asks for approval. Supported UI changes still require their own action-level approval.
