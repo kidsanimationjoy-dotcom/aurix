@@ -34,6 +34,16 @@ public static class DesktopTaskRunner
             {
                 switch (step.Kind)
                 {
+                    case DesktopTaskStepKind.CloseApplication:
+                        progress?.Invoke($"Requesting normal close of {step.TargetApp}…");
+                        var close = DesktopInteractionService.CloseApplication(
+                            step.TargetApp ?? string.Empty,
+                            requestApproval,
+                            cancellationToken);
+                        output.Add(close.Message);
+                        stepSucceeded = close.Success;
+                        hasFailure |= !close.Success;
+                        break;
                     case DesktopTaskStepKind.InspectWindows:
                         progress?.Invoke("Inspecting visible windows…");
                         var windows = DesktopWindowInspector.GetVisibleWindows();
