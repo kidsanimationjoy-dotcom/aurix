@@ -55,11 +55,31 @@ Check("Hey Auricks pronunciation is accepted", WakePhrasePolicy.IsAccepted("Hey 
 var launch = AiDesktopCommandParser.Parse(
     """{"type":"desktop_plan","summary":"Open Calculator","steps":[{"kind":"launch_application","app":"Calculator"}]}""",
     "Open Calculator");
+var localClose = DesktopTaskPlanner.CreatePlan("Close Notepad");
+Check("explicit local app close parsed", localClose.IsValid &&
+    localClose.Steps.Single().Kind == DesktopTaskStepKind.CloseApplication &&
+    localClose.Steps[0].TargetApp == "Notepad");
+var browserClose = DesktopTaskPlanner.CreatePlan("Close Edge");
+Check("browser close excluded from preview planner", !browserClose.IsValid);
 Check("allowlisted application launch accepted",
     launch.IsPlan && launch.Plan?.Steps.Count == 1 &&
     launch.Plan.Steps[0].Kind == DesktopTaskStepKind.LaunchApplication &&
     launch.Plan.Steps[0].Executable == "calc.exe");
 
+var closeProposal = AiDesktopCommandParser.Parse(
+    """{"type":"desktop_plan","summary":"Close Notepad","steps":[{"kind":"close_application","app":"Notepad"}]}""",
+    "Close Notepad");
+Check("explicit graceful local app-close proposal accepted",
+    closeProposal.Plan?.Steps.Single().Kind == DesktopTaskStepKind.CloseApplication &&
+    closeProposal.Plan.Steps[0].TargetApp == "Notepad");
+
+Reject("unrequested graceful app close rejected",
+    """{"type":"desktop_plan","summary":"Close Notepad","steps":[{"kind":"close_application","app":"Notepad"}]}""",
+    "Open Notepad");
+
+Reject("browser close proposal rejected",
+    """{"type":"desktop_plan","summary":"Close Edge","steps":[{"kind":"close_application","app":"Microsoft Edge"}]}""",
+    "Close Microsoft Edge");
 Reject("unrequested app launch rejected",
     """{"type":"desktop_plan","summary":"Open another app","steps":[{"kind":"launch_application","app":"Discord"}]}""",
     "Open Calculator");
