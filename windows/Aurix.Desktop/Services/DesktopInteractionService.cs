@@ -134,7 +134,7 @@ public static class DesktopInteractionService
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var prompt = $"Approve a normal close request?\\n\\nApplication: {appName}\\nWindow: {targetResult.Window.Title}\\n\\nAURIX will ask Windows to close the app normally. The app may show its own save prompt. AURIX will not force-terminate it.";
+            var prompt = $"Approve a normal close request?\n\nApplication: {appName}\nWindow: {targetResult.Window.Title}\n\nAURIX will ask Windows to close the app normally. The app may show its own save prompt. AURIX will not force-terminate it.";
             if (requestApproval is null || !requestApproval(prompt))
                 return new(false, $"Close cancelled. {appName} remains open.");
 
