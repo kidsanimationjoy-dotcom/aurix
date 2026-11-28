@@ -547,8 +547,10 @@ public partial class MainWindow : Window
             {
                 case VoiceOrbDisposition.Listening:
                     ShowActiveOrb("Listening",
-                        message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase)
-                            ? "Recognising wake phrase"
+                        message.StartsWith("Clap detected", StringComparison.OrdinalIgnoreCase)
+                            ? "Say AURIX now"
+                            : message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase)
+                                ? "Recognising wake phrase"
                             : message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase)
                                 ? "Hearing your speech"
                                 : "Listening to you");
