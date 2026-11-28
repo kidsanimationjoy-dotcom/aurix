@@ -471,7 +471,7 @@ public partial class MainWindow : Window
 
             UpdateHandsFreeUi(
                 true,
-                "HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Listening stays local.");
+                "HANDS-FREE ACTIVE — say “AURIX” or “Hey AURIX”. No clap needed. Listening stays local.");
         }
         catch (Exception ex)
         {
@@ -577,7 +577,7 @@ public partial class MainWindow : Window
             {
                 _greetingPending = true;
                 _speechSynthesizer.SpeakAsyncCancelAll();
-                _speechSynthesizer.SpeakAsync("What would you like me to do, boss?");
+                _speechSynthesizer.SpeakAsync("Yes, boss. What would you like me to do?");
             }
             catch
             {
@@ -722,10 +722,10 @@ public partial class MainWindow : Window
                 return;
 
             TaskOutputText.Text = result.Output;
-            HideActiveOrb();
             ListeningStatusText.Text = result.Cancelled
                 ? "Task stopped. Already completed actions are not undone."
-                : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
+                 : result.Success ? "Task completed. Say “AURIX” for another instruction." : "Task finished with an issue. Say “AURIX” when ready.";
+            SpeakAnswer(result.Output);
         }
         catch (OperationCanceledException)
         {
@@ -764,7 +764,7 @@ public partial class MainWindow : Window
     {
         var useOpenJarvis = AiProviderCombo.SelectedIndex == 0;
         var providerName = useOpenJarvis ? "Stanford OpenJarvis" : "Codex";
-        var token = useOpenJarvis ? string.Empty : CurrentCompanionToken();
+        var token = CurrentCompanionToken();
         const string actionContract = """
 You are translating a user's voice request into either an answer or a proposed AURIX desktop plan. Address the user as “boss” when conversationally appropriate.
 Return exactly one raw JSON object. Do not use Markdown or code fences.
@@ -800,14 +800,46 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
         {
             if (useOpenJarvis)
             {
-                AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(cancellationToken);
+                try
+                {
+                    AiConnectionStatusText.Text = await _localOpenJarvisChat.CheckAsync(cancellationToken);
+                }
+                catch (Exception openJarvisError) when (!cancellationToken.IsCancellationRequested)
+                {
+                    if (string.IsNullOrWhiteSpace(token))
+                    {
+                        throw new InvalidOperationException(
+                            "Stanford OpenJarvis is not ready: " + openJarvisError.Message +
+                            " Complete the official OpenJarvis Windows setup, install a local inference model, then start the local server. Alternatively connect the AURIX companion and sign in to the Codex backup.",
+                            openJarvisError);
+                    }
+
+                    var backupStatus = await _localCodexChat.CheckAsync(token, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!_taskRuns.IsCurrent(taskRun))
+                        return;
+                    if (!backupStatus.CanChat)
+                    {
+                        throw new InvalidOperationException(
+                            "OpenJarvis is not ready (" + openJarvisError.Message + "). The Codex backup is also not ready: " +
+                            backupStatus.Message + " Pair the companion, verify its sandbox and complete official Codex sign-in.",
+                            openJarvisError);
+                    }
+
+                    useOpenJarvis = false;
+                    providerName = "Codex backup";
+                    UpdateCodexStatus(backupStatus);
+                    AiConnectionStatusText.Text =
+                        "OpenJarvis was unavailable. AURIX has safely switched to your connected local Codex backup.";
+                }
             }
-            else
+
+            if (!useOpenJarvis)
             {
                 if (string.IsNullOrWhiteSpace(token))
                 {
-                    TaskOutputText.Text = "Connect the local AURIX companion and verify the Codex sandbox before using the backup AI provider. Typed local commands remain available without AI.";
-                    return;
+                    throw new InvalidOperationException(
+                        "No AI provider is ready. Install and start Stanford OpenJarvis with a local model, or connect the local AURIX companion and complete Codex sign-in. Simple allowlisted app-launch commands still work without an AI provider.");
                 }
 
                 var status = await _localCodexChat.CheckAsync(token, cancellationToken);
@@ -817,8 +849,8 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
                 UpdateCodexStatus(status);
                 if (!status.CanChat)
                 {
-                    TaskOutputText.Text = "Codex backup is not ready. Pair the companion, prepare and verify the sandbox, and complete official Codex sign-in. No prompt was sent.";
-                    return;
+                    throw new InvalidOperationException(
+                        "Codex backup is not ready. Pair the companion, prepare and verify its sandbox, and complete official Codex sign-in. No prompt was sent.");
                 }
             }
 
@@ -914,6 +946,7 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             {
                 TaskOutputText.Text = $"AI request could not complete safely: {ex.Message}";
                 ListeningStatusText.Text = "AI request finished with an issue.";
+                SpeakAnswer("Boss, I could not complete that request. " + ex.Message);
             }
         }
         finally
