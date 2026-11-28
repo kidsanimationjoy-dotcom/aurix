@@ -566,7 +566,7 @@ public partial class MainWindow : Window
             if (voice?.IsRunning != true)
                 return;
 
-            ShowActiveOrb("Speaking", "What would you like me to do, boss?");
+            ShowActiveOrb("Speaking", "Yes, boss. What would you like me to do?");
             if (_speechSynthesizer is null)
             {
                 voice.BeginCommandListeningAfterGreeting();
