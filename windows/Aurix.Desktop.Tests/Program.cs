@@ -34,6 +34,14 @@ var answer = AiDesktopCommandParser.Parse(
     "What can you help me do?");
 Check("plain answer accepted", !answer.IsPlan && answer.Message == "Hello." && answer.Plan is null);
 
+Check("AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("AURIX", 0.65));
+Check("Hey AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("Hey AURIX", 0.65));
+Check("wake phrase punctuation is normalized", WakePhrasePolicy.IsAccepted("AURIX.", 0.65));
+Check("wake phrase matching is case-insensitive", WakePhrasePolicy.IsAccepted("hey aurix", 0.65));
+Check("ordinary speech cannot wake AURIX", !WakePhrasePolicy.IsAccepted("open calculator", 0.95));
+Check("low-confidence wake phrase is rejected", !WakePhrasePolicy.IsAccepted("AURIX", 0.20));
+Check("invalid wake confidence is rejected", !WakePhrasePolicy.IsAccepted("AURIX", double.NaN));
+
 var launch = AiDesktopCommandParser.Parse(
     """{"type":"desktop_plan","summary":"Open Calculator","steps":[{"kind":"launch_application","app":"Calculator"}]}""",
     "Open Calculator");
@@ -82,6 +90,13 @@ Check("explicitly named non-external button proposal accepted",
     click.Plan?.Steps.Single().Kind == DesktopTaskStepKind.ClickButton &&
     click.Plan.Steps[0].TargetName == "Save");
 
+var paintClick = AiDesktopCommandParser.Parse(
+    """{"type":"desktop_plan","summary":"Select the brush tool","steps":[{"kind":"click_button","app":"Paint","button":"Brush"}]}""",
+    "Click the Brush button in Paint");
+Check("explicit local Paint button action accepted",
+    paintClick.Plan?.Steps.Single().TargetApp == "Paint" &&
+    paintClick.Plan.Steps[0].TargetName == "Brush");
+
 var multilinePrompt = "Type \"Hello\nWorld\" into \"Text Editor\" in Notepad";
 var typeJson =
     """{"type":"desktop_plan","summary":"Enter supplied text","steps":[{"kind":"type_text","app":"Notepad","control":"Text Editor","text":"Hello\nWorld"}]}""";
@@ -102,6 +117,10 @@ Reject("payment action button rejected",
 Reject("browser button action rejected",
     """{"type":"desktop_plan","summary":"Open a website","steps":[{"kind":"click_button","app":"Microsoft Edge","button":"Open"}]}""",
     "Click Open in Microsoft Edge");
+
+Reject("Paint text entry stays blocked",
+    """{"type":"desktop_plan","summary":"Enter text","steps":[{"kind":"type_text","app":"Paint","control":"Text Editor","text":"Hello"}]}""",
+    "Type Hello into Text Editor in Paint");
 Reject("messaging text entry rejected",
     """{"type":"desktop_plan","summary":"Write a message","steps":[{"kind":"type_text","app":"Discord","control":"Message","text":"Hello"}]}""",
     "Type Hello into Message in Discord");
