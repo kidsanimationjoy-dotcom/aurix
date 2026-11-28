@@ -112,7 +112,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                 return;
 
             // Wake recognition is direct: no clap or other physical trigger is required.
-            if (!WakePhrasePolicy.IsAccepted(phrase, e.Result.Confidence))
+            if (e.Result is null || !WakePhrasePolicy.IsAccepted(phrase, e.Result.Confidence))
                 return;
 
             wakeAccepted = true;
