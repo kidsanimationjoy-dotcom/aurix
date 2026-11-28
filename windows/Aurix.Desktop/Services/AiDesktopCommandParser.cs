@@ -24,10 +24,23 @@ public static class AiDesktopCommandParser
         if (string.IsNullOrWhiteSpace(response) || response.Length > 20_000)
             throw new InvalidOperationException("Codex returned an empty or oversized desktop proposal.");
 
+        var normalizedResponse = response.Trim();
+        if (normalizedResponse.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLineEnd = normalizedResponse.IndexOf('\n');
+            var closingFence = normalizedResponse.LastIndexOf("```", StringComparison.Ordinal);
+            var language = firstLineEnd > 0 ? normalizedResponse[3..firstLineEnd].Trim() : string.Empty;
+            if (firstLineEnd <= 0 || closingFence <= firstLineEnd ||
+                (language.Length > 0 && !language.Equals("json", StringComparison.OrdinalIgnoreCase)) ||
+                !string.IsNullOrWhiteSpace(normalizedResponse[(closingFence + 3)..]))
+                throw new InvalidOperationException("The AI response contains an invalid JSON code fence. No desktop action was taken.");
+            normalizedResponse = normalizedResponse[(firstLineEnd + 1)..closingFence].Trim();
+        }
+
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(response, new JsonDocumentOptions { MaxDepth = 12 });
+            document = JsonDocument.Parse(normalizedResponse, new JsonDocumentOptions { MaxDepth = 12 });
         }
         catch (JsonException)
         {
