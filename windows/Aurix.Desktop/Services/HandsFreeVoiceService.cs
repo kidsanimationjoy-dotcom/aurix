@@ -16,11 +16,13 @@ public sealed class HandsFreeVoiceService : IDisposable
         SwitchingToCommand,
         WaitingForGreeting,
         ListeningForCommand,
+        SwitchingToWakeWord
     }
 
     private readonly object _gate = new();
     private SpeechRecognitionEngine? _engine;
     private Grammar? _wakeGrammar;
+    private ClapWakeGate? _clapWakeGate;
     private bool _disposed;
     private DateTime _lastHypothesisStatusAt = DateTime.MinValue;
     private ListeningState _state = ListeningState.Stopped;
@@ -59,13 +61,13 @@ public sealed class HandsFreeVoiceService : IDisposable
             var engine = new SpeechRecognitionEngine(recognizer);
             try
             {
-                // Wake-word mode is always available while hands-free is enabled; no clap is required.
+                _clapWakeGate = new ClapWakeGate();
+                _clapWakeGate.ClapDetected += OnClapDetected;
+                _clapWakeGate.Faulted += OnClapGateFaulted;
+                _clapWakeGate.Start();
 
                 var builder = new GrammarBuilder { Culture = recognizer.Culture };
-                builder.Append(new Choices(
-                    "AURIX", "Hey AURIX",
-                    "ORIX", "Hey ORIX",
-                    "AURICKS", "Hey AURICKS"));
+                builder.Append(new Choices("AURIX", "Hey AURIX", "ORIX", "Hey ORIX", "AURICKS", "Hey AURICKS"));
 
                 _wakeGrammar = new Grammar(builder) { Name = "AURIX wake phrase" };
                 engine.LoadGrammar(_wakeGrammar);
@@ -92,18 +94,21 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engine.Dispose();
                 _engine = null;
                 _wakeGrammar = null;
+                var failedGate = _clapWakeGate;
+                _clapWakeGate = null;
+                DisposeClapGate(failedGate);
                 _state = ListeningState.Stopped;
                 throw;
             }
         }
 
-        StatusChanged?.Invoke("HANDS-FREE ACTIVE — say “AURIX” or “Hey AURIX” whenever you need me.");
+        StatusChanged?.Invoke("HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Clap and wake detection stay local.");
     }
 
     private void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
     {
         SpeechRecognitionEngine? engine;
-        var wakeAccepted = false;
+        var authorisedByClap = false;
         string phrase = e.Result?.Text?.Trim() ?? string.Empty;
 
         lock (_gate)
@@ -111,17 +116,21 @@ public sealed class HandsFreeVoiceService : IDisposable
             if (_disposed || _state != ListeningState.WaitingForWakeWord)
                 return;
 
-            // Wake recognition is direct: no clap or other physical trigger is required.
+            // Keep the accepted phrases narrow while allowing common pronunciation variants.
             if (e.Result is null || !WakePhrasePolicy.IsAccepted(phrase, e.Result.Confidence))
                 return;
 
-            wakeAccepted = true;
-            _state = ListeningState.SwitchingToCommand;
+            authorisedByClap = _clapWakeGate?.ConsumeWakeAuthorization() == true;
+            if (authorisedByClap)
+                _state = ListeningState.SwitchingToCommand;
             engine = _engine;
         }
 
-        if (!wakeAccepted)
+        if (!authorisedByClap)
+        {
+            StatusChanged?.Invoke("Clap first, then say “AURIX” within five seconds.");
             return;
+        }
 
         try
         {
@@ -174,6 +183,7 @@ public sealed class HandsFreeVoiceService : IDisposable
         string? status = null;
         var wakePhraseAccepted = false;
         SpeechRecognitionEngine? engineToDispose = null;
+        ClapWakeGate? gateToDispose = null;
 
         lock (_gate)
         {
@@ -191,18 +201,13 @@ public sealed class HandsFreeVoiceService : IDisposable
                 if (e.Cancelled && _state != ListeningState.SwitchingToCommand)
                     throw new InvalidOperationException("Windows speech recognition was interrupted. Check the microphone connection and enable hands-free again.");
 
-                if (_state == ListeningState.WaitingForWakeWord && !e.Cancelled)
-                {
-                    // Recover from a recognizer cycle that completed after prolonged silence.
-                    _engine.RecognizeAsync(RecognizeMode.Multiple);
-                    status = "Wake listener is active. Say “AURIX” or “Hey AURIX” whenever you need me.";
-                }
-                else if (_state == ListeningState.SwitchingToCommand)
+                if (_state == ListeningState.SwitchingToCommand)
                 {
                     // Pause recognition while AURIX speaks its greeting. The
                     // microphone is not in dictation mode until that greeting ends.
+                    _clapWakeGate?.Disarm();
                     _state = ListeningState.WaitingForGreeting;
-                    status = "Yes, boss. What would you like me to do?";
+                    status = "AURIX heard you. What would you like me to do, boss?";
                     wakePhraseAccepted = true;
                 }
                 else if (_state == ListeningState.ListeningForCommand)
@@ -211,7 +216,8 @@ public sealed class HandsFreeVoiceService : IDisposable
                     if (recognitionResult is not null && recognitionResult.Confidence >= 0.30)
                         command = recognitionResult.Text?.Trim();
 
-                    // Return to the always-available wake grammar immediately after one command.
+                    // Return to the clap-gated wake grammar immediately after one command.
+                    _clapWakeGate?.Disarm();
                     _engine.UnloadAllGrammars();
                     if (_wakeGrammar is null)
                         throw new InvalidOperationException("The AURIX wake phrase grammar is unavailable.");
@@ -235,12 +241,15 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engineToDispose = _engine;
                 _engine = null;
                 _wakeGrammar = null;
+                gateToDispose = _clapWakeGate;
+                _clapWakeGate = null;
                 status = $"Hands-free voice stopped and the microphone was released: {ex.Message}";
             }
         }
 
         if (engineToDispose is not null)
             DisposeEngine(engineToDispose);
+        DisposeClapGate(gateToDispose);
 
         if (!string.IsNullOrWhiteSpace(status))
             StatusChanged?.Invoke(status);
@@ -284,9 +293,29 @@ public sealed class HandsFreeVoiceService : IDisposable
         else
             StatusChanged?.Invoke("AURIX is listening for one instruction…");
     }
+
+    private void OnClapDetected()
+        => StatusChanged?.Invoke("Clap detected. Say “AURIX” within five seconds.");
+
+    private void OnClapGateFaulted(string message)
+    {
+        SpeechRecognitionEngine? engine;
+        lock (_gate) engine = _engine;
+        StopAfterRecognitionFailure(engine, "Local clap detection failed: " + message);
+    }
+
+    private void DisposeClapGate(ClapWakeGate? gate)
+    {
+        if (gate is null) return;
+        gate.ClapDetected -= OnClapDetected;
+        gate.Faulted -= OnClapGateFaulted;
+        gate.Dispose();
+    }
+
     private void StopAfterRecognitionFailure(SpeechRecognitionEngine? expectedEngine, string message)
     {
         SpeechRecognitionEngine? engineToDispose = null;
+        ClapWakeGate? gateToDispose = null;
 
         lock (_gate)
         {
@@ -298,11 +327,14 @@ public sealed class HandsFreeVoiceService : IDisposable
                 engineToDispose = _engine;
                 _engine = null;
                 _wakeGrammar = null;
+                gateToDispose = _clapWakeGate;
+                _clapWakeGate = null;
             }
         }
 
         if (engineToDispose is not null)
             DisposeEngine(engineToDispose);
+        DisposeClapGate(gateToDispose);
 
         StatusChanged?.Invoke(engineToDispose is null
             ? "AURIX voice state changed during a microphone transition. Check the listening indicator."
@@ -322,10 +354,11 @@ public sealed class HandsFreeVoiceService : IDisposable
     public void Dispose()
     {
         SpeechRecognitionEngine? engine;
+        ClapWakeGate? clapGate;
 
         lock (_gate)
         {
-            if (_disposed && _engine is null)
+            if (_disposed && _engine is null && _clapWakeGate is null)
                 return;
 
             _disposed = true;
@@ -333,10 +366,13 @@ public sealed class HandsFreeVoiceService : IDisposable
             engine = _engine;
             _engine = null;
             _wakeGrammar = null;
+            clapGate = _clapWakeGate;
+            _clapWakeGate = null;
         }
 
         if (engine is not null)
             DisposeEngine(engine);
+        DisposeClapGate(clapGate);
 
         StatusChanged?.Invoke("AURIX wake-word listening is paused. The microphone is no longer in use.");
     }
