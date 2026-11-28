@@ -225,6 +225,8 @@ Check("orb stays visible for the Yes boss greeting",
     VoiceOrbStatusPolicy.Classify("Yes, boss. What would you like me to do?") == VoiceOrbDisposition.Listening);
 Check("orb shows partial speech while listening",
     VoiceOrbStatusPolicy.Classify("Hearing: open Notepad") == VoiceOrbDisposition.Listening);
+Check("orb appears after the clap wake gate opens",
+    VoiceOrbStatusPolicy.Classify("Clap detected. Say “AURIX” within five seconds.") == VoiceOrbDisposition.Listening);
 Check("orb appears while Windows is checking a partial wake phrase",
     VoiceOrbStatusPolicy.Classify("Checking wake phrase: hey") == VoiceOrbDisposition.Listening);
 Check("orb switches to thinking after recognised speech",
