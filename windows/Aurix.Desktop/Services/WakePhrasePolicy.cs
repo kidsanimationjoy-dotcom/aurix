@@ -16,7 +16,7 @@ public static class WakePhrasePolicy
             return false;
 
         var normalized = Regex.Replace(recognizedText.Trim(), @"[^\p{L}\p{N}\s]", string.Empty);
-        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim().ToUpperInvariant();
 
         return normalized is "AURIX" or "HEY AURIX" or "ORIX" or "HEY ORIX" or "AURICKS" or "HEY AURICKS";
     }
