@@ -877,7 +877,9 @@ AURIX will independently validate your JSON, display the exact plan, ask the use
             TaskOutputText.Text = $"AURIX is asking local {providerName} to understand your request…";
             var rawResponse = useOpenJarvis
                 ? await _localOpenJarvisChat.ChatAsync(messages, cancellationToken)
-                : await _localCodexChat.ChatAsync(token, messages, cancellationToken);
+                : useOllama
+                    ? await _localOllamaChat.ChatAsync(messages, cancellationToken)
+                    : await _localCodexChat.ChatAsync(token, messages, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!_taskRuns.IsCurrent(taskRun))
                 return;
