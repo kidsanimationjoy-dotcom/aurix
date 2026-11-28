@@ -89,7 +89,7 @@ Coordinate-based input is a fallback only. Do not bypass Windows secure desktop,
 - Local layer: deterministic command parsing, device state, bounded desktop actions and policy checks.
 - Optional reasoning layer: the paired local Codex CLI can answer voice questions or return a structured proposal for the bounded desktop action schema.
 - AURIX rejects unknown action types, fields, applications and malformed proposals. Only the existing allowlisted desktop runner receives a validated plan.
-- AI-proposed app launches and read-only inspection may target the supported application allowlist. AI-proposed button clicks and text entry are restricted to Notepad; browsers, messaging clients and other connected apps are excluded from model-generated UI mutations in this release.
+- AI-proposed app launches and read-only inspection may target the supported application allowlist. AI-proposed button clicks are limited to Notepad, Paint and Calculator after exact target validation and individual approval. AI-proposed text entry remains restricted to Notepad; browsers, messaging clients, terminals and file-management surfaces remain excluded from model-generated UI mutations.
 - Every AI-proposed plan is displayed for user approval; Notepad button activation and text entry retain their own per-action approvals. The documented deterministic local command grammar remains separately bounded and retains its per-action approvals for explicitly named supported apps.
 - Network access, shell commands, scripts, arbitrary file access and general-purpose keyboard/mouse control are not exposed by this bridge.
 - Route according to user preference, data sensitivity, provider availability and usage limits.
