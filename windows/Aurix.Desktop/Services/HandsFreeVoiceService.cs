@@ -16,7 +16,6 @@ public sealed class HandsFreeVoiceService : IDisposable
         SwitchingToCommand,
         WaitingForGreeting,
         ListeningForCommand,
-        SwitchingToWakeWord
     }
 
     private readonly object _gate = new();
@@ -63,7 +62,10 @@ public sealed class HandsFreeVoiceService : IDisposable
                 // Wake-word mode is always available while hands-free is enabled; no clap is required.
 
                 var builder = new GrammarBuilder { Culture = recognizer.Culture };
-                builder.Append(new Choices("AURIX", "Hey AURIX"));
+                builder.Append(new Choices(
+                    "AURIX", "Hey AURIX",
+                    "ORIX", "Hey ORIX",
+                    "AURICKS", "Hey AURICKS"));
 
                 _wakeGrammar = new Grammar(builder) { Name = "AURIX wake phrase" };
                 engine.LoadGrammar(_wakeGrammar);
