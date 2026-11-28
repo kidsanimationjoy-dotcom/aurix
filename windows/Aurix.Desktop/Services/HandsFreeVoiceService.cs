@@ -63,6 +63,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             {
                 _clapWakeGate = new ClapWakeGate();
                 _clapWakeGate.ClapDetected += OnClapDetected;
+                _clapWakeGate.InputLevelChanged += OnMicrophoneInputLevelChanged;
                 _clapWakeGate.Faulted += OnClapGateFaulted;
                 _clapWakeGate.Start();
 
@@ -102,7 +103,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             }
         }
 
-        StatusChanged?.Invoke("HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Clap and wake detection stay local.");
+        StatusChanged?.Invoke($"HANDS-FREE ACTIVE — microphone: {_clapWakeGate?.CaptureDeviceName ?? "Windows default input"}. Clap once, then say “AURIX”. Live input level is shown here; sound is processed locally.");
     }
 
     private void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
@@ -297,6 +298,14 @@ public sealed class HandsFreeVoiceService : IDisposable
     private void OnClapDetected()
         => StatusChanged?.Invoke("Clap detected. Say “AURIX” within five seconds.");
 
+    private void OnMicrophoneInputLevelChanged(int inputLevel)
+    {
+        var signal = inputLevel < 2
+            ? "very quiet — check the selected Windows input and microphone volume"
+            : $"detected ({inputLevel}% peak)";
+        StatusChanged?.Invoke($"Microphone input {signal}. Clap once, then say “AURIX”.");
+    }
+
     private void OnClapGateFaulted(string message)
     {
         SpeechRecognitionEngine? engine;
@@ -308,6 +317,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     {
         if (gate is null) return;
         gate.ClapDetected -= OnClapDetected;
+        gate.InputLevelChanged -= OnMicrophoneInputLevelChanged;
         gate.Faulted -= OnClapGateFaulted;
         gate.Dispose();
     }

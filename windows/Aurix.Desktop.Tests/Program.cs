@@ -214,9 +214,11 @@ Reject("negated text-entry request with conversational wording rejected",
     "I don't want you to type Hello into Text Editor in Notepad");
 
 
-Check("sharp transient qualifies as a clap", ClapDetectionPolicy.IsClap(0.78, 0.11));
-Check("ordinary speech energy does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.29, 0.12));
-Check("quiet incidental noise does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.18, 0.015));
+Check("near clap qualifies", ClapDetectionPolicy.IsClap(0.78, 0.11));
+Check("quieter distant clap qualifies at increased sensitivity", ClapDetectionPolicy.IsClap(0.075, 0.004));
+Check("low-level room noise does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.04, 0.002));
+Check("steady speech energy does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.29, 0.12));
+Check("steady loud noise does not qualify as a clap", !ClapDetectionPolicy.IsClap(0.40, 0.20));
 Check("invalid audio measurement is rejected", !ClapDetectionPolicy.IsClap(double.NaN, 0.1));
 
 Check("orb opens after wake phrase", 

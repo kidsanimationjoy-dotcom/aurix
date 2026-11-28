@@ -4,20 +4,26 @@ using NAudio.Wave;
 namespace Aurix.Desktop.Services;
 
 /// <summary>
-/// Locally detects a short, sharp clap transient and opens a five-second
-/// one-use window in which the AURIX wake phrase can be accepted. Audio
-/// buffers are analysed in memory only; no audio is saved or transmitted.
+/// Locally detects short, sharp clap transients and opens a five-second
+/// one-use window in which the AURIX wake phrase can be accepted. Audio is
+/// analysed in short in-memory windows and is never saved or transmitted.
 /// </summary>
 public sealed class ClapWakeGate : IDisposable
 {
     private readonly object _gate = new();
     private WasapiCapture? _capture;
+    private MMDevice? _captureDevice;
+    private MMDeviceEnumerator? _deviceEnumerator;
     private DateTime _armedUntilUtc = DateTime.MinValue;
     private DateTime _lastClapUtc = DateTime.MinValue;
+    private DateTime _lastInputLevelUtc = DateTime.MinValue;
     private bool _disposed;
 
     public event Action? ClapDetected;
+    public event Action<int>? InputLevelChanged;
     public event Action<string>? Faulted;
+
+    public string CaptureDeviceName { get; private set; } = "Windows default microphone";
 
     public void Start()
     {
@@ -27,24 +33,54 @@ public sealed class ClapWakeGate : IDisposable
             if (_capture is not null)
                 return;
 
-            var capture = new WasapiCapture();
-            capture.DataAvailable += OnDataAvailable;
-            capture.RecordingStopped += OnRecordingStopped;
+            var enumerator = new MMDeviceEnumerator();
+            Exception? lastError = null;
 
-            try
+            // System.Speech normally follows the Windows multimedia default.
+            // Try that endpoint first, then Windows' console and communications
+            // defaults in case the machine has different role assignments.
+            foreach (var role in new[] { Role.Multimedia, Role.Console, Role.Communications })
             {
-                // WasapiCapture defaults to shared mode, so Windows can share
-                // the input endpoint with the speech recognizer.
-                capture.StartRecording();
-                _capture = capture;
+                MMDevice? device = null;
+                WasapiCapture? capture = null;
+                try
+                {
+                    device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, role);
+                    capture = new WasapiCapture(device, useEventSync: false, audioBufferMillisecondsLength: 50);
+                    capture.DataAvailable += OnDataAvailable;
+                    capture.RecordingStopped += OnRecordingStopped;
+
+                    // Publish the references before starting so the first audio
+                    // callback always has a complete capture context.
+                    _deviceEnumerator = enumerator;
+                    _captureDevice = device;
+                    _capture = capture;
+                    CaptureDeviceName = device.FriendlyName;
+
+                    capture.StartRecording();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    if (capture is not null)
+                    {
+                        capture.DataAvailable -= OnDataAvailable;
+                        capture.RecordingStopped -= OnRecordingStopped;
+                        try { capture.Dispose(); } catch { }
+                    }
+                    try { device?.Dispose(); } catch { }
+
+                    _capture = null;
+                    _captureDevice = null;
+                    _deviceEnumerator = null;
+                }
             }
-            catch
-            {
-                capture.DataAvailable -= OnDataAvailable;
-                capture.RecordingStopped -= OnRecordingStopped;
-                capture.Dispose();
-                throw;
-            }
+
+            enumerator.Dispose();
+            throw new InvalidOperationException(
+                "AURIX could not open a Windows microphone input. Check Settings > System > Sound > Input and Windows microphone privacy permissions.",
+                lastError);
         }
     }
 
@@ -79,11 +115,14 @@ public sealed class ClapWakeGate : IDisposable
             capture = _capture;
         }
 
-        // The capture callback can arrive before Start assigns _capture.
         var format = (sender as WasapiCapture)?.WaveFormat ?? capture?.WaveFormat;
-        if (format is null || !TryMeasure(e.Buffer, e.BytesRecorded, format, out var peak, out var rms))
+        if (format is null ||
+            !TryAnalyzeBuffer(e.Buffer, e.BytesRecorded, format,
+                out var peak, out _, out var clapDetected))
             return;
-        if (!ClapDetectionPolicy.IsClap(peak, rms))
+
+        ReportInputLevel(peak);
+        if (!clapDetected)
             return;
 
         var now = DateTime.UtcNow;
@@ -100,9 +139,70 @@ public sealed class ClapWakeGate : IDisposable
         ClapDetected?.Invoke();
     }
 
-    private static bool TryMeasure(
+    private void ReportInputLevel(double peak)
+    {
+        var now = DateTime.UtcNow;
+        lock (_gate)
+        {
+            if (_disposed || now - _lastInputLevelUtc < TimeSpan.FromMilliseconds(900))
+                return;
+            _lastInputLevelUtc = now;
+        }
+
+        var percentage = (int)Math.Round(Math.Clamp(peak * 100d, 0d, 100d));
+        InputLevelChanged?.Invoke(percentage);
+    }
+
+    private static bool TryAnalyzeBuffer(
         byte[] buffer,
         int bytesRecorded,
+        WaveFormat format,
+        out double peak,
+        out double rms,
+        out bool clapDetected)
+    {
+        peak = 0;
+        rms = 0;
+        clapDetected = false;
+
+        var bytesPerSample = format.BitsPerSample / 8;
+        var channels = format.Channels;
+        if (bytesPerSample is < 1 or > 4 || channels < 1 || format.SampleRate < 1)
+            return false;
+
+        var bytesPerFrame = bytesPerSample * channels;
+        var completeBytes = bytesRecorded - (bytesRecorded % bytesPerFrame);
+        if (completeBytes < bytesPerFrame)
+            return false;
+
+        // A 10 ms analysis window preserves the short transient of a distant
+        // clap. Measuring the whole 50 ms WASAPI buffer diluted the clap peak.
+        var framesPerWindow = Math.Max(1, format.SampleRate / 100);
+        var windowBytes = Math.Max(bytesPerFrame, framesPerWindow * bytesPerFrame);
+
+        for (var offset = 0; offset < completeBytes; offset += windowBytes)
+        {
+            var length = Math.Min(windowBytes, completeBytes - offset);
+            length -= length % bytesPerFrame;
+            if (length < bytesPerFrame)
+                continue;
+
+            if (!TryMeasure(buffer, offset, length, format, out var windowPeak, out var windowRms))
+                return false;
+
+            peak = Math.Max(peak, windowPeak);
+            rms = Math.Max(rms, windowRms);
+            if (ClapDetectionPolicy.IsClap(windowPeak, windowRms))
+                clapDetected = true;
+        }
+
+        return true;
+    }
+
+    private static bool TryMeasure(
+        byte[] buffer,
+        int offset,
+        int length,
         WaveFormat format,
         out double peak,
         out double rms)
@@ -111,37 +211,38 @@ public sealed class ClapWakeGate : IDisposable
         rms = 0;
         var bits = format.BitsPerSample;
         var bytesPerSample = bits / 8;
-        if (bytesPerSample is < 1 or > 4 || bytesRecorded < bytesPerSample)
+        if (bytesPerSample is < 1 or > 4 || length < bytesPerSample)
             return false;
 
+        var end = offset + length;
         var sumSquares = 0d;
         var count = 0;
-        for (var offset = 0; offset + bytesPerSample <= bytesRecorded; offset += bytesPerSample)
+        for (var sampleOffset = offset; sampleOffset + bytesPerSample <= end; sampleOffset += bytesPerSample)
         {
             double sample;
             if (format.Encoding == WaveFormatEncoding.IeeeFloat && bits == 32)
             {
-                sample = BitConverter.ToSingle(buffer, offset);
+                sample = BitConverter.ToSingle(buffer, sampleOffset);
             }
             else if (format.Encoding == WaveFormatEncoding.Pcm && bits == 8)
             {
-                sample = (buffer[offset] - 128) / 128d;
+                sample = (buffer[sampleOffset] - 128) / 128d;
             }
             else if (format.Encoding == WaveFormatEncoding.Pcm && bits == 16)
             {
-                sample = BitConverter.ToInt16(buffer, offset) / 32768d;
+                sample = BitConverter.ToInt16(buffer, sampleOffset) / 32768d;
             }
             else if (format.Encoding == WaveFormatEncoding.Pcm && bits == 24)
             {
-                var value = buffer[offset] | (buffer[offset + 1] << 8) |
-                            (buffer[offset + 2] << 16);
+                var value = buffer[sampleOffset] | (buffer[sampleOffset + 1] << 8) |
+                            (buffer[sampleOffset + 2] << 16);
                 if ((value & 0x800000) != 0)
                     value |= unchecked((int)0xFF000000);
                 sample = value / 8388608d;
             }
             else if (format.Encoding == WaveFormatEncoding.Pcm && bits == 32)
             {
-                sample = BitConverter.ToInt32(buffer, offset) / 2147483648d;
+                sample = BitConverter.ToInt32(buffer, sampleOffset) / 2147483648d;
             }
             else
             {
@@ -166,13 +267,24 @@ public sealed class ClapWakeGate : IDisposable
 
     private void OnRecordingStopped(object? sender, StoppedEventArgs e)
     {
-        if (e.Exception is not null)
-            Faulted?.Invoke("Windows audio capture stopped: " + e.Exception.Message);
+        bool report;
+        lock (_gate)
+            report = !_disposed;
+
+        if (!report)
+            return;
+
+        var reason = e.Exception is null
+            ? "Windows stopped delivering microphone audio unexpectedly."
+            : "Windows audio capture stopped: " + e.Exception.Message;
+        Faulted?.Invoke(reason);
     }
 
     public void Dispose()
     {
         WasapiCapture? capture;
+        MMDevice? device;
+        MMDeviceEnumerator? enumerator;
         lock (_gate)
         {
             if (_disposed)
@@ -180,28 +292,41 @@ public sealed class ClapWakeGate : IDisposable
             _disposed = true;
             _armedUntilUtc = DateTime.MinValue;
             capture = _capture;
+            device = _captureDevice;
+            enumerator = _deviceEnumerator;
             _capture = null;
+            _captureDevice = null;
+            _deviceEnumerator = null;
         }
 
-        if (capture is null)
-            return;
+        if (capture is not null)
+        {
+            capture.DataAvailable -= OnDataAvailable;
+            capture.RecordingStopped -= OnRecordingStopped;
+            try { capture.StopRecording(); } catch { }
+            capture.Dispose();
+        }
 
-        capture.DataAvailable -= OnDataAvailable;
-        capture.RecordingStopped -= OnRecordingStopped;
-        try { capture.StopRecording(); } catch { }
-        capture.Dispose();
+        device?.Dispose();
+        enumerator?.Dispose();
     }
 }
 
-/// <summary>Pure, testable thresholds for a short acoustic clap transient.</summary>
+/// <summary>More sensitive, testable thresholds for a short acoustic clap transient.</summary>
 public static class ClapDetectionPolicy
 {
+    // The old 0.42 / 0.025 limits missed quieter claps. The 10 ms window above
+    // makes these lower levels useful while the transient ratio rejects steady speech.
+    public const double MinimumPeakAmplitude = 0.06;
+    public const double MinimumRmsAmplitude = 0.0025;
+    public const double MinimumPeakToRmsRatio = 2.5;
+
     public static bool IsClap(double peakAmplitude, double rmsAmplitude)
     {
         return double.IsFinite(peakAmplitude) &&
                double.IsFinite(rmsAmplitude) &&
-               peakAmplitude >= 0.42 &&
-               rmsAmplitude >= 0.025 &&
-               peakAmplitude >= rmsAmplitude * 3.0;
+               peakAmplitude >= MinimumPeakAmplitude &&
+               rmsAmplitude >= MinimumRmsAmplitude &&
+               peakAmplitude >= rmsAmplitude * MinimumPeakToRmsRatio;
     }
 }
