@@ -546,9 +546,12 @@ public partial class MainWindow : Window
             switch (VoiceOrbStatusPolicy.Classify(message))
             {
                 case VoiceOrbDisposition.Listening:
-                    ShowActiveOrb("Listening", message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase)
-                        ? "Hearing your speech"
-                        : "Listening to you");
+                    ShowActiveOrb("Listening",
+                        message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase)
+                            ? "Recognising wake phrase"
+                            : message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase)
+                                ? "Hearing your speech"
+                                : "Listening to you");
                     break;
                 case VoiceOrbDisposition.Thinking:
                     ShowActiveOrb("Thinking", "Preparing your request");
