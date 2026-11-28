@@ -14,7 +14,7 @@ AURIX can stay in the Windows system tray with hands-free wake-word listening en
 
 1. Enable **hands-free** once in the AURIX window.
 2. Say **“AURIX”** or **“Hey AURIX”** at a normal speaking volume. No clap or other physical trigger is required.
-3. AURIX displays its larger multicolour orb near the bottom centre of the primary display and says, **“Yes, boss. What would you like me to do?”**
+3. AURIX displays its compact, Siri-inspired multicolour liquid-light orb at the centre of the primary display and says, **“Yes, boss. What would you like me to do?”**
 4. After the greeting finishes, speak one instruction. AURIX sends the recognised text to its selected local AI provider or bounded local task planner.
 5. After one command, AURIX returns to wake-only mode; the orb stays hidden while idle.
 
