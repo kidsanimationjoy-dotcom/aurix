@@ -10,7 +10,8 @@ public enum VoiceOrbDisposition
 
 /// <summary>
 /// Maps local voice-recognition status messages to the visible orb state.
-/// Timeout and no-speech messages always close the orb.
+/// The orb appears as soon as Windows starts forming a wake-phrase hypothesis,
+/// remains visible through the greeting/command, and hides on timeout or pause.
 /// </summary>
 public static class VoiceOrbStatusPolicy
 {
@@ -19,7 +20,8 @@ public static class VoiceOrbStatusPolicy
         if (string.IsNullOrWhiteSpace(message))
             return VoiceOrbDisposition.None;
 
-        if (message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase) ||
+        if (message.StartsWith("Checking wake phrase:", StringComparison.OrdinalIgnoreCase) ||
+            message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("AURIX heard you", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("Yes, boss", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("What would you like me to do, boss", StringComparison.OrdinalIgnoreCase) ||
