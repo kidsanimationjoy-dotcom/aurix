@@ -21,6 +21,7 @@ public static class VoiceOrbStatusPolicy
 
         if (message.StartsWith("Hearing:", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("AURIX heard you", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Yes, boss", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("What would you like me to do, boss", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("listening for your instruction", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("listening for one instruction", StringComparison.OrdinalIgnoreCase))
