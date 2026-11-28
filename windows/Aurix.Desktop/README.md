@@ -76,6 +76,7 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - Close-to-tray behaviour and optional current-user startup registration.
 - Deterministic, allowlisted launcher for Notepad, Calculator, Paint, File Explorer, Edge, Chrome, Windows Terminal, Discord and Spotify.
 - Multi-app launch tasks.
+- Approval-gated normal close requests for Notepad, Paint and Calculator; AURIX never force-terminates an app, and the app may show its own save prompt.
 - Read-only inspection of visible window titles and process names.
 - Read-only inspection of named UI Automation controls in supported apps. Field contents and password controls are not read.
 - Exact-name button activation through UI Automation, only after an approval prompt.
@@ -99,12 +100,17 @@ The wake phrase currently supports the recognizer's English pronunciation of “
 - `Open Chrome`
 - `Open Windows Terminal`
 - `Open Discord and Spotify`
+- `Close Notepad`
+- `Close Paint`
+- `Close Calculator`
 - `Show open windows`
 - `Inspect controls in Notepad`
 - `Click button "Save" in Notepad`
 - `Type "Hello AURIX" into "Search" in Edge`
 
-Spoken commands are submitted after one wake phrase and one utterance. The local task planner accepts only its documented desktop command patterns. Other voice requests can use the local Codex reasoning path described above. AI-proposed clicks and text entry are limited to Notepad; the documented deterministic commands retain their own per-action approval prompts in the apps they explicitly support.
+Spoken commands are submitted after one wake phrase and one utterance. The local task planner accepts only its documented desktop command patterns. Other voice requests use the configured OpenJarvis, Ollama or paired Codex reasoning path described above. AI-proposed button actions are limited to Notepad, Paint and Calculator; text entry remains Notepad-only. All clicks, text changes and graceful close requests require explicit approval.
+
+For a close request, AURIX must find one visible window from the approved app, show the app and window name in an approval prompt, then send a normal Windows close request. It never kills the process; an app may show its own save or confirmation prompt.
 
 For a button click, AURIX must find exactly one visible, enabled button with that exact name. Buttons whose names suggest sending, sharing, purchasing, paying, transferring, submitting or publishing display an additional warning. Destructive button names are blocked.
 
