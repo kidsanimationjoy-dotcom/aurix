@@ -39,6 +39,7 @@ var fencedJson = string.Join(Environment.NewLine,
     "{\"type\":\"answer\",\"message\":\"Hello from a local model.\"}",
     "```");
 var fencedAnswer = AiDesktopCommandParser.Parse(fencedJson, "What can you help me do?");
+Check("fenced JSON answer accepted", !fencedAnswer.IsPlan && fencedAnswer.Message == "Hello from a local model.");
 
 
 Check("AURIX wake phrase accepted without clap", WakePhrasePolicy.IsAccepted("AURIX", 0.65));
