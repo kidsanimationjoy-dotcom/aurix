@@ -61,10 +61,7 @@ public sealed class HandsFreeVoiceService : IDisposable
             var engine = new SpeechRecognitionEngine(recognizer);
             try
             {
-                _clapWakeGate = new ClapWakeGate();
-                _clapWakeGate.ClapDetected += OnClapDetected;
-                _clapWakeGate.Faulted += OnClapGateFaulted;
-                _clapWakeGate.Start();
+                // Wake-word mode is always available while hands-free is enabled; no clap is required.
 
                 var builder = new GrammarBuilder { Culture = recognizer.Culture };
                 builder.Append(new Choices("AURIX", "Hey AURIX"));
@@ -102,13 +99,13 @@ public sealed class HandsFreeVoiceService : IDisposable
             }
         }
 
-        StatusChanged?.Invoke("HANDS-FREE ACTIVE — clap once, say “AURIX”, then answer the spoken greeting. Clap and wake detection stay local.");
+        StatusChanged?.Invoke("HANDS-FREE ACTIVE — say “AURIX” or “Hey AURIX” whenever you need me.");
     }
 
     private void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
     {
         SpeechRecognitionEngine? engine;
-        var authorisedByClap = false;
+        var wakeAccepted = false;
         string phrase = e.Result?.Text?.Trim() ?? string.Empty;
 
         lock (_gate)
@@ -125,17 +122,13 @@ public sealed class HandsFreeVoiceService : IDisposable
             if (!isWakePhrase || e.Result.Confidence < 0.55)
                 return;
 
-            authorisedByClap = _clapWakeGate?.ConsumeWakeAuthorization() == true;
-            if (authorisedByClap)
-                _state = ListeningState.SwitchingToCommand;
+            wakeAccepted = true;
+            _state = ListeningState.SwitchingToCommand;
             engine = _engine;
         }
 
-        if (!authorisedByClap)
-        {
-            StatusChanged?.Invoke("Clap first, then say “AURIX” within five seconds.");
+        if (!wakeAccepted)
             return;
-        }
 
         try
         {
@@ -212,7 +205,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                     // microphone is not in dictation mode until that greeting ends.
                     _clapWakeGate?.Disarm();
                     _state = ListeningState.WaitingForGreeting;
-                    status = "AURIX heard you. What would you like me to do, boss?";
+                    status = "Yes, boss. What would you like me to do?";
                     wakePhraseAccepted = true;
                 }
                 else if (_state == ListeningState.ListeningForCommand)
@@ -221,7 +214,7 @@ public sealed class HandsFreeVoiceService : IDisposable
                     if (recognitionResult is not null && recognitionResult.Confidence >= 0.30)
                         command = recognitionResult.Text?.Trim();
 
-                    // Return to the clap-gated wake grammar immediately after one command.
+                    // Return to the always-available wake grammar immediately after one command.
                     _clapWakeGate?.Disarm();
                     _engine.UnloadAllGrammars();
                     if (_wakeGrammar is null)
@@ -300,7 +293,7 @@ public sealed class HandsFreeVoiceService : IDisposable
     }
 
     private void OnClapDetected()
-        => StatusChanged?.Invoke("Clap detected. Say “AURIX” within five seconds.");
+        => StatusChanged?.Invoke("Wake listener is active. Say “AURIX” whenever you need me.");
 
     private void OnClapGateFaulted(string message)
     {
