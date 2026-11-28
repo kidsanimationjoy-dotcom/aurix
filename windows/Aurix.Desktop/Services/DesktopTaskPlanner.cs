@@ -5,6 +5,7 @@ namespace Aurix.Desktop.Services;
 public enum DesktopTaskStepKind
 {
     LaunchApplication,
+    CloseApplication,
     InspectWindows,
     InspectControls,
     ClickButton,
@@ -66,6 +67,17 @@ public static class DesktopTaskPlanner
                 new DesktopTaskStep(DesktopTaskStepKind.InspectWindows, "Inspect visible open windows"));
         }
 
+        var closeMatch = Regex.Match(normalized, @"^close (?:the )?(?<app>.+)$", RegexOptions.IgnoreCase);
+        if (closeMatch.Success)
+        {
+            if (!TryGetApplication(closeMatch.Groups["app"].Value, out var closeApp))
+                return Invalid("Choose a supported app to close, such as Notepad, Paint or Calculator.");
+            if (closeApp.DisplayName is not ("Notepad" or "Paint" or "Calculator"))
+                return Invalid("For safety, AURIX can only close Notepad, Paint or Calculator in this preview.");
+            return Valid(
+                $"AURIX will request a normal close of {closeApp.DisplayName}. It will ask for approval first; the app may show its own save prompt.",
+                new DesktopTaskStep(DesktopTaskStepKind.CloseApplication, $"Close {closeApp.DisplayName}", TargetApp: closeApp.DisplayName));
+        }
         var inspectMatch = Regex.Match(normalized, @"^inspect controls in (?<app>.+)$", RegexOptions.IgnoreCase);
         if (inspectMatch.Success)
         {
