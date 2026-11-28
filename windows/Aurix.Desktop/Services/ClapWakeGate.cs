@@ -4,7 +4,7 @@ using NAudio.Wave;
 namespace Aurix.Desktop.Services;
 
 /// <summary>
-/// Locally detects short, sharp clap transients and opens a five-second
+/// Locally detects short, sharp clap transients and opens a eight-second
 /// one-use window in which the AURIX wake phrase can be accepted. Audio is
 /// analysed in short in-memory windows and is never saved or transmitted.
 /// </summary>
@@ -46,7 +46,7 @@ public sealed class ClapWakeGate : IDisposable
                 try
                 {
                     device = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, role);
-                    capture = new WasapiCapture(device, useEventSync: false, audioBufferMillisecondsLength: 50);
+                    capture = new WasapiCapture(device, useEventSync: false, audioBufferMillisecondsLength: 20);
                     capture.DataAvailable += OnDataAvailable;
                     capture.RecordingStopped += OnRecordingStopped;
 
@@ -128,12 +128,12 @@ public sealed class ClapWakeGate : IDisposable
         var now = DateTime.UtcNow;
         lock (_gate)
         {
-            if (_disposed || now - _lastClapUtc < TimeSpan.FromMilliseconds(900) ||
+            if (_disposed || now - _lastClapUtc < TimeSpan.FromMilliseconds(500) ||
                 now < _armedUntilUtc)
                 return;
 
             _lastClapUtc = now;
-            _armedUntilUtc = now.AddSeconds(5);
+            _armedUntilUtc = now.AddSeconds(8);
         }
 
         ClapDetected?.Invoke();
@@ -144,7 +144,7 @@ public sealed class ClapWakeGate : IDisposable
         var now = DateTime.UtcNow;
         lock (_gate)
         {
-            if (_disposed || now - _lastInputLevelUtc < TimeSpan.FromMilliseconds(900))
+            if (_disposed || now - _lastInputLevelUtc < TimeSpan.FromMilliseconds(500))
                 return;
             _lastInputLevelUtc = now;
         }
@@ -175,9 +175,9 @@ public sealed class ClapWakeGate : IDisposable
         if (completeBytes < bytesPerFrame)
             return false;
 
-        // A 10 ms analysis window preserves the short transient of a distant
-        // clap. Measuring the whole 50 ms WASAPI buffer diluted the clap peak.
-        var framesPerWindow = Math.Max(1, format.SampleRate / 100);
+        // A 5 ms analysis window preserves short, quieter transients instead of
+        // averaging them away in a longer capture buffer.
+        var framesPerWindow = Math.Max(1, format.SampleRate / 200);
         var windowBytes = Math.Max(bytesPerFrame, framesPerWindow * bytesPerFrame);
 
         for (var offset = 0; offset < completeBytes; offset += windowBytes)
@@ -252,6 +252,10 @@ public sealed class ClapWakeGate : IDisposable
             if (!double.IsFinite(sample))
                 continue;
 
+            // Apply a modest local pre-amplification before measuring. This
+            // raises quiet signal levels for the detector without changing the
+            // Windows microphone volume for other apps.
+            sample = Math.Clamp(sample * ClapDetectionPolicy.SoftwareSignalBoost, -1d, 1d);
             var magnitude = Math.Abs(sample);
             peak = Math.Max(peak, magnitude);
             sumSquares += sample * sample;
@@ -312,13 +316,14 @@ public sealed class ClapWakeGate : IDisposable
     }
 }
 
-/// <summary>More sensitive, testable thresholds for a short acoustic clap transient.</summary>
+/// <summary>High-sensitivity, testable settings for a short acoustic clap transient.</summary>
 public static class ClapDetectionPolicy
 {
-    // The old 0.42 / 0.025 limits missed quieter claps. The 10 ms window above
-    // makes these lower levels useful while the transient ratio rejects steady speech.
-    public const double MinimumPeakAmplitude = 0.06;
-    public const double MinimumRmsAmplitude = 0.0025;
+    // This local 2x preamp and lower thresholds help pick up quieter claps.
+    // Thresholds are applied to the boosted samples, not raw mic percentages.
+    public const double SoftwareSignalBoost = 2.0;
+    public const double MinimumPeakAmplitude = 0.035;
+    public const double MinimumRmsAmplitude = 0.0015;
     public const double MinimumPeakToRmsRatio = 2.5;
 
     public static bool IsClap(double peakAmplitude, double rmsAmplitude)
